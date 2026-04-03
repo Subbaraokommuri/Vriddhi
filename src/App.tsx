@@ -12,89 +12,48 @@ import {
   History, 
   Upload, 
   TrendingUp, 
-  TrendingDown, 
-  Plus, 
-  RefreshCw,
-  Search,
-  Filter,
-  ChevronRight,
-  AlertCircle,
-  FileText,
-  Download,
-  Calendar
+  FileText
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { 
-  BarChart, 
-  Bar, 
-  LineChart,
-  Line,
-  XAxis, 
-  YAxis, 
-  CartesianGrid, 
-  Tooltip, 
-  Legend,
-  ResponsiveContainer, 
-  Cell,
-  PieChart as RePieChart,
-  Pie
-} from 'recharts';
-import { cn, formatCurrency, formatIndianNumber, formatPercent } from './lib/utils';
-import { Summary, Folio, Portfolio, Transaction, Fund } from './lib/types';
-import { BenchmarkXirrCell } from './components/BenchmarkXirrCell';
-import { LogsView } from './components/LogsView';
-import { CasImporter } from './components/CasImporter';
+import { Sidebar } from './components/Sidebar';
+import { Header } from './components/Header';
+import { Dashboard } from './components/Dashboard';
+import { XirrReport } from './components/XirrReport';
+import { Portfolios } from './components/Portfolios';
 import { FundsList } from './components/FundsList';
 import { TransactionsList } from './components/TransactionsList';
 import { BenchmarksManager } from './components/BenchmarksManager';
-import { XirrReport } from './components/XirrReport';
+import { LogsView } from './components/LogsView';
+import { CasImporter } from './components/CasImporter';
+import { Summary, Folio, Transaction } from './lib/types';
+import { fetchSummary, fetchFolios, fetchTransactions, fetchBenchmarks } from './lib/api';
 
 type Tab = 'dashboard' | 'xirr' | 'portfolios' | 'funds' | 'transactions' | 'benchmarks' | 'logs' | 'import';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<Tab>('dashboard');
-  const [activeOnlyFunds, setActiveOnlyFunds] = useState(false);
-  const [activeOnlyXirr, setActiveOnlyXirr] = useState(false);
   const [summary, setSummary] = useState<Summary | null>(null);
   const [folios, setFolios] = useState<Folio[]>([]);
-  const [portfolios, setPortfolios] = useState<Portfolio[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [funds, setFunds] = useState<Fund[]>([]);
   const [userBenchmarks, setUserBenchmarks] = useState<any[]>([]);
   const [selectedBenchmarkIds, setSelectedBenchmarkIds] = useState<string[]>([]);
-  const [overallBenchmarkData, setOverallBenchmarkData] = useState<any>(null);
-  const [growthData, setGrowthData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [activeOnlyFunds, setActiveOnlyFunds] = useState(false);
+  const [activeOnlyXirr, setActiveOnlyXirr] = useState(false);
 
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [summaryRes, foliosRes, portfoliosRes, txnsRes, fundsRes, benchmarksRes] = await Promise.all([
-        fetch('/api/summary').then(r => r.json()),
-        fetch('/api/folios').then(r => r.json()),
-        fetch('/api/portfolios').then(r => r.json()),
-        fetch('/api/transactions').then(r => r.json()),
-        fetch('/api/funds').then(r => r.json()),
-        fetch('/api/user-benchmarks').then(r => r.json()),
+      const [summaryRes, foliosRes, transactionsRes, benchmarksRes] = await Promise.all([
+        fetchSummary(),
+        fetchFolios(),
+        fetchTransactions(),
+        fetchBenchmarks(),
       ]);
       setSummary(summaryRes);
       setFolios(foliosRes);
-      setPortfolios(portfoliosRes);
-      setTransactions(txnsRes);
-      setFunds(fundsRes);
+      setTransactions(transactionsRes);
       setUserBenchmarks(benchmarksRes);
-
-      // Fetch overall benchmark comparison (Nifty 50)
-      const nifty = benchmarksRes.find((b: any) => b.symbol === '^NSEI');
-      if (nifty) {
-        const res = await fetch(`/api/benchmark-xirr?portfolio_id=all&benchmark_ids=${nifty.id}`);
-        const result = await res.json();
-        setOverallBenchmarkData(result);
-
-        const growthRes = await fetch('/api/portfolio-growth-vs-benchmark?benchmark_symbol=^NSEI');
-        const growthResult = await growthRes.json();
-        setGrowthData(growthResult);
-      }
     } catch (error) {
       console.error('Error fetching data:', error);
     } finally {
@@ -105,18 +64,6 @@ export default function App() {
   useEffect(() => {
     fetchData();
   }, []);
-
-  const fetchLatestNav = async () => {
-    setLoading(true);
-    try {
-      await fetch('/api/fetch-nav', { method: 'POST' });
-      fetchData();
-    } catch (error) {
-      console.error('Failed to fetch NAV:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const navItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -131,323 +78,57 @@ export default function App() {
 
   return (
     <div className="flex h-screen bg-slate-50 text-slate-900 font-sans">
-      {/* Sidebar */}
-      <aside className="w-64 bg-white border-r border-slate-200 flex flex-col">
-        <div className="p-6">
-          <div className="flex items-center gap-2 text-[#01696f] font-bold text-xl">
-            <PieChart className="w-8 h-8" />
-            <span>FolioTracker</span>
-          </div>
-        </div>
-        <nav className="flex-1 px-4 space-y-1">
-          {navItems.map((item) => (
-            <button
-              key={item.id}
-              onClick={() => setActiveTab(item.id as Tab)}
-              className={cn(
-                "w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors",
-                activeTab === item.id 
-                  ? "bg-[#01696f]/10 text-[#01696f]" 
-                  : "text-slate-500 hover:bg-slate-100 hover:text-slate-900"
-              )}
-            >
-              <item.icon className="w-5 h-5" />
-              {item.label}
-            </button>
-          ))}
-        </nav>
-        <div className="p-4 border-t border-slate-200">
-          <button 
-            onClick={fetchLatestNav}
-            disabled={loading}
-            className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-slate-100 hover:bg-slate-200 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
-          >
-            <RefreshCw className={cn("w-4 h-4", loading && "animate-spin")} />
-            Update NAVs
-          </button>
-        </div>
-      </aside>
-
-      {/* Main Content */}
+      <Sidebar 
+        activeTab={activeTab} 
+        setActiveTab={setActiveTab} 
+        navItems={navItems} 
+        loading={loading}
+        onUpdateNavs={fetchData}
+      />
+      
       <main className="flex-1 overflow-y-auto">
-        <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-8 sticky top-0 z-10">
-          <h1 className="text-xl font-semibold capitalize">{activeTab.replace('-', ' ')}</h1>
-          <div className="flex items-center gap-8">
-            {(activeTab === 'funds' || activeTab === 'xirr') && (
-              <div className="flex items-center gap-3">
-                <span className="text-xs font-medium text-slate-400">
-                  Showing {folios.filter(f => f.currentUnits > 0).length} of {folios.length} folios
-                </span>
-                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Active Only</span>
-                <button
-                  onClick={() => activeTab === 'funds' ? setActiveOnlyFunds(!activeOnlyFunds) : setActiveOnlyXirr(!activeOnlyXirr)}
-                  className={cn(
-                    "relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none",
-                    (activeTab === 'funds' ? activeOnlyFunds : activeOnlyXirr) ? "bg-[#01696f]" : "bg-slate-200"
-                  )}
-                >
-                  <span
-                    className={cn(
-                      "inline-block h-4 w-4 transform rounded-full bg-white transition-transform",
-                      (activeTab === 'funds' ? activeOnlyFunds : activeOnlyXirr) ? "translate-x-6" : "translate-x-1"
-                    )}
-                  />
-                </button>
-              </div>
-            )}
-            <div className="text-right">
-              <p className="text-xs text-slate-500 font-medium uppercase tracking-wider">Net Worth</p>
-              <p className="text-lg font-bold text-[#01696f] tabular-nums">
-                {summary ? formatCurrency(summary.currentValue) : '₹0'}
-              </p>
-            </div>
-          </div>
-        </header>
+        <Header 
+          activeTab={activeTab} 
+          summary={summary}
+          folios={folios}
+          activeOnlyFunds={activeOnlyFunds}
+          setActiveOnlyFunds={setActiveOnlyFunds}
+          activeOnlyXirr={activeOnlyXirr}
+          setActiveOnlyXirr={setActiveOnlyXirr}
+        />
 
         <div className="p-8 max-w-7xl mx-auto">
           <AnimatePresence mode="wait">
-            {activeTab === 'dashboard' && (
-              <motion.div
-                key="dashboard"
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -20 }}
-                className="space-y-8"
-              >
-                {/* KPI Cards */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                  {[
-                    { label: 'Current Value', value: summary?.currentValue, sub: 'Net Worth', icon: PieChart, color: 'text-[#01696f]' },
-                    { label: 'Total Invested', value: summary?.totalInvested, sub: 'Cost Basis', icon: Briefcase, color: 'text-blue-600' },
-                    { label: 'Yearly Invested', value: summary?.yearlyInvested, sub: `In ${new Date().getFullYear()}`, icon: Plus, color: 'text-amber-600' },
-                    { label: 'Overall XIRR', value: summary?.xirr ? formatPercent(summary.xirr) : 'N/A', sub: 'Annualised', icon: TrendingUp, color: 'text-indigo-600', isRaw: true },
-                    { 
-                      label: 'vs Benchmark', 
-                      value: overallBenchmarkData?.benchmarks?.[0]?.diff !== undefined 
-                        ? `${overallBenchmarkData.benchmarks[0].diff >= 0 ? '+' : ''}${formatPercent(overallBenchmarkData.benchmarks[0].diff)}` 
-                        : 'N/A', 
-                      sub: 'Alpha (Nifty 50)', 
-                      icon: PieChart, 
-                      color: overallBenchmarkData?.benchmarks?.[0]?.diff >= 0 ? 'text-emerald-600' : 'text-rose-600', 
-                      isRaw: true 
-                    },
-                  ].map((card, i) => (
-                    <div key={i} className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-                      <div className="flex items-center justify-between mb-4">
-                        <div className={cn("p-2 rounded-xl bg-slate-50", card.color)}>
-                          <card.icon className="w-6 h-6" />
-                        </div>
-                      </div>
-                      <p className="text-sm font-medium text-slate-500 mb-1">{card.label}</p>
-                      <p className="text-2xl font-bold tabular-nums">
-                        {card.isRaw ? card.value : formatCurrency(card.value || 0)}
-                      </p>
-                      <p className={cn("text-xs font-semibold mt-2", card.color)}>{card.sub}</p>
-                    </div>
-                  ))}
-                </div>
-
-                {/* Charts */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                  <div className="bg-white p-8 rounded-2xl shadow-sm border border-slate-200">
-                    <h3 className="text-lg font-bold mb-6">Portfolio Allocation</h3>
-                    <div className="h-80">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <RePieChart>
-                          <Pie
-                            data={folios.filter(f => f.currentValue > 0)}
-                            dataKey="currentValue"
-                            nameKey="fund_name"
-                            cx="50%"
-                            cy="50%"
-                            innerRadius={60}
-                            outerRadius={100}
-                            paddingAngle={5}
-                          >
-                            {folios.map((entry, index) => (
-                              <Cell key={`cell-${index}`} fill={`hsl(${index * 45}, 70%, 45%)`} />
-                            ))}
-                          </Pie>
-                          <Tooltip formatter={(value: number) => formatCurrency(value)} />
-                        </RePieChart>
-                      </ResponsiveContainer>
-                    </div>
-                  </div>
-                  <div className="bg-white p-8 rounded-2xl shadow-sm border border-slate-200">
-                    <h3 className="text-lg font-bold mb-6">Category Distribution</h3>
-                    <div className="h-80">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={Object.entries(folios.reduce((acc, f) => {
-                          const cat = f.category || 'Uncategorized';
-                          acc[cat] = (acc[cat] || 0) + f.currentValue;
-                          return acc;
-                        }, {} as Record<string, number>)).map(([name, value]) => ({ name, value }))}>
-                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                          <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b' }} />
-                          <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b' }} tickFormatter={(v) => formatIndianNumber(v)} />
-                          <Tooltip formatter={(value: number) => formatCurrency(value)} />
-                          <Bar dataKey="value" fill="#01696f" radius={[4, 4, 0, 0]} />
-                        </BarChart>
-                      </ResponsiveContainer>
-                    </div>
-                  </div>
-                  <div className="bg-white p-8 rounded-2xl shadow-sm border border-slate-200 lg:col-span-2">
-                    <h3 className="text-lg font-bold mb-6">Growth Comparison (Indexed to 100)</h3>
-                    <div className="h-80">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <LineChart data={growthData}>
-                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                          <XAxis 
-                            dataKey="date" 
-                            axisLine={false} 
-                            tickLine={false} 
-                            tick={{ fontSize: 10, fill: '#64748b' }}
-                            tickFormatter={(v) => new Date(v).toLocaleDateString('en-IN', { month: 'short', year: '2-digit' })}
-                          />
-                          <YAxis 
-                            axisLine={false} 
-                            tickLine={false} 
-                            tick={{ fontSize: 12, fill: '#64748b' }}
-                            domain={['auto', 'auto']}
-                          />
-                          <Tooltip 
-                            formatter={(value: number) => value.toFixed(2)}
-                            labelFormatter={(label) => new Date(label).toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })}
-                          />
-                          <Legend />
-                          <Line type="monotone" dataKey="portfolio" name="Your Portfolio" stroke="#01696f" strokeWidth={3} dot={false} />
-                          <Line type="monotone" dataKey="benchmark" name="Nifty 50" stroke="#94a3b8" strokeWidth={2} strokeDasharray="5 5" dot={false} />
-                        </LineChart>
-                      </ResponsiveContainer>
-                    </div>
-                  </div>
-                </div>
-              </motion.div>
-            )}
-
-            {activeTab === 'xirr' && (
-              <motion.div
-                key="xirr"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-              >
+            <motion.div
+              key={activeTab}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.2 }}
+            >
+              {activeTab === 'dashboard' && <Dashboard />}
+              {activeTab === 'xirr' && (
                 <XirrReport 
-                  folios={folios} 
-                  activeOnlyXirr={activeOnlyXirr} 
+                  folios={folios}
+                  activeOnlyXirr={activeOnlyXirr}
                   selectedBenchmarkIds={selectedBenchmarkIds} 
                   userBenchmarks={userBenchmarks} 
                 />
-              </motion.div>
-            )}
-
-            {activeTab === 'portfolios' && (
-              <motion.div
-                key="portfolios"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                className="space-y-6"
-              >
-                <div className="flex justify-between items-center">
-                  <h3 className="text-lg font-bold">Your Portfolios</h3>
-                  <button className="flex items-center gap-2 px-4 py-2 bg-[#01696f] text-white rounded-xl text-sm font-bold hover:bg-[#015a5f] transition-colors">
-                    <Plus className="w-4 h-4" />
-                    New Portfolio
-                  </button>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {portfolios.map((p) => (
-                    <div key={p.id} className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-                      <div className="p-6 flex items-start justify-between" style={{ borderTop: `4px solid ${p.color}` }}>
-                        <div>
-                          <h4 className="text-lg font-bold">{p.name}</h4>
-                          <p className="text-sm text-slate-500">{p.description}</p>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-xs font-bold text-slate-400 uppercase">XIRR</p>
-                          <p className="text-xl font-bold text-emerald-600">{formatPercent(p.xirr)}</p>
-                        </div>
-                      </div>
-                      <div className="px-6 py-4 bg-slate-50 border-y border-slate-100 flex justify-between">
-                        <div>
-                          <p className="text-xs text-slate-500 font-bold uppercase">Current Value</p>
-                          <p className="text-lg font-bold tabular-nums">{formatCurrency(p.currentValue)}</p>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-xs text-slate-500 font-bold uppercase">Invested</p>
-                          <p className="text-lg font-bold tabular-nums">{formatCurrency(p.investedAmount)}</p>
-                        </div>
-                      </div>
-                      <div className="p-4">
-                        <p className="text-xs font-bold text-slate-400 uppercase px-2 mb-2">Folios ({p.folios.length})</p>
-                        <div className="space-y-1">
-                          {p.folios.map(f => (
-                            <div key={f.id} className="flex items-center justify-between p-2 hover:bg-slate-50 rounded-lg group">
-                              <span className="text-sm font-medium text-slate-700 truncate">{f.fund_name}</span>
-                              <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-slate-500" />
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </motion.div>
-            )}
-
-            {activeTab === 'funds' && (
-              <motion.div
-                key="funds"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-              >
-                <FundsList folios={folios} activeOnly={activeOnlyFunds} />
-              </motion.div>
-            )}
-
-            {activeTab === 'transactions' && (
-              <motion.div
-                key="transactions"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-              >
-                <TransactionsList transactions={transactions} />
-              </motion.div>
-            )}
-
-            {activeTab === 'benchmarks' && (
-              <motion.div
-                key="benchmarks"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-              >
+              )}
+              {activeTab === 'portfolios' && <Portfolios />}
+              {activeTab === 'funds' && <FundsList folios={folios} activeOnly={activeOnlyFunds} />}
+              {activeTab === 'transactions' && <TransactionsList transactions={transactions} />}
+              {activeTab === 'benchmarks' && (
                 <BenchmarksManager 
                   userBenchmarks={userBenchmarks} 
                   selectedBenchmarkIds={selectedBenchmarkIds} 
                   setSelectedBenchmarkIds={setSelectedBenchmarkIds}
                   onRefresh={fetchData}
                 />
-              </motion.div>
-            )}
-
-            {activeTab === 'logs' && (
-              <motion.div
-                key="logs"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-              >
-                <LogsView />
-              </motion.div>
-            )}
-
-            {activeTab === 'import' && (
-              <motion.div
-                key="import"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-              >
-                <CasImporter onImportSuccess={fetchData} />
-              </motion.div>
-            )}
+              )}
+              {activeTab === 'logs' && <LogsView />}
+              {activeTab === 'import' && <CasImporter onImportSuccess={fetchData} />}
+            </motion.div>
           </AnimatePresence>
         </div>
       </main>
