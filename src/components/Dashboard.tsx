@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { motion } from 'motion/react';
 import { 
   PieChart, 
   Briefcase, 
@@ -7,6 +6,7 @@ import {
   TrendingUp,
   AlertCircle
 } from 'lucide-react';
+import { motion } from 'motion/react';
 import { 
   BarChart, 
   Bar, 
@@ -24,7 +24,13 @@ import {
 } from 'recharts';
 import { cn, formatCurrency, formatIndianNumber, formatPercent } from '../lib/utils';
 import { Summary, Folio } from '../lib/types';
-import { fetchSummary, fetchFolios, fetchBenchmarks, fetchBenchmarkXirr, fetchPortfolioGrowth } from '../lib/api';
+import { 
+  fetchSummary, 
+  fetchFolios, 
+  fetchBenchmarks, 
+  fetchBenchmarkXirr, 
+  fetchPortfolioGrowth 
+} from '../lib/api';
 
 export function Dashboard() {
   const [summary, setSummary] = useState<Summary | null>(null);
@@ -59,7 +65,7 @@ export function Dashboard() {
         }
       } catch (err) {
         console.error('Dashboard data fetch failed:', err);
-        setError('Failed to load dashboard data');
+        setError('Failed to load dashboard data. Please try again later.');
       } finally {
         setLoading(false);
       }
@@ -85,7 +91,7 @@ export function Dashboard() {
     );
   }
 
-  const kpis = [
+  const kpiCards = [
     { label: 'Current Value', value: summary?.currentValue, sub: 'Net Worth', icon: PieChart, color: 'text-[#01696f]' },
     { label: 'Total Invested', value: summary?.totalInvested, sub: 'Cost Basis', icon: Briefcase, color: 'text-blue-600' },
     { label: 'Yearly Invested', value: summary?.yearlyInvested, sub: `In ${new Date().getFullYear()}`, icon: Plus, color: 'text-amber-600' },
@@ -102,17 +108,22 @@ export function Dashboard() {
     },
   ];
 
-  const categoryData = Object.entries(folios.reduce((acc, f) => {
+  const categoryDistribution = Object.entries(folios.reduce((acc, f) => {
     const cat = f.category || 'Uncategorized';
     acc[cat] = (acc[cat] || 0) + f.currentValue;
     return acc;
   }, {} as Record<string, number>)).map(([name, value]) => ({ name, value }));
 
   return (
-    <div className="space-y-8">
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -20 }}
+      className="space-y-8"
+    >
       {/* KPI Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {kpis.map((card, i) => (
+        {kpiCards.map((card, i) => (
           <div key={i} className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
             <div className="flex items-center justify-between mb-4">
               <div className={cn("p-2 rounded-xl bg-slate-50", card.color)}>
@@ -158,7 +169,7 @@ export function Dashboard() {
           <h3 className="text-lg font-bold mb-6">Category Distribution</h3>
           <div className="h-80">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={categoryData}>
+              <BarChart data={categoryDistribution}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                 <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b' }} />
                 <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b' }} tickFormatter={(v) => formatIndianNumber(v)} />
@@ -199,6 +210,6 @@ export function Dashboard() {
           </div>
         </div>
       </div>
-    </div>
+    </motion.div>
   );
 }
