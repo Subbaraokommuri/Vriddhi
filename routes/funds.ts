@@ -79,4 +79,90 @@ router.put('/funds/:id/nav', (req, res) => {
   res.json({ success: true });
 });
 
+router.get('/export-holdings-csv', (req, res) => {
+  try {
+    const folios = db.prepare(`
+      SELECT f.id, f.folio_number, fu.isin, fu.name as fund_name, fu.id as fund_id
+      FROM folios f
+      JOIN funds fu ON f.fund_id = fu.id
+      ORDER BY fu.name ASC, f.folio_number ASC
+    `).all() as any[];
+
+    const rows: string[] = [
+      'Folio,ISIN,Fund_Name,Unit_Balance,Cost_Value,NAV_Date,NAV,Market_Value,Registrar'
+    ];
+
+    let totalCost = 0;
+    let totalMarketValue = 0;
+
+    for (const folio of folios) {
+      const txns = db.prepare('SELECT amount, units, transaction_type FROM transactions WHERE folio_id = ?').all(folio.id) as any[];
+      const latestNavData = db.prepare('SELECT nav, date FROM nav_history WHERE fund_id = ? ORDER BY date DESC LIMIT 1').get(folio.fund_id) as any;
+      
+      const nav = latestNavData ? latestNavData.nav : 0;
+      const navDate = latestNavData ? latestNavData.date : '';
+
+      let currentUnits = 0;
+      let investedAmount = 0;
+
+      for (const t of txns) {
+        if (t.transaction_type === 'buy') {
+          currentUnits += t.units;
+          investedAmount += t.amount;
+        } else {
+          currentUnits -= t.units;
+          investedAmount -= t.amount;
+        }
+      }
+
+      const marketValue = currentUnits * nav;
+      
+      totalCost += investedAmount;
+      totalMarketValue += marketValue;
+
+      const escape = (val: any) => {
+        const str = String(val ?? '');
+        if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+          return `"${str.replace(/"/g, '""')}"`;
+        }
+        return str;
+      };
+
+      rows.push([
+        escape(folio.folio_number),
+        escape(folio.isin),
+        escape(folio.fund_name),
+        currentUnits.toFixed(4),
+        investedAmount.toFixed(2),
+        escape(navDate),
+        nav.toFixed(4),
+        marketValue.toFixed(2),
+        '' // Registrar field (empty as it's not in DB)
+      ].join(','));
+    }
+
+    // Totals row
+    rows.push([
+      'TOTAL',
+      '',
+      '',
+      '',
+      totalCost.toFixed(2),
+      '',
+      '',
+      totalMarketValue.toFixed(2),
+      ''
+    ].join(','));
+
+    const dateStr = new Date().toISOString().split('T')[0];
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename="holdings-export-${dateStr}.csv"`);
+    res.status(200).send(rows.join('\n'));
+
+  } catch (error) {
+    console.error('Export failed:', error);
+    res.status(500).json({ error: error instanceof Error ? error.message : 'Unknown error' });
+  }
+});
+
 export default router;
