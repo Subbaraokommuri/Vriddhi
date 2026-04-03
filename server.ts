@@ -10,6 +10,7 @@ import yahooFinance from 'yahoo-finance2';
 import { CONFIG } from './lib/config.ts';
 import { db, initDb, log } from './lib/db.ts';
 import { xirr, calcMirrorXirr } from './lib/xirr.ts';
+import fundsRouter from './routes/funds.ts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -19,6 +20,7 @@ initDb();
 async function startServer() {
   const app = express();
   app.use(express.json({ limit: '50mb' }));
+  app.use('/api', fundsRouter);
 
   // API Routes
   app.get('/api/summary', (req, res) => {
@@ -82,65 +84,6 @@ async function startServer() {
       xirr: overallXirr,
       yearlyInvested: yearlyInvested ? yearlyInvested.total : 0
     });
-  });
-
-  app.get('/api/funds', (req, res) => {
-    const funds = db.prepare('SELECT * FROM funds').all();
-    res.json(funds);
-  });
-
-  app.get('/api/folios', (req, res) => {
-    const folios = db.prepare(`
-      SELECT f.*, fu.name as fund_name, fu.category
-      FROM folios f
-      JOIN funds fu ON f.fund_id = fu.id
-    `).all() as any[];
-
-    const result = folios.map(folio => {
-      const txns = db.prepare('SELECT date, amount, units, transaction_type FROM transactions WHERE folio_id = ?').all(folio.id) as any[];
-      const latestNav = db.prepare('SELECT nav FROM nav_history WHERE fund_id = ? ORDER BY date DESC LIMIT 1').get(folio.fund_id) as any;
-      const nav = latestNav ? latestNav.nav : 0;
-
-      let currentUnits = 0;
-      let investedAmount = 0;
-      const cashflows: { date: Date; amount: number }[] = [];
-
-      for (const t of txns) {
-        if (t.transaction_type === 'buy') {
-          currentUnits += t.units;
-          investedAmount += t.amount;
-          cashflows.push({ date: new Date(t.date), amount: -t.amount });
-        } else {
-          currentUnits -= t.units;
-          investedAmount -= t.amount;
-          cashflows.push({ date: new Date(t.date), amount: t.amount });
-        }
-      }
-
-      if (currentUnits > 0 && nav > 0) {
-        cashflows.push({ date: new Date(), amount: currentUnits * nav });
-      }
-
-      cashflows.sort((a, b) => a.date.getTime() - b.date.getTime());
-      let folioXirr = null;
-      try {
-        if (cashflows.length >= 2) {
-          folioXirr = xirr(cashflows).value;
-        }
-      } catch (e) {
-        console.warn(`XIRR calculation failed for folio ${folio.id}:`, e);
-      }
-
-      return {
-        ...folio,
-        currentUnits,
-        investedAmount,
-        currentValue: currentUnits * nav,
-        xirr: folioXirr
-      };
-    });
-
-    res.json(result);
   });
 
   app.post('/api/import-cas', (req, res) => {
@@ -376,20 +319,6 @@ async function startServer() {
   app.delete('/api/portfolio-folio', (req, res) => {
     const { portfolio_id, folio_id } = req.body;
     db.prepare("DELETE FROM portfolio_assets WHERE portfolio_id = ? AND asset_type = 'mf' AND asset_id = ?").run(portfolio_id, folio_id);
-    res.json({ success: true });
-  });
-
-  app.post('/api/funds', (req, res) => {
-    const { name, isin, scheme_code, amfi_code, category } = req.body;
-    const id = isin || uuidv4();
-    db.prepare('INSERT INTO funds (id, name, isin, scheme_code, amfi_code, category) VALUES (?, ?, ?, ?, ?, ?)').run(id, name, isin, scheme_code, amfi_code, category);
-    res.json({ id });
-  });
-
-  app.put('/api/funds/:id/nav', (req, res) => {
-    const { id } = req.params;
-    const { nav, date } = req.body;
-    db.prepare('INSERT OR REPLACE INTO nav_history (fund_id, date, nav) VALUES (?, ?, ?)').run(id, date || new Date().toISOString().split('T')[0], nav);
     res.json({ success: true });
   });
 
