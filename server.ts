@@ -8,143 +8,10 @@ import { parse } from 'csv-parse/sync';
 import fs from 'fs';
 import yahooFinance from 'yahoo-finance2';
 import { CONFIG } from './lib/config.ts';
+import { db, initDb, log } from './lib/db.ts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-
-function log(type: 'app' | 'import' | 'benchmark', level: 'INFO' | 'WARN' | 'ERROR', module: string, message: string) {
-  try {
-    const date = new Date();
-    const dateStr = date.toISOString().split('T')[0];
-    const timeStr = date.toTimeString().split(' ')[0];
-    const logDir = path.join(process.cwd(), CONFIG.LOG_DIR);
-    if (!fs.existsSync(logDir)) {
-      fs.mkdirSync(logDir, { recursive: true });
-    }
-    const logFile = path.join(logDir, `${type}-${dateStr}.log`);
-    const logLine = `[${dateStr} ${timeStr}] [${level}] [${module}] ${message}\n`;
-    fs.appendFileSync(logFile, logLine);
-  } catch (err) {
-    console.error('Logging failed:', err);
-  }
-}
-
-const db = new Database(CONFIG.DB_NAME);
-
-// Initialize Database
-function initDb() {
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS funds (
-      id TEXT PRIMARY KEY,
-      name TEXT NOT NULL,
-      isin TEXT,
-      scheme_code TEXT,
-      amfi_code TEXT,
-      category TEXT
-    );
-
-    CREATE TABLE IF NOT EXISTS folios (
-      id TEXT PRIMARY KEY,
-      folio_number TEXT NOT NULL,
-      fund_id TEXT REFERENCES funds(id),
-      pan TEXT,
-      mode TEXT
-    );
-
-    CREATE TABLE IF NOT EXISTS portfolios (
-      id TEXT PRIMARY KEY,
-      name TEXT NOT NULL,
-      description TEXT,
-      color TEXT DEFAULT '#01696f'
-    );
-
-    CREATE TABLE IF NOT EXISTS portfolio_assets (
-      portfolio_id TEXT REFERENCES portfolios(id),
-      asset_type TEXT NOT NULL, -- 'mf_folio', 'equity', 'fd'
-      asset_id TEXT NOT NULL,
-      PRIMARY KEY (portfolio_id, asset_type, asset_id)
-    );
-  `);
-
-  // Migration: Move data from portfolio_folios to portfolio_assets if it exists
-  const tableExists = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='portfolio_folios'").get();
-  if (tableExists) {
-    db.exec(`
-      INSERT OR IGNORE INTO portfolio_assets (portfolio_id, asset_type, asset_id)
-      SELECT portfolio_id, 'mf_folio', folio_id FROM portfolio_folios;
-
-      DROP TABLE IF EXISTS portfolio_folios;
-    `);
-  }
-
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS transactions (
-      id TEXT PRIMARY KEY,
-      folio_id TEXT REFERENCES folios(id),
-      date TEXT NOT NULL,
-      transaction_type TEXT NOT NULL,
-      amount REAL,
-      units REAL,
-      nav REAL,
-      balance_units REAL,
-      source TEXT DEFAULT 'manual'
-    );
-
-    CREATE TABLE IF NOT EXISTS nav_history (
-      fund_id TEXT REFERENCES funds(id),
-      date TEXT NOT NULL,
-      nav REAL NOT NULL,
-      PRIMARY KEY (fund_id, date)
-    );
-
-    CREATE TABLE IF NOT EXISTS benchmark_prices (
-      symbol TEXT NOT NULL,
-      name TEXT NOT NULL,
-      date TEXT NOT NULL,
-      close REAL NOT NULL,
-      source TEXT DEFAULT 'index',
-      amfi_code TEXT,
-      PRIMARY KEY (symbol, date)
-    );
-
-    CREATE TABLE IF NOT EXISTS user_benchmarks (
-      id TEXT PRIMARY KEY,
-      symbol TEXT NOT NULL,
-      name TEXT NOT NULL,
-      source TEXT NOT NULL,
-      category TEXT,
-      is_active INTEGER DEFAULT 1,
-      color TEXT
-    );
-
-    CREATE TABLE IF NOT EXISTS settings (
-      key TEXT PRIMARY KEY,
-      value TEXT
-    );
-  `);
-
-  // Migration for benchmark_prices columns
-  const benchmarkCols = db.prepare("PRAGMA table_info(benchmark_prices)").all() as any[];
-  if (!benchmarkCols.find(c => c.name === 'source')) {
-    db.exec("ALTER TABLE benchmark_prices ADD COLUMN source TEXT DEFAULT 'index'");
-  }
-  if (!benchmarkCols.find(c => c.name === 'amfi_code')) {
-    db.exec("ALTER TABLE benchmark_prices ADD COLUMN amfi_code TEXT");
-  }
-
-  // Pre-populate user_benchmarks
-  const count = db.prepare('SELECT COUNT(*) as count FROM user_benchmarks').get() as any;
-  if (count.count === 0) {
-    const insert = db.prepare('INSERT INTO user_benchmarks (id, symbol, name, source, category, color) VALUES (?, ?, ?, ?, ?, ?)');
-    CONFIG.DEFAULT_BENCHMARKS.forEach(d => insert.run(uuidv4(), d.symbol, d.name, d.source, d.category, d.color));
-  }
-
-  const logDir = path.join(process.cwd(), CONFIG.LOG_DIR);
-  if (!fs.existsSync(logDir)) {
-    fs.mkdirSync(logDir, { recursive: true });
-  }
-  log('app', 'INFO', 'APP', 'Application started, database initialized');
-}
 
 initDb();
 
@@ -527,7 +394,7 @@ async function startServer() {
         FROM portfolio_assets pa
         JOIN folios f ON pa.asset_id = f.id
         JOIN funds fu ON f.fund_id = fu.id
-        WHERE pa.portfolio_id = ? AND pa.asset_type = 'mf_folio'
+        WHERE pa.portfolio_id = ? AND pa.asset_type = 'mf'
       `).all(p.id) as any[];
 
       // Calculate XIRR for portfolio
@@ -568,13 +435,13 @@ async function startServer() {
 
   app.post('/api/portfolio-folio', (req, res) => {
     const { portfolio_id, folio_id } = req.body;
-    db.prepare("INSERT OR IGNORE INTO portfolio_assets (portfolio_id, asset_type, asset_id) VALUES (?, 'mf_folio', ?)").run(portfolio_id, folio_id);
+    db.prepare("INSERT OR IGNORE INTO portfolio_assets (portfolio_id, asset_type, asset_id) VALUES (?, 'mf', ?)").run(portfolio_id, folio_id);
     res.json({ success: true });
   });
 
   app.delete('/api/portfolio-folio', (req, res) => {
     const { portfolio_id, folio_id } = req.body;
-    db.prepare("DELETE FROM portfolio_assets WHERE portfolio_id = ? AND asset_type = 'mf_folio' AND asset_id = ?").run(portfolio_id, folio_id);
+    db.prepare("DELETE FROM portfolio_assets WHERE portfolio_id = ? AND asset_type = 'mf' AND asset_id = ?").run(portfolio_id, folio_id);
     res.json({ success: true });
   });
 
@@ -714,7 +581,7 @@ async function startServer() {
       allCf.sort((a, b) => a.date.getTime() - b.date.getTime());
       actualXirr = allCf.length >= 2 ? xirr(allCf) : null;
     } else if (portfolio_id) {
-      const assets = db.prepare("SELECT asset_id FROM portfolio_assets WHERE portfolio_id = ? AND asset_type = 'mf_folio'").all(portfolio_id) as any[];
+      const assets = db.prepare("SELECT asset_id FROM portfolio_assets WHERE portfolio_id = ? AND asset_type = 'mf'").all(portfolio_id) as any[];
       const allCf: { date: Date; amount: number }[] = [];
       let totalCurrentValue = 0;
 
