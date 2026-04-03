@@ -1,5 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, ChevronRight, AlertCircle } from 'lucide-react';
+import { motion } from 'motion/react';
+import { 
+  Plus, 
+  ChevronRight,
+  AlertCircle
+} from 'lucide-react';
 import { formatCurrency, formatPercent } from '../lib/utils';
 import { Portfolio } from '../lib/types';
 import { fetchPortfolios } from '../lib/api';
@@ -18,7 +23,7 @@ export function Portfolios() {
         setPortfolios(data);
       } catch (err) {
         console.error('Portfolios fetch failed:', err);
-        setError('Failed to load portfolios');
+        setError('Failed to load portfolios. Please try again later.');
       } finally {
         setLoading(false);
       }
@@ -45,7 +50,12 @@ export function Portfolios() {
   }
 
   return (
-    <div className="space-y-6">
+    <motion.div
+      key="portfolios"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      className="space-y-6"
+    >
       <div className="flex justify-between items-center">
         <h3 className="text-lg font-bold">Your Portfolios</h3>
         <button className="flex items-center gap-2 px-4 py-2 bg-[#01696f] text-white rounded-xl text-sm font-bold hover:bg-[#015a5f] transition-colors">
@@ -96,6 +106,6 @@ export function Portfolios() {
           ))
         )}
       </div>
-    </div>
+    </motion.div>
   );
 }
