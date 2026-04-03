@@ -5,12 +5,31 @@ import { fileURLToPath } from 'url';
 import Database from 'better-sqlite3';
 import { v4 as uuidv4 } from 'uuid';
 import { parse } from 'csv-parse/sync';
+import fs from 'fs';
 import yahooFinance from 'yahoo-finance2';
+import { CONFIG } from './lib/config.ts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const db = new Database('tracker.db');
+function log(type: 'app' | 'import' | 'benchmark', level: 'INFO' | 'WARN' | 'ERROR', module: string, message: string) {
+  try {
+    const date = new Date();
+    const dateStr = date.toISOString().split('T')[0];
+    const timeStr = date.toTimeString().split(' ')[0];
+    const logDir = path.join(process.cwd(), CONFIG.LOG_DIR);
+    if (!fs.existsSync(logDir)) {
+      fs.mkdirSync(logDir, { recursive: true });
+    }
+    const logFile = path.join(logDir, `${type}-${dateStr}.log`);
+    const logLine = `[${dateStr} ${timeStr}] [${level}] [${module}] ${message}\n`;
+    fs.appendFileSync(logFile, logLine);
+  } catch (err) {
+    console.error('Logging failed:', err);
+  }
+}
+
+const db = new Database(CONFIG.DB_NAME);
 
 // Initialize Database
 function initDb() {
@@ -116,27 +135,23 @@ function initDb() {
   // Pre-populate user_benchmarks
   const count = db.prepare('SELECT COUNT(*) as count FROM user_benchmarks').get() as any;
   if (count.count === 0) {
-    const defaults = [
-      { id: uuidv4(), symbol: '^NSEI', name: 'Nifty 50', source: 'yahoo', category: 'broad_market', color: '#01696f' },
-      { id: uuidv4(), symbol: 'NIFTYTR1.NS', name: 'Nifty 50 TRI', source: 'yahoo', category: 'broad_market', color: '#01696f' },
-      { id: uuidv4(), symbol: '^BSESN', name: 'Sensex', source: 'yahoo', category: 'broad_market', color: '#01696f' },
-      { id: uuidv4(), symbol: 'NIFTYNXT50.NS', name: 'Nifty Next 50', source: 'yahoo', category: 'broad_market', color: '#01696f' },
-      { id: uuidv4(), symbol: 'NIFTYMIDCAP150.NS', name: 'Nifty Midcap 150', source: 'yahoo', category: 'broad_market', color: '#01696f' },
-      { id: uuidv4(), symbol: 'NIFTYSMLCAP250.NS', name: 'Nifty Smallcap 250', source: 'yahoo', category: 'broad_market', color: '#01696f' },
-      { id: uuidv4(), symbol: 'NIFTY_LOW_VOL30.NS', name: 'Nifty Low Volatility 30', source: 'yahoo', category: 'broad_market', color: '#01696f' },
-      { id: uuidv4(), symbol: 'NIFTYALPHA50.NS', name: 'Nifty Alpha 50', source: 'yahoo', category: 'broad_market', color: '#01696f' },
-    ];
     const insert = db.prepare('INSERT INTO user_benchmarks (id, symbol, name, source, category, color) VALUES (?, ?, ?, ?, ?, ?)');
-    defaults.forEach(d => insert.run(d.id, d.symbol, d.name, d.source, d.category, d.color));
+    CONFIG.DEFAULT_BENCHMARKS.forEach(d => insert.run(uuidv4(), d.symbol, d.name, d.source, d.category, d.color));
   }
+
+  const logDir = path.join(process.cwd(), CONFIG.LOG_DIR);
+  if (!fs.existsSync(logDir)) {
+    fs.mkdirSync(logDir, { recursive: true });
+  }
+  log('app', 'INFO', 'APP', 'Application started, database initialized');
 }
 
 initDb();
 
 // XIRR Calculation Logic
 function xirr(cashflows: { date: Date; amount: number }[], guess = 0.1) {
-  const maxIter = 100;
-  const precision = 1e-7;
+  const maxIter = CONFIG.XIRR.MAX_ITERATIONS;
+  const precision = CONFIG.XIRR.PRECISION;
   let rate = guess;
 
   for (let i = 0; i < maxIter; i++) {
@@ -161,9 +176,11 @@ function xirr(cashflows: { date: Date; amount: number }[], guess = 0.1) {
   return null;
 }
 
-function calc_mirror_xirr(cashflows: { date: Date; amount: number; type: 'buy' | 'sell' }[], benchmark_symbol: string) {
+function calc_mirror_xirr(cashflows: { date: Date; amount: number; type: 'buy' | 'sell' }[], benchmark_symbol: string, context?: string) {
   const mirrorCashflows: { date: Date; amount: number }[] = [];
   let totalBenchmarkUnits = 0;
+  let hits = 0;
+  let misses = 0;
 
   for (const cf of cashflows) {
     if (cf.type === 'buy') {
@@ -171,16 +188,25 @@ function calc_mirror_xirr(cashflows: { date: Date; amount: number; type: 'buy' |
       const priceRow = db.prepare(`
         SELECT close, date FROM benchmark_prices 
         WHERE symbol = ? 
-        AND ABS(JULIANDAY(date) - JULIANDAY(?)) <= 3
+        AND ABS(JULIANDAY(date) - JULIANDAY(?)) <= ?
         ORDER BY ABS(JULIANDAY(date) - JULIANDAY(?)) ASC
         LIMIT 1
-      `).get(benchmark_symbol, dateStr, dateStr) as any;
+      `).get(benchmark_symbol, dateStr, CONFIG.XIRR.BENCHMARK_TOLERANCE_DAYS, dateStr) as any;
 
       if (priceRow) {
+        hits++;
         const units = Math.abs(cf.amount) / priceRow.close;
         totalBenchmarkUnits += units;
         mirrorCashflows.push({ date: cf.date, amount: -Math.abs(cf.amount) });
       } else {
+        misses++;
+        const nearest = db.prepare(`
+          SELECT date FROM benchmark_prices 
+          WHERE symbol = ? 
+          ORDER BY ABS(JULIANDAY(date) - JULIANDAY(?)) ASC
+          LIMIT 1
+        `).get(benchmark_symbol, dateStr) as any;
+        log('benchmark', 'WARN', 'BENCHMARK', `No price for ${benchmark_symbol} on ${dateStr}, searched ±${CONFIG.XIRR.BENCHMARK_TOLERANCE_DAYS} days, nearest found: ${nearest?.date || 'none'}`);
         console.warn(`No benchmark price for ${benchmark_symbol} on ${dateStr}`);
       }
     } else {
@@ -194,15 +220,23 @@ function calc_mirror_xirr(cashflows: { date: Date; amount: number; type: 'buy' |
     mirrorCashflows.push({ date: new Date(), amount: currentValue });
   }
 
-  if (mirrorCashflows.length < 2) return null;
+  if (mirrorCashflows.length < 2) {
+    log('benchmark', 'INFO', 'BENCHMARK', `Mirror XIRR for ${context || benchmark_symbol} vs ${benchmark_symbol}: insufficient data (${hits} hits, ${misses} misses)`);
+    return null;
+  }
   
   const firstDate = mirrorCashflows[0].date;
   const lastDate = mirrorCashflows[mirrorCashflows.length - 1].date;
   const diffDays = (lastDate.getTime() - firstDate.getTime()) / (1000 * 60 * 60 * 24);
-  if (diffDays < 30) return null;
+  if (diffDays < CONFIG.XIRR.MIN_DAYS) {
+    log('benchmark', 'INFO', 'BENCHMARK', `Mirror XIRR for ${context || benchmark_symbol} vs ${benchmark_symbol}: history < ${CONFIG.XIRR.MIN_DAYS} days (${hits} hits, ${misses} misses)`);
+    return null;
+  }
 
   mirrorCashflows.sort((a, b) => a.date.getTime() - b.date.getTime());
-  return xirr(mirrorCashflows);
+  const result = xirr(mirrorCashflows);
+  log('benchmark', 'INFO', 'BENCHMARK', `Mirror XIRR for ${context || benchmark_symbol} vs ${benchmark_symbol}: ${hits} hits, ${misses} misses, result: ${result !== null ? (result * 100).toFixed(1) + '%' : 'N/A'}`);
+  return result;
 }
 
 async function startServer() {
@@ -342,11 +376,6 @@ async function startServer() {
         )
       `);
 
-      const monthMap: Record<string, string> = {
-        'jan': '01', 'feb': '02', 'mar': '03', 'apr': '04', 'may': '05', 'jun': '06',
-        'jul': '07', 'aug': '08', 'sep': '09', 'oct': '10', 'nov': '11', 'dec': '12'
-      };
-
       const convertDate = (dateStr: string) => {
         if (!dateStr) return '';
         // Handle YYYY-MM-DD
@@ -356,7 +385,7 @@ async function startServer() {
         const parts = dateStr.split('-');
         if (parts.length === 3) {
           const day = parts[0].padStart(2, '0');
-          const month = monthMap[parts[1].toLowerCase()];
+          const month = CONFIG.MONTH_MAP[parts[1].toLowerCase()];
           let year = parseInt(parts[2]);
           if (parts[2].length === 2) {
             year += year <= 30 ? 2000 : 1900;
@@ -414,17 +443,25 @@ async function startServer() {
             folioId, isoDate, amount, units, type
           );
 
-          if (result.changes > 0) added++;
-          else skipped++;
+          if (result.changes > 0) {
+            added++;
+            log('import', 'INFO', 'IMPORT', `Processed: folio ${row.folio_num}, fund ${row.fund_name}, date ${isoDate}, amount ${amount}`);
+          } else {
+            skipped++;
+            log('import', 'INFO', 'IMPORT', `Skipped duplicate: folio ${row.folio_num}, date ${isoDate}, amount ${amount}`);
+          }
 
           if (nav > 0 && isoDate) {
             db.prepare('INSERT OR REPLACE INTO nav_history (fund_id, date, nav) VALUES (?, ?, ?)').run(fundId, isoDate, nav);
           }
         } catch (rowError) {
+          const errorMsg = rowError instanceof Error ? rowError.message : String(rowError);
+          log('import', 'ERROR', 'IMPORT', `Row ${records.indexOf(rawRow) + 1} failed: ${errorMsg}`);
           console.error('Error processing row:', rawRow, rowError);
           errors++;
         }
       }
+      log('import', 'INFO', 'IMPORT', `Complete: ${added} added, ${skipped} skipped, ${errors} errors`);
       res.json({ added, skipped, errors });
     } catch (parseError) {
       console.error('CSV Parse Error:', parseError);
@@ -438,7 +475,7 @@ async function startServer() {
 
     for (const fund of funds) {
       try {
-        const response = await fetch(`https://api.mfapi.in/mf/${fund.amfi_code}`);
+        const response = await fetch(`${CONFIG.APIS.MF_DATA}${fund.amfi_code}`);
         const data = await response.json() as any;
         if (data && data.data && data.data.length > 0) {
           const latest = data.data[0];
@@ -449,9 +486,11 @@ async function startServer() {
           updated++;
         }
       } catch (e) {
+        log('app', 'ERROR', 'NAV', `Failed to fetch NAV for ${fund.id}: ${String(e)}`);
         console.error(`Failed to fetch NAV for ${fund.id}`, e);
       }
     }
+    log('app', 'INFO', 'NAV', `NAV update complete: ${updated} funds updated`);
     res.json({ updated });
   });
 
@@ -476,7 +515,7 @@ async function startServer() {
   app.post('/api/portfolios', (req, res) => {
     const { name, description, color } = req.body;
     const id = uuidv4();
-    db.prepare('INSERT INTO portfolios (id, name, description, color) VALUES (?, ?, ?, ?)').run(id, name, description, color || '#01696f');
+    db.prepare('INSERT INTO portfolios (id, name, description, color) VALUES (?, ?, ?, ?)').run(id, name, description, color || CONFIG.DEFAULT_THEME_COLOR);
     res.json({ id });
   });
 
@@ -588,7 +627,7 @@ async function startServer() {
           transaction(result);
           updated.push({ name: b.name, days_fetched: result.length });
         } else if (b.source === 'mf') {
-          const response = await fetch(`https://api.mfapi.in/mf/${b.symbol}`);
+          const response = await fetch(`${CONFIG.APIS.MF_DATA}${b.symbol}`);
           const data = await response.json() as any;
           if (data && data.data) {
             const insert = db.prepare('INSERT OR REPLACE INTO benchmark_prices (symbol, name, date, close, source, amfi_code) VALUES (?, ?, ?, ?, ?, ?)');
@@ -604,16 +643,18 @@ async function startServer() {
           }
         }
       } catch (e) {
+        log('app', 'ERROR', 'BENCHMARK', `Failed to fetch benchmark ${b.name}: ${String(e)}`);
         console.error(`Failed to fetch benchmark ${b.name}`, e);
       }
     }
+    log('app', 'INFO', 'BENCHMARK', `Benchmark update complete: ${updated.length} benchmarks updated`);
     res.json({ updated });
   });
 
   app.post('/api/fetch-mf-benchmark', async (req, res) => {
     const { amfi_code, name } = req.body;
     try {
-      const response = await fetch(`https://api.mfapi.in/mf/${amfi_code}`);
+      const response = await fetch(`${CONFIG.APIS.MF_DATA}${amfi_code}`);
       const data = await response.json() as any;
       if (data && data.data) {
         const insert = db.prepare('INSERT OR REPLACE INTO benchmark_prices (symbol, name, date, close, source, amfi_code) VALUES (?, ?, ?, ?, ?, ?)');
@@ -625,11 +666,14 @@ async function startServer() {
           }
         });
         transaction(data.data);
+        log('app', 'INFO', 'BENCHMARK', `Fetched MF benchmark ${name} (${amfi_code}): ${data.data.length} days`);
         res.json({ count: data.data.length });
       } else {
+        log('app', 'WARN', 'BENCHMARK', `MF benchmark ${name} (${amfi_code}) not found`);
         res.status(404).json({ error: 'MF not found' });
       }
     } catch (e) {
+      log('app', 'ERROR', 'BENCHMARK', `Failed to fetch MF benchmark ${name} (${amfi_code}): ${String(e)}`);
       res.status(500).json({ error: String(e) });
     }
   });
@@ -723,7 +767,8 @@ async function startServer() {
     for (const bid of benchmarkIds) {
       const b = db.prepare('SELECT * FROM user_benchmarks WHERE id = ?').get(bid) as any;
       if (b) {
-        const bXirr = calc_mirror_xirr(cashflows, b.symbol);
+        const context = folio_id ? `folio ${folio_id}` : (portfolio_id === 'all' ? 'all portfolios' : `portfolio ${portfolio_id}`);
+        const bXirr = calc_mirror_xirr(cashflows, b.symbol, context);
         benchmarks.push({
           name: b.name,
           xirr: bXirr,
@@ -816,6 +861,19 @@ async function startServer() {
     }
 
     res.json(result);
+  });
+
+  app.get('/api/logs', (req, res) => {
+    const { type, date } = req.query as { type: string, date: string };
+    if (!type || !date) return res.status(400).send('Missing type or date');
+    const logFile = path.join(process.cwd(), 'logs', `${type}-${date}.log`);
+    if (fs.existsSync(logFile)) {
+      const content = fs.readFileSync(logFile, 'utf8');
+      res.header('Content-Type', 'text/plain');
+      res.send(content);
+    } else {
+      res.status(404).send('Log file not found');
+    }
   });
 
   // Vite setup

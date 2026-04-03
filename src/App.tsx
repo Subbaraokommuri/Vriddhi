@@ -18,7 +18,10 @@ import {
   Search,
   Filter,
   ChevronRight,
-  AlertCircle
+  AlertCircle,
+  FileText,
+  Download,
+  Calendar
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -39,7 +42,7 @@ import {
 import { cn, formatCurrency, formatIndianNumber, formatPercent } from './lib/utils';
 import { Summary, Folio, Portfolio, Transaction, Fund } from './types';
 
-type Tab = 'dashboard' | 'xirr' | 'portfolios' | 'funds' | 'transactions' | 'benchmarks' | 'import';
+type Tab = 'dashboard' | 'xirr' | 'portfolios' | 'funds' | 'transactions' | 'benchmarks' | 'logs' | 'import';
 
 function BenchmarkXirrCell({ folioId, portfolioId, benchmarkIds, actualXirr }: { folioId?: string, portfolioId?: string, benchmarkIds: string[], actualXirr: number | null }) {
   const [data, setData] = useState<any>(null);
@@ -86,6 +89,104 @@ function BenchmarkXirrCell({ folioId, portfolioId, benchmarkIds, actualXirr }: {
         </td>
       ))}
     </>
+  );
+}
+
+function LogsView() {
+  const [type, setType] = useState<'app' | 'import' | 'benchmark'>('app');
+  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+  const [content, setContent] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const fetchLogs = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/logs?type=${type}&date=${date}`);
+      if (res.ok) {
+        const text = await res.text();
+        setContent(text);
+      } else {
+        setContent(`No logs found for ${type} on ${date}`);
+      }
+    } catch (e) {
+      setContent(`Error fetching logs: ${String(e)}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchLogs();
+    const interval = setInterval(fetchLogs, 5000);
+    return () => clearInterval(interval);
+  }, [type, date]);
+
+  const downloadLogs = () => {
+    const blob = new Blob([content], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${type}-${date}.log`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div className="flex bg-slate-100 p-1 rounded-xl">
+          {(['app', 'import', 'benchmark'] as const).map((t) => (
+            <button
+              key={t}
+              onClick={() => setType(t)}
+              className={cn(
+                "px-4 py-2 rounded-lg text-sm font-bold transition-all capitalize",
+                type === t ? "bg-white text-[#01696f] shadow-sm" : "text-slate-500 hover:text-slate-700"
+              )}
+            >
+              {t} Log
+            </button>
+          ))}
+        </div>
+        <div className="flex items-center gap-3">
+          <div className="relative">
+            <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <input
+              type="date"
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+              className="pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#01696f]/20"
+            />
+          </div>
+          <button
+            onClick={downloadLogs}
+            className="flex items-center gap-2 px-4 py-2 bg-[#01696f] text-white rounded-xl text-sm font-bold hover:bg-[#015a5f] transition-colors"
+          >
+            <Download className="w-4 h-4" />
+            Download
+          </button>
+        </div>
+      </div>
+
+      <div className="bg-slate-900 rounded-2xl p-6 border border-slate-800 shadow-xl">
+        <div className="flex justify-between items-center mb-4">
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 rounded-full bg-rose-500" />
+            <div className="w-3 h-3 rounded-full bg-amber-500" />
+            <div className="w-3 h-3 rounded-full bg-emerald-500" />
+            <span className="ml-2 text-xs font-mono text-slate-500 uppercase tracking-widest">{type}-{date}.log</span>
+          </div>
+          {loading && <RefreshCw className="w-4 h-4 text-slate-500 animate-spin" />}
+        </div>
+        <textarea
+          readOnly
+          value={content}
+          className="w-full h-[600px] bg-transparent text-slate-300 font-mono text-sm resize-none focus:outline-none"
+        />
+      </div>
+    </div>
   );
 }
 
@@ -191,6 +292,7 @@ export default function App() {
     { id: 'funds', label: 'Funds', icon: Database },
     { id: 'transactions', label: 'Transactions', icon: History },
     { id: 'benchmarks', label: 'Benchmarks', icon: PieChart },
+    { id: 'logs', label: 'Logs', icon: FileText },
     { id: 'import', label: 'Import CAS', icon: Upload },
   ];
 
@@ -719,6 +821,16 @@ export default function App() {
                 <p className="text-xs text-slate-400 italic">
                   Note: TRI (Total Return Index) data includes dividends reinvested and is more accurate for comparison with growth mutual funds.
                 </p>
+              </motion.div>
+            )}
+
+            {activeTab === 'logs' && (
+              <motion.div
+                key="logs"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+              >
+                <LogsView />
               </motion.div>
             )}
 
