@@ -45,6 +45,9 @@ import { BenchmarkXirrCell } from './components/BenchmarkXirrCell';
 import { LogsView } from './components/LogsView';
 import { CasImporter } from './components/CasImporter';
 import { FundsList } from './components/FundsList';
+import { TransactionsList } from './components/TransactionsList';
+import { BenchmarksManager } from './components/BenchmarksManager';
+import { XirrReport } from './components/XirrReport';
 
 type Tab = 'dashboard' | 'xirr' | 'portfolios' | 'funds' | 'transactions' | 'benchmarks' | 'logs' | 'import';
 
@@ -327,62 +330,13 @@ export default function App() {
                 key="xirr"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
-                className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden"
               >
-                <div className="p-6 border-b border-slate-200 flex items-center justify-between">
-                  <h3 className="text-lg font-bold">Fund-wise Performance</h3>
-                  <div className="flex gap-2">
-                    <button className="p-2 hover:bg-slate-100 rounded-lg"><Filter className="w-5 h-5 text-slate-500" /></button>
-                    <button className="p-2 hover:bg-slate-100 rounded-lg"><Search className="w-5 h-5 text-slate-500" /></button>
-                  </div>
-                </div>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left">
-                    <thead className="bg-slate-50 border-b border-slate-200">
-                      <tr>
-                        <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase">Fund Name</th>
-                        <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase text-right">Invested</th>
-                        <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase text-right">Current Value</th>
-                        <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase text-right">Gain</th>
-                        <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase text-right">Your XIRR</th>
-                        {selectedBenchmarkIds.map(id => (
-                          <th key={id} className="px-6 py-4 text-xs font-bold text-slate-500 uppercase text-right">
-                            {userBenchmarks.find(b => b.id === id)?.name}
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-200">
-                      {folios.filter(f => !activeOnlyXirr || f.currentUnits > 0).map((folio) => (
-                        <tr key={folio.id} className="hover:bg-slate-50 transition-colors">
-                          <td className="px-6 py-4">
-                            <p className="font-semibold text-sm">{folio.fund_name}</p>
-                            <p className="text-xs text-slate-500">Folio: {folio.folio_number}</p>
-                          </td>
-                          <td className="px-6 py-4 text-right tabular-nums text-sm font-medium">
-                            {formatCurrency(folio.investedAmount)}
-                          </td>
-                          <td className="px-6 py-4 text-right tabular-nums text-sm font-bold text-[#01696f]">
-                            {formatCurrency(folio.currentValue)}
-                          </td>
-                          <td className={cn(
-                            "px-6 py-4 text-right tabular-nums text-sm font-semibold",
-                            folio.currentValue - folio.investedAmount >= 0 ? "text-emerald-600" : "text-rose-600"
-                          )}>
-                            {formatCurrency(folio.currentValue - folio.investedAmount)}
-                          </td>
-                          <td className={cn(
-                            "px-6 py-4 text-right tabular-nums text-sm font-bold",
-                            folio.xirr && folio.xirr >= 0 ? "text-emerald-600" : "text-rose-600"
-                          )}>
-                            {formatPercent(folio.xirr)}
-                          </td>
-                          <BenchmarkXirrCell folioId={folio.id} benchmarkIds={selectedBenchmarkIds} actualXirr={folio.xirr} />
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                <XirrReport 
+                  folios={folios} 
+                  activeOnlyXirr={activeOnlyXirr} 
+                  selectedBenchmarkIds={selectedBenchmarkIds} 
+                  userBenchmarks={userBenchmarks} 
+                />
               </motion.div>
             )}
 
@@ -455,62 +409,8 @@ export default function App() {
                 key="transactions"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
-                className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden"
               >
-                <div className="p-6 border-b border-slate-200 flex items-center justify-between">
-                  <h3 className="text-lg font-bold">Transaction History</h3>
-                  <div className="flex gap-2">
-                    <button className="flex items-center gap-2 px-4 py-2 bg-slate-100 hover:bg-slate-200 rounded-xl text-sm font-bold transition-colors">
-                      <Filter className="w-4 h-4" />
-                      Filter
-                    </button>
-                  </div>
-                </div>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left">
-                    <thead className="bg-slate-50 border-b border-slate-200">
-                      <tr>
-                        <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase">Date</th>
-                        <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase">Fund / Folio</th>
-                        <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase">Type</th>
-                        <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase text-right">Amount</th>
-                        <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase text-right">Units</th>
-                        <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase text-right">NAV</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-200">
-                      {transactions.map((t) => (
-                        <tr key={t.id} className="hover:bg-slate-50 transition-colors">
-                          <td className="px-6 py-4 text-sm font-medium text-slate-600">
-                            {new Date(t.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
-                          </td>
-                          <td className="px-6 py-4">
-                            <p className="font-semibold text-sm">{t.fund_name}</p>
-                            <p className="text-xs text-slate-500">Folio: {t.folio_number}</p>
-                          </td>
-                          <td className="px-6 py-4">
-                            <span className={cn(
-                              "px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider",
-                              t.transaction_type === 'buy' ? "bg-emerald-100 text-emerald-700" : 
-                              t.transaction_type === 'sell' ? "bg-rose-100 text-rose-700" : "bg-blue-100 text-blue-700"
-                            )}>
-                              {t.transaction_type}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4 text-right tabular-nums text-sm font-bold">
-                            {formatCurrency(t.amount)}
-                          </td>
-                          <td className="px-6 py-4 text-right tabular-nums text-sm font-medium text-slate-600">
-                            {t.units.toFixed(3)}
-                          </td>
-                          <td className="px-6 py-4 text-right tabular-nums text-sm font-medium text-slate-600">
-                            ₹{t.nav.toFixed(4)}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                <TransactionsList transactions={transactions} />
               </motion.div>
             )}
 
@@ -519,94 +419,13 @@ export default function App() {
                 key="benchmarks"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
-                className="space-y-6"
               >
-                <div className="flex justify-between items-center">
-                  <h3 className="text-lg font-bold">Benchmark Management</h3>
-                  <div className="flex gap-3">
-                    <button 
-                      onClick={async () => {
-                        setLoading(true);
-                        await fetch('/api/fetch-all-benchmarks', { method: 'POST' });
-                        fetchData();
-                      }}
-                      className="flex items-center gap-2 px-4 py-2 bg-slate-100 hover:bg-slate-200 rounded-xl text-sm font-bold transition-colors"
-                    >
-                      <RefreshCw className={cn("w-4 h-4", loading && "animate-spin")} />
-                      Refresh All Prices
-                    </button>
-                    <button className="flex items-center gap-2 px-4 py-2 bg-[#01696f] text-white rounded-xl text-sm font-bold hover:bg-[#015a5f] transition-colors">
-                      <Plus className="w-4 h-4" />
-                      Add Benchmark
-                    </button>
-                  </div>
-                </div>
-
-                <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left">
-                      <thead className="bg-slate-50 border-b border-slate-200">
-                        <tr>
-                          <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase">Benchmark Name</th>
-                          <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase">Symbol / AMFI</th>
-                          <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase">Source</th>
-                          <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase">Category</th>
-                          <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase">Status</th>
-                          <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase text-right">Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-200">
-                        {userBenchmarks.map((b) => (
-                          <tr key={b.id} className="hover:bg-slate-50 transition-colors">
-                            <td className="px-6 py-4">
-                              <div className="flex items-center gap-3">
-                                <div className="w-3 h-3 rounded-full" style={{ backgroundColor: b.color || '#01696f' }} />
-                                <span className="font-semibold text-sm">{b.name}</span>
-                              </div>
-                            </td>
-                            <td className="px-6 py-4 text-sm font-mono text-slate-500">{b.symbol}</td>
-                            <td className="px-6 py-4">
-                              <span className="px-2 py-1 bg-slate-100 rounded text-[10px] font-bold uppercase text-slate-600">
-                                {b.source}
-                              </span>
-                            </td>
-                            <td className="px-6 py-4 text-sm text-slate-600 capitalize">{b.category?.replace('_', ' ')}</td>
-                            <td className="px-6 py-4">
-                              <span className={cn(
-                                "px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider",
-                                b.is_active ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500"
-                              )}>
-                                {b.is_active ? 'Active' : 'Inactive'}
-                              </span>
-                            </td>
-                            <td className="px-6 py-4 text-right">
-                              <button 
-                                onClick={() => {
-                                  if (selectedBenchmarkIds.includes(b.id)) {
-                                    setSelectedBenchmarkIds(selectedBenchmarkIds.filter(id => id !== b.id));
-                                  } else if (selectedBenchmarkIds.length < 3) {
-                                    setSelectedBenchmarkIds([...selectedBenchmarkIds, b.id]);
-                                  }
-                                }}
-                                className={cn(
-                                  "text-xs font-bold px-3 py-1 rounded-lg transition-colors",
-                                  selectedBenchmarkIds.includes(b.id) 
-                                    ? "bg-[#01696f] text-white" 
-                                    : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                                )}
-                              >
-                                {selectedBenchmarkIds.includes(b.id) ? 'Comparing' : 'Compare'}
-                              </button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-                <p className="text-xs text-slate-400 italic">
-                  Note: TRI (Total Return Index) data includes dividends reinvested and is more accurate for comparison with growth mutual funds.
-                </p>
+                <BenchmarksManager 
+                  userBenchmarks={userBenchmarks} 
+                  selectedBenchmarkIds={selectedBenchmarkIds} 
+                  setSelectedBenchmarkIds={setSelectedBenchmarkIds}
+                  onRefresh={fetchData}
+                />
               </motion.div>
             )}
 
