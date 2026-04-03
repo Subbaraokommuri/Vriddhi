@@ -10,3 +10,4 @@
 [2026-04-03 22:19:06] [ERROR] [BENCHMARK] Failed to fetch benchmark Nifty Low Volatility 30: Error: Call `const yahooFinance = new YahooFinance()` first.  Upgrading from v2?  See https://github.com/gadicc/yahoo-finance2/blob/dev/docs/UPGRADING.md.
 [2026-04-03 22:19:06] [ERROR] [BENCHMARK] Failed to fetch benchmark Nifty Alpha 50: Error: Call `const yahooFinance = new YahooFinance()` first.  Upgrading from v2?  See https://github.com/gadicc/yahoo-finance2/blob/dev/docs/UPGRADING.md.
 [2026-04-03 22:19:06] [INFO] [BENCHMARK] Benchmark update complete: 0 benchmarks updated
+[2026-04-03 22:23:43] [INFO] [APP] Application started, database initialized

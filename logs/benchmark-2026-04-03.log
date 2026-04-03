@@ -14801,3 +14801,5 @@
 [2026-04-03 22:19:12] [WARN] [BENCHMARK] No price for ^NSEI on 2023-11-28, searched ±3 days, nearest found: none
 [2026-04-03 22:19:12] [WARN] [BENCHMARK] No price for ^NSEI on 2024-11-05, searched ±3 days, nearest found: none
 [2026-04-03 22:19:12] [INFO] [BENCHMARK] Mirror XIRR for folio 9198377_INF109K01Y80 vs ^NSEI: insufficient data (0 hits, 41 misses)
+[2026-04-03 22:23:48] [INFO] [BENCHMARK] Mirror XIRR for all portfolios vs ^NSEI: result: N/A
+[2026-04-03 22:23:48] [INFO] [BENCHMARK] Mirror XIRR for all portfolios vs ^NSEI: result: N/A
