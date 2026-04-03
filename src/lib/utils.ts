@@ -23,3 +23,11 @@ export function formatIndianNumber(num: number) {
   if (num >= 100000) return (num / 100000).toFixed(2) + ' L';
   return num.toLocaleString('en-IN');
 }
+
+export function formatDate(dateStr: string) {
+  return new Date(dateStr).toLocaleDateString('en-IN', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  });
+}
