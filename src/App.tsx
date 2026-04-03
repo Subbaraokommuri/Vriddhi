@@ -40,7 +40,7 @@ import {
   Pie
 } from 'recharts';
 import { cn, formatCurrency, formatIndianNumber, formatPercent } from './lib/utils';
-import { Summary, Folio, Portfolio, Transaction, Fund } from './types';
+import { Summary, Folio, Portfolio, Transaction, Fund } from './lib/types';
 
 type Tab = 'dashboard' | 'xirr' | 'portfolios' | 'funds' | 'transactions' | 'benchmarks' | 'logs' | 'import';
 
