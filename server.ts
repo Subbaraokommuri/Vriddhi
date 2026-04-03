@@ -49,13 +49,13 @@ async function startServer() {
           amount: t.transaction_type === 'buy' ? -t.amount : t.amount
         });
       }
-      
-      if (folio.current_units > 0 && nav > 0) {
-        allCashflows.push({
-          date: new Date(),
-          amount: folio.current_units * nav
-        });
-      }
+    }
+
+    if (currentValue > 0) {
+      allCashflows.push({
+        date: new Date(),
+        amount: currentValue
+      });
     }
 
     allCashflows.sort((a, b) => a.date.getTime() - b.date.getTime());
@@ -345,8 +345,11 @@ async function startServer() {
         }
         if (currentUnits > 0 && nav > 0) {
           currentValue += currentUnits * nav;
-          allCashflows.push({ date: new Date(), amount: currentUnits * nav });
         }
+      }
+
+      if (currentValue > 0) {
+        allCashflows.push({ date: new Date(), amount: currentValue });
       }
 
       allCashflows.sort((a, b) => a.date.getTime() - b.date.getTime());
