@@ -16,6 +16,7 @@ export interface Folio {
   currentUnits: number;
   investedAmount: number;
   currentValue: number;
+  nav: number;
   xirr: number | null;
 }
 
