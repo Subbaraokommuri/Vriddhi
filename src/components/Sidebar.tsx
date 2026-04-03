@@ -7,20 +7,22 @@ interface SidebarProps {
   activeTab: string;
   setActiveTab: (tab: any) => void;
   navItems: any[];
+  loading: boolean;
+  onUpdateNavs: () => void;
 }
 
-export function Sidebar({ activeTab, setActiveTab, navItems }: SidebarProps) {
-  const [loading, setLoading] = useState(false);
+export function Sidebar({ activeTab, setActiveTab, navItems, loading, onUpdateNavs }: SidebarProps) {
+  const [updating, setUpdating] = useState(false);
 
   const handleUpdateNavs = async () => {
-    setLoading(true);
+    setUpdating(true);
     try {
       await updateNavs();
-      window.location.reload();
+      onUpdateNavs();
     } catch (error) {
       console.error('Failed to update NAVs:', error);
     } finally {
-      setLoading(false);
+      setUpdating(false);
     }
   };
 
@@ -52,10 +54,10 @@ export function Sidebar({ activeTab, setActiveTab, navItems }: SidebarProps) {
       <div className="p-4 border-t border-slate-200">
         <button 
           onClick={handleUpdateNavs}
-          disabled={loading}
+          disabled={updating || loading}
           className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-slate-100 hover:bg-slate-200 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
         >
-          <RefreshCw className={cn("w-4 h-4", loading && "animate-spin")} />
+          <RefreshCw className={cn("w-4 h-4", (updating || loading) && "animate-spin")} />
           Update NAVs
         </button>
       </div>
