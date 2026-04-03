@@ -9,102 +9,12 @@ import fs from 'fs';
 import yahooFinance from 'yahoo-finance2';
 import { CONFIG } from './lib/config.ts';
 import { db, initDb, log } from './lib/db.ts';
+import { xirr, calcMirrorXirr } from './lib/xirr.ts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 initDb();
-
-// XIRR Calculation Logic
-function xirr(cashflows: { date: Date; amount: number }[], guess = 0.1) {
-  const maxIter = CONFIG.XIRR.MAX_ITERATIONS;
-  const precision = CONFIG.XIRR.PRECISION;
-  let rate = guess;
-
-  for (let i = 0; i < maxIter; i++) {
-    let npv = 0;
-    let dNpv = 0;
-
-    for (const cf of cashflows) {
-      const days = (cf.date.getTime() - cashflows[0].date.getTime()) / (1000 * 60 * 60 * 24);
-      const yearFraction = days / 365;
-      const factor = Math.pow(1 + rate, yearFraction);
-      npv += cf.amount / factor;
-      dNpv -= (cf.amount * yearFraction) / (factor * (1 + rate));
-    }
-
-    if (Math.abs(npv) < precision) return rate;
-    if (dNpv === 0) break;
-
-    const nextRate = rate - npv / dNpv;
-    if (Math.abs(nextRate - rate) < precision) return nextRate;
-    rate = nextRate;
-  }
-  return null;
-}
-
-function calc_mirror_xirr(cashflows: { date: Date; amount: number; type: 'buy' | 'sell' }[], benchmark_symbol: string, context?: string) {
-  const mirrorCashflows: { date: Date; amount: number }[] = [];
-  let totalBenchmarkUnits = 0;
-  let hits = 0;
-  let misses = 0;
-
-  for (const cf of cashflows) {
-    if (cf.type === 'buy') {
-      const dateStr = cf.date.toISOString().split('T')[0];
-      const priceRow = db.prepare(`
-        SELECT close, date FROM benchmark_prices 
-        WHERE symbol = ? 
-        AND ABS(JULIANDAY(date) - JULIANDAY(?)) <= ?
-        ORDER BY ABS(JULIANDAY(date) - JULIANDAY(?)) ASC
-        LIMIT 1
-      `).get(benchmark_symbol, dateStr, CONFIG.XIRR.BENCHMARK_TOLERANCE_DAYS, dateStr) as any;
-
-      if (priceRow) {
-        hits++;
-        const units = Math.abs(cf.amount) / priceRow.close;
-        totalBenchmarkUnits += units;
-        mirrorCashflows.push({ date: cf.date, amount: -Math.abs(cf.amount) });
-      } else {
-        misses++;
-        const nearest = db.prepare(`
-          SELECT date FROM benchmark_prices 
-          WHERE symbol = ? 
-          ORDER BY ABS(JULIANDAY(date) - JULIANDAY(?)) ASC
-          LIMIT 1
-        `).get(benchmark_symbol, dateStr) as any;
-        log('benchmark', 'WARN', 'BENCHMARK', `No price for ${benchmark_symbol} on ${dateStr}, searched ±${CONFIG.XIRR.BENCHMARK_TOLERANCE_DAYS} days, nearest found: ${nearest?.date || 'none'}`);
-        console.warn(`No benchmark price for ${benchmark_symbol} on ${dateStr}`);
-      }
-    } else {
-      mirrorCashflows.push({ date: cf.date, amount: Math.abs(cf.amount) });
-    }
-  }
-
-  const latestPriceRow = db.prepare('SELECT close FROM benchmark_prices WHERE symbol = ? ORDER BY date DESC LIMIT 1').get(benchmark_symbol) as any;
-  if (latestPriceRow && totalBenchmarkUnits > 0) {
-    const currentValue = totalBenchmarkUnits * latestPriceRow.close;
-    mirrorCashflows.push({ date: new Date(), amount: currentValue });
-  }
-
-  if (mirrorCashflows.length < 2) {
-    log('benchmark', 'INFO', 'BENCHMARK', `Mirror XIRR for ${context || benchmark_symbol} vs ${benchmark_symbol}: insufficient data (${hits} hits, ${misses} misses)`);
-    return null;
-  }
-  
-  const firstDate = mirrorCashflows[0].date;
-  const lastDate = mirrorCashflows[mirrorCashflows.length - 1].date;
-  const diffDays = (lastDate.getTime() - firstDate.getTime()) / (1000 * 60 * 60 * 24);
-  if (diffDays < CONFIG.XIRR.MIN_DAYS) {
-    log('benchmark', 'INFO', 'BENCHMARK', `Mirror XIRR for ${context || benchmark_symbol} vs ${benchmark_symbol}: history < ${CONFIG.XIRR.MIN_DAYS} days (${hits} hits, ${misses} misses)`);
-    return null;
-  }
-
-  mirrorCashflows.sort((a, b) => a.date.getTime() - b.date.getTime());
-  const result = xirr(mirrorCashflows);
-  log('benchmark', 'INFO', 'BENCHMARK', `Mirror XIRR for ${context || benchmark_symbol} vs ${benchmark_symbol}: ${hits} hits, ${misses} misses, result: ${result !== null ? (result * 100).toFixed(1) + '%' : 'N/A'}`);
-  return result;
-}
 
 async function startServer() {
   const app = express();
@@ -149,7 +59,14 @@ async function startServer() {
     }
 
     allCashflows.sort((a, b) => a.date.getTime() - b.date.getTime());
-    const overallXirr = allCashflows.length >= 2 ? xirr(allCashflows) : null;
+    let overallXirr = null;
+    try {
+      if (allCashflows.length >= 2) {
+        overallXirr = xirr(allCashflows).value;
+      }
+    } catch (e) {
+      console.warn('Overall XIRR calculation failed:', e);
+    }
 
     const currentYear = new Date().getFullYear().toString();
     const yearlyInvested = db.prepare(`
@@ -205,7 +122,14 @@ async function startServer() {
       }
 
       cashflows.sort((a, b) => a.date.getTime() - b.date.getTime());
-      const folioXirr = cashflows.length >= 2 ? xirr(cashflows) : null;
+      let folioXirr = null;
+      try {
+        if (cashflows.length >= 2) {
+          folioXirr = xirr(cashflows).value;
+        }
+      } catch (e) {
+        console.warn(`XIRR calculation failed for folio ${folio.id}:`, e);
+      }
 
       return {
         ...folio,
@@ -426,7 +350,14 @@ async function startServer() {
       }
 
       allCashflows.sort((a, b) => a.date.getTime() - b.date.getTime());
-      const portfolioXirr = allCashflows.length >= 2 ? xirr(allCashflows) : null;
+      let portfolioXirr = null;
+      try {
+        if (allCashflows.length >= 2) {
+          portfolioXirr = xirr(allCashflows).value;
+        }
+      } catch (e) {
+        console.warn(`XIRR calculation failed for portfolio ${p.id}:`, e);
+      }
 
       return { ...p, folios, xirr: portfolioXirr, currentValue, investedAmount };
     });
@@ -579,7 +510,11 @@ async function startServer() {
         allCf.push({ date: new Date(), amount: totalCurrentValue });
       }
       allCf.sort((a, b) => a.date.getTime() - b.date.getTime());
-      actualXirr = allCf.length >= 2 ? xirr(allCf) : null;
+      try {
+        actualXirr = allCf.length >= 2 ? xirr(allCf).value : null;
+      } catch (e) {
+        console.warn('XIRR calculation failed for all portfolios:', e);
+      }
     } else if (portfolio_id) {
       const assets = db.prepare("SELECT asset_id FROM portfolio_assets WHERE portfolio_id = ? AND asset_type = 'mf'").all(portfolio_id) as any[];
       const allCf: { date: Date; amount: number }[] = [];
@@ -607,7 +542,11 @@ async function startServer() {
         allCf.push({ date: new Date(), amount: totalCurrentValue });
       }
       allCf.sort((a, b) => a.date.getTime() - b.date.getTime());
-      actualXirr = allCf.length >= 2 ? xirr(allCf) : null;
+      try {
+        actualXirr = allCf.length >= 2 ? xirr(allCf).value : null;
+      } catch (e) {
+        console.warn(`XIRR calculation failed for portfolio ${portfolio_id}:`, e);
+      }
     } else if (folio_id) {
       const txns = db.prepare('SELECT date, amount, units, transaction_type FROM transactions WHERE folio_id = ?').all(folio_id) as any[];
       const latestNav = db.prepare('SELECT nav FROM nav_history WHERE fund_id = ? ORDER BY date DESC LIMIT 1').get(folio_id) as any;
@@ -627,7 +566,11 @@ async function startServer() {
         allCf.push({ date: new Date(), amount: currentUnits * nav });
       }
       allCf.sort((a, b) => a.date.getTime() - b.date.getTime());
-      actualXirr = allCf.length >= 2 ? xirr(allCf) : null;
+      try {
+        actualXirr = allCf.length >= 2 ? xirr(allCf).value : null;
+      } catch (e) {
+        console.warn(`XIRR calculation failed for folio ${folio_id}:`, e);
+      }
     }
 
     const benchmarks = [];
@@ -635,7 +578,19 @@ async function startServer() {
       const b = db.prepare('SELECT * FROM user_benchmarks WHERE id = ?').get(bid) as any;
       if (b) {
         const context = folio_id ? `folio ${folio_id}` : (portfolio_id === 'all' ? 'all portfolios' : `portfolio ${portfolio_id}`);
-        const bXirr = calc_mirror_xirr(cashflows, b.symbol, context);
+        
+        const benchmarkPrices = db.prepare('SELECT date, close FROM benchmark_prices WHERE symbol = ?').all(b.symbol) as any[];
+        const latestPriceRow = db.prepare('SELECT close FROM benchmark_prices WHERE symbol = ? ORDER BY date DESC LIMIT 1').get(b.symbol) as any;
+        const latestPrice = latestPriceRow ? latestPriceRow.close : null;
+
+        const bResult = calcMirrorXirr(cashflows, benchmarkPrices, latestPrice, {
+          minDays: CONFIG.XIRR.MIN_DAYS,
+          toleranceDays: CONFIG.XIRR.BENCHMARK_TOLERANCE_DAYS
+        });
+
+        const bXirr = bResult.value;
+        log('benchmark', 'INFO', 'BENCHMARK', `Mirror XIRR for ${context} vs ${b.symbol}: result: ${bXirr !== null ? (bXirr * 100).toFixed(1) + '%' : 'N/A'}`);
+
         benchmarks.push({
           name: b.name,
           xirr: bXirr,
