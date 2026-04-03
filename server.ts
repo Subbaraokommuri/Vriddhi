@@ -11,6 +11,7 @@ import { db, initDb, log } from './lib/db.ts';
 import { xirr, calcMirrorXirr } from './lib/xirr.ts';
 import fundsRouter from './routes/funds.ts';
 import transactionsRouter from './routes/transactions.ts';
+import navRouter from './routes/nav.ts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -22,6 +23,7 @@ async function startServer() {
   app.use(express.json({ limit: '50mb' }));
   app.use('/api', fundsRouter);
   app.use('/api', transactionsRouter);
+  app.use('/api', navRouter);
 
   // API Routes
   app.get('/api/summary', (req, res) => {
@@ -85,31 +87,6 @@ async function startServer() {
       xirr: overallXirr,
       yearlyInvested: yearlyInvested ? yearlyInvested.total : 0
     });
-  });
-
-  app.post('/api/fetch-nav', async (req, res) => {
-    const funds = db.prepare('SELECT id, amfi_code FROM funds WHERE amfi_code IS NOT NULL').all() as any[];
-    let updated = 0;
-
-    for (const fund of funds) {
-      try {
-        const response = await fetch(`${CONFIG.APIS.MF_DATA}${fund.amfi_code}`);
-        const data = await response.json() as any;
-        if (data && data.data && data.data.length > 0) {
-          const latest = data.data[0];
-          // Date format in mfapi is DD-MM-YYYY, convert to YYYY-MM-DD
-          const [d, m, y] = latest.date.split('-');
-          const isoDate = `${y}-${m}-${d}`;
-          db.prepare('INSERT OR REPLACE INTO nav_history (fund_id, date, nav) VALUES (?, ?, ?)').run(fund.id, isoDate, parseFloat(latest.nav));
-          updated++;
-        }
-      } catch (e) {
-        log('app', 'ERROR', 'NAV', `Failed to fetch NAV for ${fund.id}: ${String(e)}`);
-        console.error(`Failed to fetch NAV for ${fund.id}`, e);
-      }
-    }
-    log('app', 'INFO', 'NAV', `NAV update complete: ${updated} funds updated`);
-    res.json({ updated });
   });
 
   app.post('/api/portfolios', (req, res) => {
