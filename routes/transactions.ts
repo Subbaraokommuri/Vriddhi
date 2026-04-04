@@ -1,7 +1,7 @@
 import express from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { parse } from 'csv-parse/sync';
-import { db, log } from '../lib/db.ts';
+import { db, log, sanitizeFolio } from '../lib/db.ts';
 import { CONFIG } from '../lib/config.ts';
 import { refreshAmfiCodes } from './nav.ts';
 
@@ -51,7 +51,7 @@ router.post('/import-cas', async (req, res) => {
     for (const rawRow of records as any[]) {
       try {
         const row = {
-          folio_num: rawRow.folio_num || rawRow.Folio,
+          folio_num: sanitizeFolio(rawRow.folio_num || rawRow.Folio),
           isin: rawRow.isin || rawRow.ISIN,
           fund_name: rawRow.fund_name || rawRow.Fund_name,
           date: rawRow.date || rawRow.Date,

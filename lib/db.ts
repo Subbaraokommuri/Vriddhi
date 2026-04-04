@@ -251,5 +251,69 @@ export function initDb() {
   if (!fs.existsSync(logDir)) {
     fs.mkdirSync(logDir, { recursive: true });
   }
+
+  // Migration for folio columns to TEXT (Precision fix for KFINtech folios)
+  const tablesToCheck = ['folios', 'transactions', 'funds', 'portfolios', 'portfolio_assets'];
+  for (const tableName of tablesToCheck) {
+    try {
+      const tableInfo = db.prepare(`PRAGMA table_info(${tableName})`).all() as any[];
+      const columnsToMigrate = tableInfo.filter(c => 
+        c.name.toLowerCase().includes('folio') && 
+        c.type.toUpperCase() !== 'TEXT'
+      );
+
+      if (columnsToMigrate.length > 0) {
+        log('app', 'INFO', 'DB', `Migrating ${tableName} folio columns to TEXT`);
+        db.transaction(() => {
+          const createSqlRow = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name=?").get(tableName) as any;
+          if (!createSqlRow) return;
+          
+          let newCreateSql = createSqlRow.sql;
+          for (const col of columnsToMigrate) {
+            const reg = new RegExp(`\\b${col.name}\\b\\s+[^,)]+`, 'gi');
+            newCreateSql = newCreateSql.replace(reg, `${col.name} TEXT`);
+          }
+
+          db.exec(`ALTER TABLE ${tableName} RENAME TO ${tableName}_old`);
+          db.exec(newCreateSql);
+          
+          const colNames = tableInfo.map(c => c.name).join(', ');
+          const selectNames = tableInfo.map(c => 
+            c.name.toLowerCase().includes('folio') ? `CAST(${c.name} AS TEXT)` : c.name
+          ).join(', ');
+          
+          db.exec(`INSERT INTO ${tableName} (${colNames}) SELECT ${selectNames} FROM ${tableName}_old`);
+          db.exec(`DROP TABLE ${tableName}_old`);
+        })();
+      }
+    } catch (e) {
+      // Skip errors if table doesn't exist or other issues
+    }
+  }
+
   log('app', 'INFO', 'APP', 'Application started, database initialized');
+}
+
+/**
+ * Sanitizes folio numbers to prevent precision loss and scientific notation issues.
+ * Logic: if the value is in scientific notation, use BigInt(Math.round(Number(raw))).toString()
+ * Keeps full folio as-is including suffixes like "/76".
+ */
+export function sanitizeFolio(raw: string | number | any): string {
+  if (raw === null || raw === undefined) return '';
+  let str = String(raw).trim();
+  
+  // Handle scientific notation (e.g., "5.9935E+11")
+  if (/e\+/i.test(str)) {
+    try {
+      const num = Number(raw);
+      if (!isNaN(num)) {
+        str = BigInt(Math.round(num)).toString();
+      }
+    } catch (e) {
+      // If conversion fails, return original trimmed string
+    }
+  }
+  
+  return str;
 }
