@@ -88,16 +88,16 @@ export function XirrReport() {
         valB = b.currentUnits ?? 0;
         break;
       case 'invested':
-        valA = a.grossInvested ?? 0;
-        valB = b.grossInvested ?? 0;
+        valA = a.investedAmount ?? 0;
+        valB = b.investedAmount ?? 0;
         break;
       case 'currentValue':
         valA = a.currentValue ?? 0;
         valB = b.currentValue ?? 0;
         break;
       case 'gain':
-        valA = (a.currentUnits ?? 0) <= 0.001 ? (a.totalRedeemed ?? 0) - (a.grossInvested ?? 0) : (a.currentValue ?? 0) - (a.grossInvested ?? 0);
-        valB = (b.currentUnits ?? 0) <= 0.001 ? (b.totalRedeemed ?? 0) - (b.grossInvested ?? 0) : (b.currentValue ?? 0) - (b.grossInvested ?? 0);
+        valA = (a.currentUnits ?? 0) <= 0.001 ? (a.totalRedeemed ?? 0) - (a.grossInvested ?? 0) : (a.currentValue ?? 0) - (a.investedAmount ?? 0);
+        valB = (b.currentUnits ?? 0) <= 0.001 ? (b.totalRedeemed ?? 0) - (b.grossInvested ?? 0) : (b.currentValue ?? 0) - (b.investedAmount ?? 0);
         break;
       case 'xirr':
         valA = a.xirr ?? -Infinity;
@@ -227,7 +227,7 @@ export function XirrReport() {
                     {(folio.currentUnits ?? 0) <= 0.001 ? '—' : (folio.currentUnits ?? 0).toFixed(3)}
                   </td>
                   <td className="px-6 py-4 text-right tabular-nums text-sm font-medium">
-                    {formatCurrency(folio.grossInvested ?? 0)}
+                    {formatCurrency(folio.investedAmount ?? 0)}
                   </td>
                   <td className="px-6 py-4 text-right tabular-nums text-sm font-bold text-[#01696f]">
                     {formatCurrency(folio.currentValue ?? 0)}
@@ -236,11 +236,11 @@ export function XirrReport() {
                     "px-6 py-4 text-right tabular-nums text-sm font-semibold",
                     ((folio.currentUnits ?? 0) <= 0.001 
                       ? ((folio.totalRedeemed ?? 0) - (folio.grossInvested ?? 0)) 
-                      : ((folio.currentValue ?? 0) - (folio.grossInvested ?? 0))) >= 0 ? "text-emerald-600" : "text-rose-600"
+                      : ((folio.currentValue ?? 0) - (folio.investedAmount ?? 0))) >= 0 ? "text-emerald-600" : "text-rose-600"
                   )}>
                     {formatCurrency((folio.currentUnits ?? 0) <= 0.001 
                       ? ((folio.totalRedeemed ?? 0) - (folio.grossInvested ?? 0)) 
-                      : ((folio.currentValue ?? 0) - (folio.grossInvested ?? 0)))}
+                      : ((folio.currentValue ?? 0) - (folio.investedAmount ?? 0)))}
                   </td>
                   <td className={cn(
                     "px-6 py-4 text-right tabular-nums text-sm font-bold",
