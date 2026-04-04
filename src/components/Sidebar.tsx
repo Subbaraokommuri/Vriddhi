@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { PieChart, RefreshCw } from 'lucide-react';
+import { PieChart, RefreshCw, Database } from 'lucide-react';
 import { cn } from '../lib/utils';
-import { updateNavs } from '../lib/api';
+import { updateNavs, refreshAmfiCodes } from '../lib/api';
 
 interface SidebarProps {
   activeTab: string;
@@ -13,6 +13,7 @@ interface SidebarProps {
 
 export function Sidebar({ activeTab, setActiveTab, navItems, loading, onUpdateNavs }: SidebarProps) {
   const [updating, setUpdating] = useState(false);
+  const [refreshingCodes, setRefreshingCodes] = useState(false);
   const [errors, setErrors] = useState<{ name: string; error: string }[]>([]);
 
   const handleUpdateNavs = async () => {
@@ -29,6 +30,21 @@ export function Sidebar({ activeTab, setActiveTab, navItems, loading, onUpdateNa
       setErrors([{ name: 'System', error: String(error) }]);
     } finally {
       setUpdating(false);
+    }
+  };
+
+  const handleRefreshCodes = async () => {
+    setRefreshingCodes(true);
+    setErrors([]);
+    try {
+      const result = await refreshAmfiCodes();
+      alert(`AMFI Refresh Complete: ${result.updated} updated, ${result.notFound} not found, ${result.failedCount} failed.`);
+      onUpdateNavs();
+    } catch (error) {
+      console.error('Failed to refresh AMFI codes:', error);
+      setErrors([{ name: 'AMFI Refresh', error: String(error) }]);
+    } finally {
+      setRefreshingCodes(false);
     }
   };
 
@@ -78,11 +94,19 @@ export function Sidebar({ activeTab, setActiveTab, navItems, loading, onUpdateNa
           </div>
         )}
       </nav>
-      <div className="p-4 border-t border-slate-200">
+      <div className="p-4 border-t border-slate-200 space-y-2">
+        <button 
+          onClick={handleRefreshCodes}
+          disabled={refreshingCodes || loading}
+          className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-slate-100 hover:bg-slate-200 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+        >
+          <Database className={cn("w-4 h-4", refreshingCodes && "animate-pulse")} />
+          Refresh AMFI Codes
+        </button>
         <button 
           onClick={handleUpdateNavs}
           disabled={updating || loading}
-          className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-slate-100 hover:bg-slate-200 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+          className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-[#01696f] text-white hover:bg-[#01696f]/90 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
         >
           <RefreshCw className={cn("w-4 h-4", (updating || loading) && "animate-spin")} />
           Update NAVs

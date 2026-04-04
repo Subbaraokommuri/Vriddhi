@@ -68,6 +68,11 @@ export async function updateNavs(): Promise<{ updated: number; errors?: { fundId
   return handleResponse<{ updated: number; errors?: { fundId: string; name: string; error: string }[] }>(res);
 }
 
+export async function refreshAmfiCodes(): Promise<{ updated: number; notFound: number; failedCount: number }> {
+  const res = await fetch('/api/nav/refresh-amfi-codes', { method: 'POST' });
+  return handleResponse<{ updated: number; notFound: number; failedCount: number }>(res);
+}
+
 export async function fetchLogs(type: string, date: string): Promise<string> {
   const res = await fetch(`/api/logs?type=${type}&date=${date}`);
   if (!res.ok) {

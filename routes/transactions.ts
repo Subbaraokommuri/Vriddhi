@@ -3,10 +3,11 @@ import { v4 as uuidv4 } from 'uuid';
 import { parse } from 'csv-parse/sync';
 import { db, appendLog } from '../lib/db.ts';
 import { CONFIG } from '../lib/config.ts';
+import { refreshAmfiCodes } from './nav.ts';
 
 const router = express.Router();
 
-router.post('/import-cas', (req, res) => {
+router.post('/import-cas', async (req, res) => {
   const { csvData } = req.body;
   let added = 0;
   let skipped = 0;
@@ -62,10 +63,12 @@ router.post('/import-cas', (req, res) => {
           scheme_code: rawRow.scheme_code
         };
 
+        const isin = (row.isin || '').split(/[\s\-–]/)[0].trim().toUpperCase();
+
         if (!row.fund_name || !row.date) continue;
 
-        const fundId = row.isin || row.fund_name;
-        insertFund.run(fundId, row.fund_name, row.isin, row.scheme_code || null);
+        const fundId = isin || row.fund_name;
+        insertFund.run(fundId, row.fund_name, isin, row.scheme_code || null);
 
         const folioId = `${row.folio_num}_${fundId}`;
         insertFolio.run(folioId, row.folio_num, fundId);
@@ -101,8 +104,8 @@ router.post('/import-cas', (req, res) => {
           appendLog('import.log', 'INFO', `Skipped duplicate: folio ${row.folio_num}, date ${isoDate}, amount ${amount}`);
         }
 
-        if (nav > 0 && isoDate && row.isin) {
-          db.prepare('INSERT OR REPLACE INTO nav_history (isin, nav_date, nav) VALUES (?, ?, ?)').run(row.isin, isoDate, nav);
+        if (nav > 0 && isoDate && isin) {
+          db.prepare('INSERT OR REPLACE INTO nav_history (isin, nav_date, nav) VALUES (?, ?, ?)').run(isin, isoDate, nav);
         }
       } catch (rowError) {
         const errorMsg = rowError instanceof Error ? rowError.message : String(rowError);
@@ -110,6 +113,15 @@ router.post('/import-cas', (req, res) => {
         errors++;
       }
     }
+    
+    // Auto-refresh AMFI codes and NAVs after import
+    try {
+      const { updated } = await refreshAmfiCodes();
+      appendLog('import.log', 'INFO', `Post-import AMFI refresh: ${updated} codes updated`);
+    } catch (refreshErr) {
+      appendLog('import.log', 'ERROR', `Post-import AMFI refresh failed: ${String(refreshErr)}`);
+    }
+
     appendLog('import.log', 'INFO', `Complete: ${added} added, ${skipped} skipped, ${errors} errors`);
     res.json({ added, skipped, errors });
   } catch (parseError) {
