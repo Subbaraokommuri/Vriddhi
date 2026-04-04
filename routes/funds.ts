@@ -32,20 +32,23 @@ router.get('/folios', (req, res) => {
     const navDate = latestNav ? latestNav.date : null;
 
     let currentUnits = 0;
-    let investedAmount = 0;
+    let grossInvested = 0;
+    let totalRedeemed = 0;
     const cashflows: { date: Date; amount: number }[] = [];
 
     for (const t of txns) {
       if (t.transaction_type === 'buy') {
         currentUnits += t.units;
-        investedAmount += t.amount;
+        grossInvested += t.amount;
         cashflows.push({ date: new Date(t.date), amount: -t.amount });
       } else {
         currentUnits -= t.units;
-        investedAmount -= t.amount;
+        totalRedeemed += t.amount;
         cashflows.push({ date: new Date(t.date), amount: t.amount });
       }
     }
+
+    const investedAmount = grossInvested - totalRedeemed;
 
     if (currentUnits > 0 && nav > 0) {
       cashflows.push({ date: new Date(), amount: currentUnits * nav });
@@ -65,6 +68,8 @@ router.get('/folios', (req, res) => {
       ...folio,
       currentUnits,
       investedAmount,
+      grossInvested,
+      totalRedeemed,
       currentValue: currentUnits * nav,
       nav,
       navDate,

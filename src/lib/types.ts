@@ -15,6 +15,8 @@ export interface Folio {
   category: string;
   currentUnits: number;
   investedAmount: number;
+  grossInvested: number;
+  totalRedeemed: number;
   currentValue: number;
   nav: number;
   navDate: string | null;

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Filter, AlertCircle, Download, Clock } from 'lucide-react';
+import { AlertCircle, Download, Clock } from 'lucide-react';
 import { cn, formatCurrency, formatDate } from '../lib/utils';
 import { Folio } from '../lib/types';
 import { fetchFolios } from '../lib/api';
@@ -11,7 +11,7 @@ export function FundsList() {
   
   // UI State
   const [activeOnly, setActiveOnly] = useState(() => {
-    return localStorage.getItem('activeOnlyFunds') === 'true';
+    return localStorage.getItem('activeOnlyFunds') !== 'false';
   });
 
   useEffect(() => {
@@ -35,7 +35,7 @@ export function FundsList() {
     localStorage.setItem('activeOnlyFunds', activeOnly.toString());
   }, [activeOnly]);
 
-  const filteredFolios = activeOnly ? (folios ?? []).filter(f => (f.currentUnits ?? 0) > 0) : (folios ?? []);
+  const filteredFolios = activeOnly ? (folios ?? []).filter(f => (f.currentUnits ?? 0) > 0.001) : (folios ?? []);
 
   if (!folios) return <div className="p-4 text-gray-500">Loading holdings...</div>;
 
@@ -76,6 +76,9 @@ export function FundsList() {
               )} />
             </div>
             <span className="text-sm font-bold text-slate-600 group-hover:text-[#01696f] transition-colors">Active Only</span>
+            <span className="text-xs text-slate-400 font-normal">
+              ({filteredFolios.length}/{folios.length})
+            </span>
           </label>
           <div className="flex gap-2">
             <button 
@@ -85,8 +88,6 @@ export function FundsList() {
               <Download className="w-4 h-4" />
               <span>Export CSV</span>
             </button>
-            <button className="p-2 hover:bg-slate-100 rounded-lg"><Filter className="w-5 h-5 text-slate-500" /></button>
-            <button className="p-2 hover:bg-slate-100 rounded-lg"><Search className="w-5 h-5 text-slate-500" /></button>
           </div>
         </div>
       </div>
