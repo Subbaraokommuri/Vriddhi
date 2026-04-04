@@ -19,7 +19,10 @@ router.get('/benchmark-xirr', (req, res) => {
 
     for (const f of folios) {
       const txns = db.prepare('SELECT date, amount, units, transaction_type FROM transactions WHERE folio_id = ?').all(f.id) as any[];
-      const latestNav = db.prepare('SELECT nav FROM nav_history WHERE fund_id = ? ORDER BY date DESC LIMIT 1').get(f.id) as any;
+      const fund = db.prepare('SELECT fu.isin FROM funds fu JOIN folios f ON f.fund_id = fu.id WHERE f.id = ?').get(f.id) as any;
+      const latestNav = fund?.isin
+        ? db.prepare('SELECT nav FROM nav_history WHERE isin = ? ORDER BY nav_date DESC LIMIT 1').get(fund.isin) as any
+        : null;
       const nav = latestNav ? latestNav.nav : 0;
       let currentUnits = 0;
 
@@ -51,7 +54,10 @@ router.get('/benchmark-xirr', (req, res) => {
 
     for (const a of assets) {
       const txns = db.prepare('SELECT date, amount, units, transaction_type FROM transactions WHERE folio_id = ?').all(a.asset_id) as any[];
-      const latestNav = db.prepare('SELECT nav FROM nav_history WHERE fund_id = ? ORDER BY date DESC LIMIT 1').get(a.asset_id) as any;
+      const fund = db.prepare('SELECT fu.isin FROM funds fu JOIN folios f ON f.fund_id = fu.id WHERE f.id = ?').get(a.asset_id) as any;
+      const latestNav = fund?.isin
+        ? db.prepare('SELECT nav FROM nav_history WHERE isin = ? ORDER BY nav_date DESC LIMIT 1').get(fund.isin) as any
+        : null;
       const nav = latestNav ? latestNav.nav : 0;
       let currentUnits = 0;
 
@@ -78,7 +84,10 @@ router.get('/benchmark-xirr', (req, res) => {
     }
   } else if (folio_id) {
     const txns = db.prepare('SELECT date, amount, units, transaction_type FROM transactions WHERE folio_id = ?').all(folio_id) as any[];
-    const latestNav = db.prepare('SELECT nav FROM nav_history WHERE fund_id = ? ORDER BY date DESC LIMIT 1').get(folio_id) as any;
+    const fund = db.prepare('SELECT fu.isin FROM funds fu JOIN folios f ON f.fund_id = fu.id WHERE f.id = ?').get(folio_id) as any;
+    const latestNav = fund?.isin
+      ? db.prepare('SELECT nav FROM nav_history WHERE isin = ? ORDER BY nav_date DESC LIMIT 1').get(fund.isin) as any
+      : null;
     const nav = latestNav ? latestNav.nav : 0;
     let currentUnits = 0;
     const allCf: { date: Date; amount: number }[] = [];

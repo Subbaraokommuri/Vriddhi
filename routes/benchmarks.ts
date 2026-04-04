@@ -1,7 +1,7 @@
 import express from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import yahooFinance from 'yahoo-finance2';
-import { db, log } from '../lib/db.ts';
+import { db, appendLog } from '../lib/db.ts';
 import { CONFIG } from '../lib/config.ts';
 
 const router = express.Router();
@@ -32,10 +32,10 @@ router.post('/fetch-all-benchmarks', async (req, res) => {
     try {
       if (b.source === 'yahoo') {
         const result = await yahooFinance.historical(b.symbol, { period1: '2010-01-01' }) as any[];
-        const insert = db.prepare('INSERT OR REPLACE INTO benchmark_prices (symbol, name, date, close, source) VALUES (?, ?, ?, ?, ?)');
+        const insert = db.prepare('INSERT OR REPLACE INTO benchmark_history (index_name, price_date, value) VALUES (?, ?, ?)');
         const transaction = db.transaction((data) => {
           for (const item of data) {
-            insert.run(b.symbol, b.name, item.date.toISOString().split('T')[0], item.close, 'index');
+            insert.run(b.symbol, item.date.toISOString().split('T')[0], item.close);
           }
         });
         transaction(result);
@@ -44,12 +44,12 @@ router.post('/fetch-all-benchmarks', async (req, res) => {
         const response = await fetch(`${CONFIG.APIS.MF_DATA}${b.symbol}`);
         const data = await response.json() as any;
         if (data && data.data) {
-          const insert = db.prepare('INSERT OR REPLACE INTO benchmark_prices (symbol, name, date, close, source, amfi_code) VALUES (?, ?, ?, ?, ?, ?)');
+          const insert = db.prepare('INSERT OR REPLACE INTO benchmark_history (index_name, price_date, value) VALUES (?, ?, ?)');
           const transaction = db.transaction((items) => {
             for (const item of items) {
               const [d, m, y] = item.date.split('-');
               const isoDate = `${y}-${m}-${d}`;
-              insert.run(b.symbol, b.name, isoDate, parseFloat(item.nav), 'mf', b.symbol);
+              insert.run(b.symbol, isoDate, parseFloat(item.nav));
             }
           });
           transaction(data.data);
@@ -57,11 +57,11 @@ router.post('/fetch-all-benchmarks', async (req, res) => {
         }
       }
     } catch (e) {
-      log('app', 'ERROR', 'BENCHMARK', `Failed to fetch benchmark ${b.name}: ${String(e)}`);
+      appendLog('benchmark.log', 'ERROR', `Failed to fetch benchmark ${b.name}: ${String(e)}`);
       console.error(`Failed to fetch benchmark ${b.name}`, e);
     }
   }
-  log('app', 'INFO', 'BENCHMARK', `Benchmark update complete: ${updated.length} benchmarks updated`);
+  appendLog('benchmark.log', 'INFO', `Benchmark update complete: ${updated.length} benchmarks updated`);
   res.json({ updated });
 });
 
@@ -71,44 +71,50 @@ router.post('/fetch-mf-benchmark', async (req, res) => {
     const response = await fetch(`${CONFIG.APIS.MF_DATA}${amfi_code}`);
     const data = await response.json() as any;
     if (data && data.data) {
-      const insert = db.prepare('INSERT OR REPLACE INTO benchmark_prices (symbol, name, date, close, source, amfi_code) VALUES (?, ?, ?, ?, ?, ?)');
+      const insert = db.prepare('INSERT OR REPLACE INTO benchmark_history (index_name, price_date, value) VALUES (?, ?, ?)');
       const transaction = db.transaction((items) => {
         for (const item of items) {
           const [d, m, y] = item.date.split('-');
           const isoDate = `${y}-${m}-${d}`;
-          insert.run(amfi_code, name, isoDate, parseFloat(item.nav), 'mf', amfi_code);
+          insert.run(amfi_code, isoDate, parseFloat(item.nav));
         }
       });
       transaction(data.data);
-      log('app', 'INFO', 'BENCHMARK', `Fetched MF benchmark ${name} (${amfi_code}): ${data.data.length} days`);
+      appendLog('benchmark.log', 'INFO', `Fetched MF benchmark ${name} (${amfi_code}): ${data.data.length} days`);
       res.json({ count: data.data.length });
     } else {
-      log('app', 'WARN', 'BENCHMARK', `MF benchmark ${name} (${amfi_code}) not found`);
+      appendLog('benchmark.log', 'WARN', `MF benchmark ${name} (${amfi_code}) not found`);
       res.status(404).json({ error: 'MF not found' });
     }
   } catch (e) {
-    log('app', 'ERROR', 'BENCHMARK', `Failed to fetch MF benchmark ${name} (${amfi_code}): ${String(e)}`);
+    appendLog('benchmark.log', 'ERROR', `Failed to fetch MF benchmark ${name} (${amfi_code}): ${String(e)}`);
     res.status(500).json({ error: String(e) });
   }
 });
 
 router.get('/portfolio-growth-vs-benchmark', (req, res) => {
   const { benchmark_symbol } = req.query as any;
-  const txns = db.prepare('SELECT date, amount, units, folio_id, transaction_type FROM transactions ORDER BY date ASC').all() as any[];
+  const txns = db.prepare(`
+    SELECT t.date, t.amount, t.units, t.folio_id, t.transaction_type, fu.isin
+    FROM transactions t
+    JOIN folios f ON t.folio_id = f.id
+    JOIN funds fu ON f.fund_id = fu.id
+    ORDER BY t.date ASC
+  `).all() as any[];
   if (txns.length === 0) return res.json([]);
 
   const startDate = new Date(txns[0].date);
   const endDate = new Date();
   const result = [];
 
-  // Get all unique fund IDs
-  const fundIds = [...new Set(txns.map(t => t.folio_id))];
+  // Get all unique ISINs
+  const isins = [...new Set(txns.map(t => t.isin).filter(Boolean))];
   const navs: Record<string, any[]> = {};
-  for (const id of fundIds) {
-    navs[id] = db.prepare('SELECT date, nav FROM nav_history WHERE fund_id = ? ORDER BY date ASC').all(id) as any[];
+  for (const isin of isins) {
+    navs[isin] = db.prepare('SELECT nav_date as date, nav FROM nav_history WHERE isin = ? ORDER BY nav_date ASC').all(isin) as any[];
   }
 
-  const benchmarkPrices = db.prepare('SELECT date, close FROM benchmark_prices WHERE symbol = ? ORDER BY date ASC').all(benchmark_symbol) as any[];
+  const benchmarkPrices = db.prepare('SELECT price_date as date, value as close FROM benchmark_history WHERE index_name = ? ORDER BY price_date ASC').all(benchmark_symbol) as any[];
   const bPricesMap = new Map(benchmarkPrices.map(p => [p.date, p.close]));
 
   let currentPortfolioUnits: Record<string, number> = {};
@@ -143,14 +149,15 @@ router.get('/portfolio-growth-vs-benchmark', (req, res) => {
       } else {
         currentPortfolioUnits[t.folio_id] -= t.units;
         totalInvested -= t.amount;
-        // For simplicity, we don't sell benchmark units here, we just track growth of invested capital
       }
     }
 
     // Calculate current values
     let portfolioValue = 0;
     for (const id in currentPortfolioUnits) {
-      const fundNavs = navs[id];
+      const txn = txns.find(t => t.folio_id === id);
+      if (!txn || !txn.isin) continue;
+      const fundNavs = navs[txn.isin];
       const closestNav = fundNavs.filter(n => new Date(n.date) <= curr).pop();
       if (closestNav) {
         portfolioValue += currentPortfolioUnits[id] * closestNav.nav;

@@ -1,7 +1,7 @@
 import express from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { parse } from 'csv-parse/sync';
-import { db, log } from '../lib/db.ts';
+import { db, appendLog } from '../lib/db.ts';
 import { CONFIG } from '../lib/config.ts';
 
 const router = express.Router();
@@ -32,10 +32,8 @@ router.post('/import-cas', (req, res) => {
 
     const convertDate = (dateStr: string) => {
       if (!dateStr) return '';
-      // Handle YYYY-MM-DD
       if (dateStr.match(/^\d{4}-\d{2}-\d{2}$/)) return dateStr;
       
-      // Handle DD-MMM-YY (e.g. 01-Jan-13)
       const parts = dateStr.split('-');
       if (parts.length === 3) {
         const day = parts[0].padStart(2, '0');
@@ -51,7 +49,6 @@ router.post('/import-cas', (req, res) => {
 
     for (const rawRow of records as any[]) {
       try {
-        // Map column names
         const row = {
           folio_num: rawRow.folio_num || rawRow.Folio,
           isin: rawRow.isin || rawRow.ISIN,
@@ -83,7 +80,6 @@ router.post('/import-cas', (req, res) => {
         let type = 'buy';
         const rawType = (row.transaction_type || '').toLowerCase();
         
-        // Handle negative amounts/units as sell
         if (amount < 0 || units < 0 || rawType.includes('redemption') || rawType.includes('switch out') || rawType.includes('swp') || rawType.includes('stp out')) {
           type = 'sell';
           amount = Math.abs(amount);
@@ -99,26 +95,25 @@ router.post('/import-cas', (req, res) => {
 
         if (result.changes > 0) {
           added++;
-          log('import', 'INFO', 'IMPORT', `Processed: folio ${row.folio_num}, fund ${row.fund_name}, date ${isoDate}, amount ${amount}`);
+          appendLog('import.log', 'INFO', `Processed: folio ${row.folio_num}, fund ${row.fund_name}, date ${isoDate}, amount ${amount}`);
         } else {
           skipped++;
-          log('import', 'INFO', 'IMPORT', `Skipped duplicate: folio ${row.folio_num}, date ${isoDate}, amount ${amount}`);
+          appendLog('import.log', 'INFO', `Skipped duplicate: folio ${row.folio_num}, date ${isoDate}, amount ${amount}`);
         }
 
-        if (nav > 0 && isoDate) {
-          db.prepare('INSERT OR REPLACE INTO nav_history (fund_id, date, nav) VALUES (?, ?, ?)').run(fundId, isoDate, nav);
+        if (nav > 0 && isoDate && row.isin) {
+          db.prepare('INSERT OR REPLACE INTO nav_history (isin, nav_date, nav) VALUES (?, ?, ?)').run(row.isin, isoDate, nav);
         }
       } catch (rowError) {
         const errorMsg = rowError instanceof Error ? rowError.message : String(rowError);
-        log('import', 'ERROR', 'IMPORT', `Row ${records.indexOf(rawRow) + 1} failed: ${errorMsg}`);
-        console.error('Error processing row:', rawRow, rowError);
+        appendLog('import.log', 'ERROR', `Row ${records.indexOf(rawRow) + 1} failed: ${errorMsg}`);
         errors++;
       }
     }
-    log('import', 'INFO', 'IMPORT', `Complete: ${added} added, ${skipped} skipped, ${errors} errors`);
+    appendLog('import.log', 'INFO', `Complete: ${added} added, ${skipped} skipped, ${errors} errors`);
     res.json({ added, skipped, errors });
   } catch (parseError) {
-    console.error('CSV Parse Error:', parseError);
+    appendLog('import.log', 'ERROR', `CSV Parse Error: ${String(parseError)}`);
     res.status(400).json({ error: 'Failed to parse CSV data' });
   }
 });

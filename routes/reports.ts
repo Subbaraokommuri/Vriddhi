@@ -6,11 +6,12 @@ const router = express.Router();
 
 router.get('/summary', (req, res) => {
   const folios = db.prepare(`
-    SELECT f.id, f.fund_id, 
+    SELECT f.id, fu.isin, 
            SUM(CASE WHEN t.transaction_type = 'buy' THEN t.units ELSE -t.units END) as current_units,
            SUM(CASE WHEN t.transaction_type = 'buy' THEN t.amount ELSE -t.amount END) as invested_amount
     FROM folios f
     JOIN transactions t ON f.id = t.folio_id
+    JOIN funds fu ON f.fund_id = fu.id
     GROUP BY f.id
   `).all() as any[];
 
@@ -19,7 +20,7 @@ router.get('/summary', (req, res) => {
   const allCashflows: { date: Date; amount: number }[] = [];
 
   for (const folio of folios) {
-    const latestNav = db.prepare('SELECT nav FROM nav_history WHERE fund_id = ? ORDER BY date DESC LIMIT 1').get(folio.fund_id) as any;
+    const latestNav = db.prepare('SELECT nav FROM nav_history WHERE isin = ? ORDER BY nav_date DESC LIMIT 1').get(folio.isin) as any;
     const nav = latestNav ? latestNav.nav : 0;
     
     totalInvested += folio.invested_amount;

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Filter, AlertCircle, Download } from 'lucide-react';
-import { cn, formatCurrency } from '../lib/utils';
+import { Search, Filter, AlertCircle, Download, Clock } from 'lucide-react';
+import { cn, formatCurrency, formatDate } from '../lib/utils';
 import { Folio } from '../lib/types';
 import { fetchFolios } from '../lib/api';
 
@@ -97,6 +97,7 @@ export function FundsList() {
               <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase">Fund Name</th>
               <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase text-right">Units</th>
               <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase text-right">NAV</th>
+              <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase text-right">Last Updated</th>
               <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase text-right">Current Value</th>
               <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase">Category</th>
             </tr>
@@ -104,7 +105,7 @@ export function FundsList() {
           <tbody className="divide-y divide-slate-200">
             {(filteredFolios ?? []).length === 0 ? (
               <tr>
-                <td colSpan={5} className="px-6 py-12 text-center text-slate-500">
+                <td colSpan={6} className="px-6 py-12 text-center text-slate-500">
                   No funds found.
                 </td>
               </tr>
@@ -120,6 +121,14 @@ export function FundsList() {
                   </td>
                   <td className="px-6 py-4 text-right tabular-nums text-sm font-medium">
                     ₹{(folio.nav ?? 0).toFixed(4)}
+                  </td>
+                  <td className="px-6 py-4 text-right tabular-nums text-xs text-slate-500">
+                    {folio.navDate ? (
+                      <div className="flex items-center justify-end gap-1">
+                        <Clock className="w-3 h-3" />
+                        {formatDate(folio.navDate)}
+                      </div>
+                    ) : 'Never'}
                   </td>
                   <td className="px-6 py-4 text-right tabular-nums text-sm font-bold text-[#01696f]">
                     {formatCurrency(folio.currentValue)}

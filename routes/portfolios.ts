@@ -31,7 +31,10 @@ router.get('/portfolios', (req, res) => {
 
     for (const folio of folios) {
       const txns = db.prepare('SELECT date, amount, units, transaction_type FROM transactions WHERE folio_id = ?').all(folio.id) as any[];
-      const latestNav = db.prepare('SELECT nav FROM nav_history WHERE fund_id = ? ORDER BY date DESC LIMIT 1').get(folio.fund_id) as any;
+      const fund = db.prepare('SELECT isin FROM funds WHERE id = ?').get(folio.fund_id) as any;
+      const latestNav = fund?.isin
+        ? db.prepare('SELECT nav FROM nav_history WHERE isin = ? ORDER BY nav_date DESC LIMIT 1').get(fund.isin) as any
+        : null;
       const nav = latestNav ? latestNav.nav : 0;
 
       let currentUnits = 0;
