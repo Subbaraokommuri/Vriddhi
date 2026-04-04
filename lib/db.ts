@@ -27,6 +27,26 @@ export function log(type: 'app' | 'import' | 'benchmark' | 'nav', level: 'INFO' 
 }
 
 /**
+ * Standard logger
+ */
+export function appendLog(filename: string, level: string, message: string) {
+  try {
+    const date = new Date();
+    const dateStr = date.toISOString().split('T')[0];
+    const timeStr = date.toTimeString().split(' ')[0];
+    const logDir = path.join(process.cwd(), CONFIG.LOG_DIR);
+    if (!fs.existsSync(logDir)) {
+      fs.mkdirSync(logDir, { recursive: true });
+    }
+    const logFile = path.join(logDir, filename);
+    const logLine = `[${dateStr} ${timeStr}] [${level}] ${message}\n`;
+    fs.appendFileSync(logFile, logLine);
+  } catch (err) {
+    console.error('Logging failed:', err);
+  }
+}
+
+/**
  * Initialize Database and run migrations
  */
 export function initDb() {
