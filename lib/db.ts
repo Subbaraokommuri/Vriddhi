@@ -7,7 +7,7 @@ import { CONFIG } from './config.ts';
 export const db = new Database(CONFIG.DB_NAME);
 
 /**
- * Logging system
+ * Logging system (Legacy)
  */
 export function log(type: 'app' | 'import' | 'benchmark', level: 'INFO' | 'WARN' | 'ERROR', module: string, message: string) {
   try {
@@ -23,6 +23,27 @@ export function log(type: 'app' | 'import' | 'benchmark', level: 'INFO' | 'WARN'
     fs.appendFileSync(logFile, logLine);
   } catch (err) {
     console.error('Logging failed:', err);
+  }
+}
+
+/**
+ * New Logging system
+ */
+export function appendLog(logFile: string, level: 'INFO' | 'WARN' | 'ERROR', message: string) {
+  try {
+    const logDir = path.join(process.cwd(), 'logs');
+    if (!fs.existsSync(logDir)) {
+      fs.mkdirSync(logDir, { recursive: true });
+    }
+    const now = new Date();
+    const datePart = now.toISOString().split('T')[0];
+    const timePart = now.toTimeString().split(' ')[0];
+    const timestamp = `${datePart} ${timePart}`;
+    const logPath = path.join(logDir, logFile);
+    const logLine = `[${timestamp}] ${level} ${message}\n`;
+    fs.appendFileSync(logPath, logLine);
+  } catch (err) {
+    console.error('appendLog failed:', err);
   }
 }
 
@@ -176,6 +197,75 @@ export function initDb() {
   if (count.count === 0) {
     const insert = db.prepare('INSERT INTO user_benchmarks (id, symbol, name, source, category, color) VALUES (?, ?, ?, ?, ?, ?)');
     CONFIG.DEFAULT_BENCHMARKS.forEach(d => insert.run(uuidv4(), d.symbol, d.name, d.source, d.category, d.color));
+  }
+
+  // NEW MIGRATIONS
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS benchmark_history (
+      index_name TEXT NOT NULL,
+      price_date TEXT NOT NULL,
+      value      REAL NOT NULL,
+      PRIMARY KEY (index_name, price_date)
+    );
+    CREATE INDEX IF NOT EXISTS idx_benchmark_date ON benchmark_history(index_name, price_date);
+  `);
+
+  // Check if nav_history needs to be migrated to the isin-based schema
+  const navHistoryCols = db.prepare("PRAGMA table_info(nav_history)").all() as any[];
+  if (navHistoryCols.length > 0 && !navHistoryCols.find(c => c.name === 'isin')) {
+    // Table exists but with old schema (fund_id). Rename it to avoid conflict.
+    db.exec("ALTER TABLE nav_history RENAME TO nav_history_v1");
+  }
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS nav_history (
+      isin      TEXT NOT NULL,
+      nav_date  TEXT NOT NULL,
+      nav       REAL NOT NULL,
+      PRIMARY KEY (isin, nav_date)
+    );
+    CREATE INDEX IF NOT EXISTS idx_nav_history_isin_date ON nav_history(isin, nav_date);
+  `);
+
+  // Data migration for nav_history
+  const v1Exists = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='nav_history_v1'").get();
+  if (v1Exists) {
+    appendLog('db.log', 'INFO', 'Migrating data to new nav_history schema');
+    db.exec(`
+      INSERT OR IGNORE INTO nav_history (isin, nav_date, nav)
+      SELECT f.isin, n.date, n.nav
+      FROM nav_history_v1 n
+      JOIN funds f ON n.fund_id = f.id
+      WHERE f.isin IS NOT NULL;
+    `);
+  }
+
+  // Data migration for benchmark_history
+  const bpExists = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='benchmark_prices'").get();
+  if (bpExists) {
+    appendLog('db.log', 'INFO', 'Migrating data to benchmark_history');
+    db.exec(`
+      INSERT OR IGNORE INTO benchmark_history (index_name, price_date, value)
+      SELECT symbol, date, close
+      FROM benchmark_prices;
+    `);
+  }
+
+  // Migration for funds/folios columns
+  const fundsCols = db.prepare("PRAGMA table_info(funds)").all() as any[];
+  if (!fundsCols.find(c => c.name === 'amfi_code')) {
+    db.exec("ALTER TABLE funds ADD COLUMN amfi_code TEXT");
+  }
+  if (!fundsCols.find(c => c.name === 'nav_history_fetched')) {
+    db.exec("ALTER TABLE funds ADD COLUMN nav_history_fetched INTEGER DEFAULT 0");
+  }
+
+  const foliosCols = db.prepare("PRAGMA table_info(folios)").all() as any[];
+  if (!foliosCols.find(c => c.name === 'amfi_code')) {
+    db.exec("ALTER TABLE folios ADD COLUMN amfi_code TEXT");
+  }
+  if (!foliosCols.find(c => c.name === 'nav_history_fetched')) {
+    db.exec("ALTER TABLE folios ADD COLUMN nav_history_fetched INTEGER DEFAULT 0");
   }
 
   const logDir = path.join(process.cwd(), CONFIG.LOG_DIR);

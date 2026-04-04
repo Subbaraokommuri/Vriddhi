@@ -1,6 +1,6 @@
 import express from 'express';
 import { v4 as uuidv4 } from 'uuid';
-import { db, log } from '../lib/db.ts';
+import { db, appendLog } from '../lib/db.ts';
 import { xirr } from '../lib/xirr.ts';
 import { CONFIG } from '../lib/config.ts';
 
@@ -20,15 +20,16 @@ router.post('/funds', (req, res) => {
 
 router.get('/folios', (req, res) => {
   const folios = db.prepare(`
-    SELECT f.*, fu.name as fund_name, fu.category
+    SELECT f.*, fu.name as fund_name, fu.category, fu.isin
     FROM folios f
     JOIN funds fu ON f.fund_id = fu.id
   `).all() as any[];
 
   const result = folios.map(folio => {
     const txns = db.prepare('SELECT date, amount, units, transaction_type FROM transactions WHERE folio_id = ?').all(folio.id) as any[];
-    const latestNav = db.prepare('SELECT nav FROM nav_history WHERE fund_id = ? ORDER BY date DESC LIMIT 1').get(folio.fund_id) as any;
+    const latestNav = db.prepare('SELECT nav, nav_date as date FROM nav_history WHERE isin = ? ORDER BY nav_date DESC LIMIT 1').get(folio.isin) as any;
     const nav = latestNav ? latestNav.nav : 0;
+    const navDate = latestNav ? latestNav.date : null;
 
     let currentUnits = 0;
     let investedAmount = 0;
@@ -65,6 +66,8 @@ router.get('/folios', (req, res) => {
       currentUnits,
       investedAmount,
       currentValue: currentUnits * nav,
+      nav,
+      navDate,
       xirr: folioXirr
     };
   });
@@ -75,8 +78,13 @@ router.get('/folios', (req, res) => {
 router.put('/funds/:id/nav', (req, res) => {
   const { id } = req.params;
   const { nav, date } = req.body;
-  db.prepare('INSERT OR REPLACE INTO nav_history (fund_id, date, nav) VALUES (?, ?, ?)').run(id, date || new Date().toISOString().split('T')[0], nav);
-  res.json({ success: true });
+  const fund = db.prepare('SELECT isin FROM funds WHERE id = ?').get(id) as any;
+  if (fund && fund.isin) {
+    db.prepare('INSERT OR REPLACE INTO nav_history (isin, nav_date, nav) VALUES (?, ?, ?)').run(fund.isin, date || new Date().toISOString().split('T')[0], nav);
+    res.json({ success: true });
+  } else {
+    res.status(400).json({ error: 'Fund ISIN missing' });
+  }
 });
 
 router.get('/export-holdings-csv', (req, res) => {
@@ -97,7 +105,7 @@ router.get('/export-holdings-csv', (req, res) => {
 
     for (const folio of folios) {
       const txns = db.prepare('SELECT amount, units, transaction_type FROM transactions WHERE folio_id = ?').all(folio.id) as any[];
-      const latestNavData = db.prepare('SELECT nav, date FROM nav_history WHERE fund_id = ? ORDER BY date DESC LIMIT 1').get(folio.fund_id) as any;
+      const latestNavData = db.prepare('SELECT nav, nav_date as date FROM nav_history WHERE isin = ? ORDER BY nav_date DESC LIMIT 1').get(folio.isin) as any;
       
       const nav = latestNavData ? latestNavData.nav : 0;
       const navDate = latestNavData ? latestNavData.date : '';
@@ -160,7 +168,7 @@ router.get('/export-holdings-csv', (req, res) => {
     res.status(200).send(rows.join('\n'));
 
   } catch (error) {
-    console.error('Export failed:', error);
+    appendLog('app.log', 'ERROR', `Export failed: ${String(error)}`);
     res.status(500).json({ error: error instanceof Error ? error.message : 'Unknown error' });
   }
 });

@@ -63,9 +63,9 @@ export async function importCas(csvData: string): Promise<{ added: number; skipp
   return handleResponse<{ added: number; skipped: number; errors: number }>(res);
 }
 
-export async function updateNavs(): Promise<{ updated: number }> {
+export async function updateNavs(): Promise<{ updated: number; errors?: { fundId: string; name: string; error: string }[] }> {
   const res = await fetch('/api/fetch-nav', { method: 'POST' });
-  return handleResponse<{ updated: number }>(res);
+  return handleResponse<{ updated: number; errors?: { fundId: string; name: string; error: string }[] }>(res);
 }
 
 export async function fetchLogs(type: string, date: string): Promise<string> {
