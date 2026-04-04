@@ -125,7 +125,7 @@ export async function refreshAmfiCodes() {
   return { updated, notFound, failed };
 }
 
-router.post('/refresh-amfi-codes', async (req, res) => {
+router.post('/nav/refresh-amfi-codes', async (req, res) => {
   try {
     const result = await refreshAmfiCodes();
     res.json({
@@ -153,6 +153,104 @@ router.post('/fetch-nav', async (req, res) => {
     log('nav', 'ERROR', 'NAV', `NAVAll.txt fetch failed: ${reason}`);
     res.status(503).json({ error: 'Failed to fetch NAVAll.txt from AMFI' });
   }
+});
+
+router.post('/nav/backfill', async (req, res) => {
+  const funds = db.prepare(`
+    SELECT f.id, f.name, f.isin, f.amfi_code, f.nav_history_fetched,
+           MAX(nh.nav_date) as last_nav_date
+    FROM funds f
+    LEFT JOIN nav_history nh ON nh.isin = f.isin
+    WHERE f.amfi_code IS NOT NULL AND f.isin IS NOT NULL
+    GROUP BY f.id
+  `).all() as any[];
+
+  log('nav', 'INFO', 'BACKFILL', `Starting NAV history backfill/sync: ${funds.length} funds to process`);
+  
+  let full_backfill = 0;
+  let incremental = 0;
+  let up_to_date = 0;
+  const failed: { name: string; reason: string }[] = [];
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  for (const fund of funds) {
+    try {
+      // CASE 2: Already backfilled, check gap
+      if (fund.nav_history_fetched === 1 && fund.last_nav_date) {
+        const lastDate = new Date(fund.last_nav_date);
+        lastDate.setHours(0, 0, 0, 0);
+        const gap = Math.floor((today.getTime() - lastDate.getTime()) / (1000 * 60 * 60 * 24));
+        
+        if (gap <= 1) {
+          log('nav', 'INFO', 'BACKFILL', `Up to date: ${fund.name} (last: ${fund.last_nav_date})`);
+          up_to_date++;
+          continue;
+        }
+      }
+
+      // Fetch from MFAPI
+      const response = await fetch(`https://api.mfapi.in/mf/${fund.amfi_code}`);
+      if (!response.ok) {
+        throw new Error(`MFAPI request failed: ${response.statusText}`);
+      }
+      
+      const data = await response.json() as any;
+      if (data && data.data && Array.isArray(data.data)) {
+        let rowsBefore = 0;
+        if (fund.nav_history_fetched === 1) {
+          const countRes = db.prepare('SELECT COUNT(*) as count FROM nav_history WHERE isin = ?').get(fund.isin) as any;
+          rowsBefore = countRes.count;
+        }
+
+        const insert = db.prepare('INSERT OR IGNORE INTO nav_history (isin, nav_date, nav) VALUES (?, ?, ?)');
+        const transaction = db.transaction((items: any[]) => {
+          for (const item of items) {
+            // Convert DD-MM-YYYY to YYYY-MM-DD
+            const parts = item.date.split('-');
+            if (parts.length === 3) {
+              const isoDate = `${parts[2]}-${parts[1]}-${parts[0]}`;
+              insert.run(fund.isin, isoDate, parseFloat(item.nav));
+            }
+          }
+        });
+        
+        transaction(data.data);
+
+        if (fund.nav_history_fetched === 0) {
+          // CASE 1: Never backfilled
+          db.prepare('UPDATE funds SET nav_history_fetched = 1 WHERE id = ?').run(fund.id);
+          log('nav', 'INFO', 'BACKFILL', `Full backfill ${fund.name}: ${data.data.length} days inserted`);
+          full_backfill++;
+        } else {
+          // CASE 2: Incremental fill
+          const countRes = db.prepare('SELECT COUNT(*) as count FROM nav_history WHERE isin = ?').get(fund.isin) as any;
+          const rowsAfter = countRes.count;
+          const newRows = rowsAfter - rowsBefore;
+          
+          const lastDate = new Date(fund.last_nav_date);
+          lastDate.setHours(0, 0, 0, 0);
+          const gap = Math.floor((today.getTime() - lastDate.getTime()) / (1000 * 60 * 60 * 24));
+          
+          log('nav', 'INFO', 'BACKFILL', `Incremental fill ${fund.name}: ${newRows} new days, gap was ${gap} days`);
+          incremental++;
+        }
+      } else {
+        throw new Error('Invalid data format from MFAPI');
+      }
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      log('nav', 'ERROR', 'BACKFILL', `Failed ${fund.name} (${fund.amfi_code}): ${reason}`);
+      failed.push({ name: fund.name, reason });
+    }
+    
+    // 300ms delay to avoid rate limiting
+    await new Promise(r => setTimeout(r, 300));
+  }
+
+  log('nav', 'INFO', 'BACKFILL', `COMPLETE backfill: ${full_backfill} full, ${incremental} incremental, ${up_to_date} up-to-date, ${failed.length} errors`);
+  res.json({ full_backfill, incremental, up_to_date, failed });
 });
 
 /**
