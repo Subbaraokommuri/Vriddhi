@@ -1,6 +1,6 @@
 import express from 'express';
 import { v4 as uuidv4 } from 'uuid';
-import { db, appendLog } from '../lib/db.ts';
+import { db, log } from '../lib/db.ts';
 import { xirr } from '../lib/xirr.ts';
 import { CONFIG } from '../lib/config.ts';
 
@@ -168,7 +168,7 @@ router.get('/export-holdings-csv', (req, res) => {
     res.status(200).send(rows.join('\n'));
 
   } catch (error) {
-    appendLog('app.log', 'ERROR', `Export failed: ${String(error)}`);
+    log('app', 'ERROR', 'FUNDS', `Export failed: ${String(error)}`);
     res.status(500).json({ error: error instanceof Error ? error.message : 'Unknown error' });
   }
 });

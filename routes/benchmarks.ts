@@ -1,7 +1,7 @@
 import express from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import yahooFinance from 'yahoo-finance2';
-import { db, appendLog } from '../lib/db.ts';
+import { db, log } from '../lib/db.ts';
 import { CONFIG } from '../lib/config.ts';
 
 const router = express.Router();
@@ -57,11 +57,11 @@ router.post('/fetch-all-benchmarks', async (req, res) => {
         }
       }
     } catch (e) {
-      appendLog('benchmark.log', 'ERROR', `Failed to fetch benchmark ${b.name}: ${String(e)}`);
+      log('benchmark', 'ERROR', 'BENCHMARK', `Failed to fetch benchmark ${b.name}: ${String(e)}`);
       console.error(`Failed to fetch benchmark ${b.name}`, e);
     }
   }
-  appendLog('benchmark.log', 'INFO', `Benchmark update complete: ${updated.length} benchmarks updated`);
+  log('benchmark', 'INFO', 'BENCHMARK', `Benchmark update complete: ${updated.length} benchmarks updated`);
   res.json({ updated });
 });
 
@@ -80,14 +80,14 @@ router.post('/fetch-mf-benchmark', async (req, res) => {
         }
       });
       transaction(data.data);
-      appendLog('benchmark.log', 'INFO', `Fetched MF benchmark ${name} (${amfi_code}): ${data.data.length} days`);
+      log('benchmark', 'INFO', 'BENCHMARK', `Fetched MF benchmark ${name} (${amfi_code}): ${data.data.length} days`);
       res.json({ count: data.data.length });
     } else {
-      appendLog('benchmark.log', 'WARN', `MF benchmark ${name} (${amfi_code}) not found`);
+      log('benchmark', 'WARN', 'BENCHMARK', `MF benchmark ${name} (${amfi_code}) not found`);
       res.status(404).json({ error: 'MF not found' });
     }
   } catch (e) {
-    appendLog('benchmark.log', 'ERROR', `Failed to fetch MF benchmark ${name} (${amfi_code}): ${String(e)}`);
+    log('benchmark', 'ERROR', 'BENCHMARK', `Failed to fetch MF benchmark ${name} (${amfi_code}): ${String(e)}`);
     res.status(500).json({ error: String(e) });
   }
 });

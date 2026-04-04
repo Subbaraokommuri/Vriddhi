@@ -9,7 +9,7 @@ export const db = new Database(CONFIG.DB_NAME);
 /**
  * Logging system (Legacy)
  */
-export function log(type: 'app' | 'import' | 'benchmark', level: 'INFO' | 'WARN' | 'ERROR', module: string, message: string) {
+export function log(type: 'app' | 'import' | 'benchmark' | 'nav', level: 'INFO' | 'WARN' | 'ERROR', module: string, message: string) {
   try {
     const date = new Date();
     const dateStr = date.toISOString().split('T')[0];
@@ -23,27 +23,6 @@ export function log(type: 'app' | 'import' | 'benchmark', level: 'INFO' | 'WARN'
     fs.appendFileSync(logFile, logLine);
   } catch (err) {
     console.error('Logging failed:', err);
-  }
-}
-
-/**
- * New Logging system
- */
-export function appendLog(logFile: string, level: 'INFO' | 'WARN' | 'ERROR', message: string) {
-  try {
-    const logDir = path.join(process.cwd(), 'logs');
-    if (!fs.existsSync(logDir)) {
-      fs.mkdirSync(logDir, { recursive: true });
-    }
-    const now = new Date();
-    const datePart = now.toISOString().split('T')[0];
-    const timePart = now.toTimeString().split(' ')[0];
-    const timestamp = `${datePart} ${timePart}`;
-    const logPath = path.join(logDir, logFile);
-    const logLine = `[${timestamp}] ${level} ${message}\n`;
-    fs.appendFileSync(logPath, logLine);
-  } catch (err) {
-    console.error('appendLog failed:', err);
   }
 }
 
@@ -230,7 +209,7 @@ export function initDb() {
   // Data migration for nav_history
   const v1Exists = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='nav_history_v1'").get();
   if (v1Exists) {
-    appendLog('db.log', 'INFO', 'Migrating data to new nav_history schema');
+    log('app', 'INFO', 'DB', 'Migrating data to new nav_history schema');
     db.exec(`
       INSERT OR IGNORE INTO nav_history (isin, nav_date, nav)
       SELECT f.isin, n.date, n.nav
@@ -243,7 +222,7 @@ export function initDb() {
   // Data migration for benchmark_history
   const bpExists = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='benchmark_prices'").get();
   if (bpExists) {
-    appendLog('db.log', 'INFO', 'Migrating data to benchmark_history');
+    log('app', 'INFO', 'DB', 'Migrating data to benchmark_history');
     db.exec(`
       INSERT OR IGNORE INTO benchmark_history (index_name, price_date, value)
       SELECT symbol, date, close
