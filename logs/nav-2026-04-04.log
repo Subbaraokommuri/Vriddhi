@@ -57,3 +57,337 @@
 [2026-04-04 12:35:29] [INFO] [NAV] Updated 108NYG1G-UTI Nifty Next 50 Index Fund (INF789FC12T1): amfi_code=143341 nav=22.9552 date=2026-04-02
 [2026-04-04 12:35:29] [INFO] [NAV] COMPLETE amfi-refresh: 49 updated, 5 not found, 0 errors
 [2026-04-04 12:35:29] [INFO] [NAV] COMPLETE nav-update: 49 updated, 5 not found, 0 errors
+[2026-04-04 12:55:10] [INFO] [NAV] Starting NAV update via NAVAll.txt
+[2026-04-04 12:55:12] [INFO] [NAV] Source: NAVAll.txt (portal.amfiindia.com)
+[2026-04-04 12:55:12] [INFO] [NAV] Starting AMFI refresh: 54 funds to process
+[2026-04-04 12:55:12] [WARN] [NAV] ISIN not found in NAVAll.txt: INF209K01108 (B02G-Aditya Birla Sun Life ELSS Tax Saver Fund)
+[2026-04-04 12:55:12] [WARN] [NAV] ISIN not found in NAVAll.txt: INF194K01292 (G223-Bandhan ELSS Tax saver Fund)
+[2026-04-04 12:55:12] [WARN] [NAV] ISIN not found in NAVAll.txt: INF194K01V89 (GD201-Bandhan Large & Mid Cap Fund)
+[2026-04-04 12:55:12] [WARN] [NAV] ISIN not found in NAVAll.txt: INF761K01157 (GD201-Bandhan Large & Mid Cap Fund)
+[2026-04-04 12:55:12] [WARN] [NAV] ISIN not found in NAVAll.txt: INF760K01EI4 (101EQDGG-Canara Robeco Large and Mid Cap Fund)
+[2026-04-04 12:55:12] [WARN] [NAV] ISIN not found in NAVAll.txt: INF226401018 (183FCDGG-Capitalmind Flexi Cap Fund)
+[2026-04-04 12:55:12] [WARN] [NAV] ISIN not found in NAVAll.txt: INF740K01185 (D110-DSP ELSS Tax Saver Fund)
+[2026-04-04 12:55:12] [WARN] [NAV] ISIN not found in NAVAll.txt:  (FTI417-Franklin India Mid Cap FUND)
+[2026-04-04 12:55:12] [WARN] [NAV] ISIN not found in NAVAll.txt: INF090I01775 (FTI034-Franklin India ELSS Tax Saver Fund)
+[2026-04-04 12:55:12] [WARN] [NAV] ISIN not found in NAVAll.txt: INF090I01FN7 (FTI419-Franklin India Large Cap FUND)
+[2026-04-04 12:55:12] [WARN] [NAV] ISIN not found in NAVAll.txt: INF090I01GC8 (FTI425-Franklin INDIA OPPORTUNITIES FUND)
+[2026-04-04 12:55:12] [WARN] [NAV] ISIN not found in NAVAll.txt: INF090I01FE6 (FTI413-Franklin India Technology Fund)
+[2026-04-04 12:55:12] [WARN] [NAV] ISIN not found in NAVAll.txt: INF179K01UT0 (H02T-HDFC Flexi Cap Fund)
+[2026-04-04 12:55:12] [WARN] [NAV] ISIN not found in NAVAll.txt: INF179K01BB8 (H02T-HDFC Flexi Cap Fund)
+[2026-04-04 12:55:12] [WARN] [NAV] ISIN not found in NAVAll.txt: INF179K01BE2 (H44-HDFC Large Cap Fund)
+[2026-04-04 12:55:12] [WARN] [NAV] ISIN not found in NAVAll.txt: INF179K01YV8 (H44T-HDFC Large Cap Fund)
+[2026-04-04 12:55:12] [WARN] [NAV] ISIN not found in NAVAll.txt: INF179K01YC8 (H22T-HDFC Prudence Fund)
+[2026-04-04 12:55:12] [WARN] [NAV] ISIN not found in NAVAll.txt: INF179K01XQ0 (HMCOGT-HDFC Mid Cap Fund)
+[2026-04-04 12:55:12] [WARN] [NAV] ISIN not found in NAVAll.txt: INF179K01AV8 (H22-HDFC Prudence Fund)
+[2026-04-04 12:55:12] [WARN] [NAV] ISIN not found in NAVAll.txt: INF677K01064 (OFTAFG-HSBC ELSS Tax Saver Fund)
+[2026-04-04 12:55:12] [WARN] [NAV] ISIN not found in NAVAll.txt: INF917K01FZ1 (O17D-HSBC Midcap Fund)
+[2026-04-04 12:55:12] [WARN] [NAV] ISIN not found in NAVAll.txt: INF109K012K1 (P8176-ICICI Prudential Value Fund)
+[2026-04-04 12:55:12] [WARN] [NAV] ISIN not found in NAVAll.txt: INF109K01464 (P01-ICICI Prudential ELSS Tax Saver Fund)
+[2026-04-04 12:55:12] [WARN] [NAV] ISIN not found in NAVAll.txt: INF109KC1RH9 (P9453-ICICI Prudential India Opportunities Fund)
+[2026-04-04 12:55:12] [WARN] [NAV] ISIN not found in NAVAll.txt: INF109K011O (P8002-ICICI Prudential Large & Mid Cap Fund)
+[2026-04-04 12:55:12] [WARN] [NAV] ISIN not found in NAVAll.txt: INF109K01AF8 (PDFG-ICICI Prudential Value Fund)
+[2026-04-04 12:55:12] [WARN] [NAV] ISIN not found in NAVAll.txt: INF109K01Y80 (P8107-ICICI Prudential Nifty Next 50 Index Fund)
+[2026-04-04 12:55:12] [WARN] [NAV] ISIN not found in NAVAll.txt: INF205K01270 (120TPGPG-Invesco India ELSS Tax Saver Fund)
+[2026-04-04 12:55:12] [WARN] [NAV] ISIN not found in NAVAll.txt: INF205K01MA0 (120GFD1G-Invesco India Large & Mid Cap Fund)
+[2026-04-04 12:55:12] [WARN] [NAV] ISIN not found in NAVAll.txt: INF192K01BT3 (105BADGG-JM Value Fund)
+[2026-04-04 12:55:12] [WARN] [NAV] ISIN not found in NAVAll.txt: INF174K01LT0 (K123D-Kotak Midcap Fund)
+[2026-04-04 12:55:12] [WARN] [NAV] ISIN not found in NAVAll.txt: INF174K01369 (K144-Kotak ELSS Tax Saver Fund)
+[2026-04-04 12:55:12] [WARN] [NAV] ISIN not found in NAVAll.txt: INF769K01AX2 (117IOD1G-Mirae Asset Large Cap Fund)
+[2026-04-04 12:55:12] [WARN] [NAV] ISIN not found in NAVAll.txt: INF247L01957 (127NTGDG-Motilal Oswal Nifty 500 Index Fund)
+[2026-04-04 12:55:12] [WARN] [NAV] ISIN not found in NAVAll.txt: INF247L01502 (127CPGDG-Motilal Oswal Flexi Cap Fund)
+[2026-04-04 12:55:12] [WARN] [NAV] ISIN not found in NAVAll.txt: INF247L01189 (127MFGDG-Motilal Oswal Focused Fund)
+[2026-04-04 12:55:12] [WARN] [NAV] ISIN not found in NAVAll.txt: INF204K01XI3 (RMFEAAGG-NIPPON INDIA LARGE CAP FUND)
+[2026-04-04 12:55:12] [WARN] [NAV] ISIN not found in NAVAll.txt: INF204K01K15 (RMFSCAGG-NIPPON INDIA SMALL CAP FUND)
+[2026-04-04 12:55:12] [WARN] [NAV] ISIN not found in NAVAll.txt: INF879O01027 (PP001ZG-Parag Parikh Flexi Cap Fund)
+[2026-04-04 12:55:12] [WARN] [NAV] ISIN not found in NAVAll.txt: INF879O01332 (PPLCFGZ-Parag Parikh Large Cap Fund)
+[2026-04-04 12:55:12] [WARN] [NAV] ISIN not found in NAVAll.txt: INF966L01614 (166GFDGG-quant Multi Cap Fund)
+[2026-04-04 12:55:12] [WARN] [NAV] ISIN not found in NAVAll.txt: INF082J01036 (123EFGPG-Quantum Value Fund)
+[2026-04-04 12:55:12] [WARN] [NAV] ISIN not found in NAVAll.txt: INF200K01362 (L036G-SBI Contra Fund)
+[2026-04-04 12:55:12] [WARN] [NAV] ISIN not found in NAVAll.txt: INF200K01RJ1 (LD81G-SBI Focused Fund)
+[2026-04-04 12:55:12] [WARN] [NAV] ISIN not found in NAVAll.txt: INF200K01370 (L081G-SBI Focused Fund)
+[2026-04-04 12:55:12] [WARN] [NAV] ISIN not found in NAVAll.txt: INF200K01180 (L103G-SBI Large Cap Fund)
+[2026-04-04 12:55:12] [WARN] [NAV] ISIN not found in NAVAll.txt: INF173K01361 (176TFGP-SUNDARAM ELSS TAX SAVER FUND)
+[2026-04-04 12:55:12] [WARN] [NAV] ISIN not found in NAVAll.txt: INF903J01MJ3 (176MCDG-SUNDARAM MID CAP FUND)
+[2026-04-04 12:55:12] [WARN] [NAV] ISIN not found in NAVAll.txt: INF903J01538 (176DEGP-SUNDARAM VALUE FUND)
+[2026-04-04 12:55:12] [WARN] [NAV] ISIN not found in NAVAll.txt: INF173K01EZ4 (176NHZG-SUNDARAM NIFTY 100 EQUAL WEIGHT FUND)
+[2026-04-04 12:55:12] [WARN] [NAV] ISIN not found in NAVAll.txt: INF277K01I60 - Payout (TTSF-Tata ELSS Fund)
+[2026-04-04 12:55:12] [WARN] [NAV] ISIN not found in NAVAll.txt: INF789F01547 (108ETGPG-UTI ELSS Tax Saver Fund)
+[2026-04-04 12:55:12] [WARN] [NAV] ISIN not found in NAVAll.txt: INF789F01XA0 (108NID2G-UTI Nifty 50 Index Fund)
+[2026-04-04 12:55:12] [WARN] [NAV] ISIN not found in NAVAll.txt: INF789FC12T1 (108NYG1G-UTI Nifty Next 50 Index Fund)
+[2026-04-04 12:55:12] [INFO] [NAV] COMPLETE amfi-refresh: 0 updated, 54 not found, 0 errors
+[2026-04-04 12:55:12] [INFO] [NAV] COMPLETE nav-update: 0 updated, 54 not found, 0 errors
+[2026-04-04 13:06:45] [INFO] [BACKFILL] Starting NAV history backfill: 49 funds to process
+[2026-04-04 13:06:47] [INFO] [BACKFILL] Backfilled B02G-Aditya Birla Sun Life ELSS Tax Saver Fund: 4440 days of history
+[2026-04-04 13:06:48] [INFO] [BACKFILL] Backfilled G223-Bandhan ELSS Tax saver Fund: 4255 days of history
+[2026-04-04 13:06:49] [INFO] [BACKFILL] Backfilled GD201-Bandhan Large & Mid Cap Fund: 3268 days of history
+[2026-04-04 13:06:49] [INFO] [BACKFILL] Backfilled GD201-Bandhan Large & Mid Cap Fund: 4206 days of history
+[2026-04-04 13:06:50] [INFO] [BACKFILL] Backfilled 101EQDGG-Canara Robeco Large and Mid Cap Fund: 3260 days of history
+[2026-04-04 13:06:51] [INFO] [BACKFILL] Backfilled 183FCDGG-Capitalmind Flexi Cap Fund: 161 days of history
+[2026-04-04 13:06:52] [INFO] [BACKFILL] Backfilled D110-DSP ELSS Tax Saver Fund: 4725 days of history
+[2026-04-04 13:06:53] [INFO] [BACKFILL] Backfilled FTI034-Franklin India ELSS Tax Saver Fund: 4920 days of history
+[2026-04-04 13:06:53] [INFO] [BACKFILL] Backfilled FTI419-Franklin India Large Cap FUND: 3260 days of history
+[2026-04-04 13:06:54] [INFO] [BACKFILL] Backfilled FTI425-Franklin INDIA OPPORTUNITIES FUND: 3260 days of history
+[2026-04-04 13:06:55] [INFO] [BACKFILL] Backfilled FTI413-Franklin India Technology Fund: 3258 days of history
+[2026-04-04 13:06:56] [INFO] [BACKFILL] Backfilled H02T-HDFC Flexi Cap Fund: 3261 days of history
+[2026-04-04 13:06:56] [INFO] [BACKFILL] Backfilled H02T-HDFC Flexi Cap Fund: 4923 days of history
+[2026-04-04 13:06:57] [INFO] [BACKFILL] Backfilled H44-HDFC Large Cap Fund: 4923 days of history
+[2026-04-04 13:06:58] [INFO] [BACKFILL] Backfilled H44T-HDFC Large Cap Fund: 3261 days of history
+[2026-04-04 13:06:59] [INFO] [BACKFILL] Backfilled HMCOGT-HDFC Mid Cap Fund: 3261 days of history
+[2026-04-04 13:06:59] [INFO] [BACKFILL] Backfilled OFTAFG-HSBC ELSS Tax Saver Fund: 824 days of history
+[2026-04-04 13:07:00] [INFO] [BACKFILL] Backfilled O17D-HSBC Midcap Fund: 824 days of history
+[2026-04-04 13:07:01] [INFO] [BACKFILL] Backfilled P8176-ICICI Prudential Value Fund: 3259 days of history
+[2026-04-04 13:07:02] [INFO] [BACKFILL] Backfilled P01-ICICI Prudential ELSS Tax Saver Fund: 4924 days of history
+[2026-04-04 13:07:03] [INFO] [BACKFILL] Backfilled P9453-ICICI Prudential India Opportunities Fund: 1776 days of history
+[2026-04-04 13:07:04] [INFO] [BACKFILL] Backfilled PDFG-ICICI Prudential Value Fund: 4923 days of history
+[2026-04-04 13:07:05] [INFO] [BACKFILL] Backfilled P8107-ICICI Prudential Nifty Next 50 Index Fund: 3260 days of history
+[2026-04-04 13:07:05] [INFO] [BACKFILL] Backfilled 120TPGPG-Invesco India ELSS Tax Saver Fund: 4727 days of history
+[2026-04-04 13:07:06] [INFO] [BACKFILL] Backfilled 120GFD1G-Invesco India Large & Mid Cap Fund: 3260 days of history
+[2026-04-04 13:07:07] [INFO] [BACKFILL] Backfilled 105BADGG-JM Value Fund: 3260 days of history
+[2026-04-04 13:07:08] [INFO] [BACKFILL] Backfilled K123D-Kotak Midcap Fund: 3258 days of history
+[2026-04-04 13:07:09] [INFO] [BACKFILL] Backfilled K144-Kotak ELSS Tax Saver Fund: 4923 days of history
+[2026-04-04 13:07:10] [INFO] [BACKFILL] Backfilled 117IOD1G-Mirae Asset Large Cap Fund: 3260 days of history
+[2026-04-04 13:07:10] [INFO] [BACKFILL] Backfilled 127NTGDG-Motilal Oswal Nifty 500 Index Fund: 1617 days of history
+[2026-04-04 13:07:11] [INFO] [BACKFILL] Backfilled 127CPGDG-Motilal Oswal Flexi Cap Fund: 2935 days of history
+[2026-04-04 13:07:12] [INFO] [BACKFILL] Backfilled 127MFGDG-Motilal Oswal Focused Fund: 3170 days of history
+[2026-04-04 13:07:13] [INFO] [BACKFILL] Backfilled RMFEAAGG-NIPPON INDIA LARGE CAP FUND: 3260 days of history
+[2026-04-04 13:07:14] [INFO] [BACKFILL] Backfilled RMFSCAGG-NIPPON INDIA SMALL CAP FUND: 3259 days of history
+[2026-04-04 13:07:15] [INFO] [BACKFILL] Backfilled PP001ZG-Parag Parikh Flexi Cap Fund: 3160 days of history
+[2026-04-04 13:07:16] [INFO] [BACKFILL] Backfilled PPLCFGZ-Parag Parikh Large Cap Fund: 38 days of history
+[2026-04-04 13:07:17] [INFO] [BACKFILL] Backfilled 166GFDGG-quant Multi Cap Fund: 3263 days of history
+[2026-04-04 13:07:18] [INFO] [BACKFILL] Backfilled 123EFGPG-Quantum Value Fund: 4926 days of history
+[2026-04-04 13:07:19] [INFO] [BACKFILL] Backfilled L036G-SBI Contra Fund: 4910 days of history
+[2026-04-04 13:07:20] [INFO] [BACKFILL] Backfilled LD81G-SBI Focused Fund: 3266 days of history
+[2026-04-04 13:07:21] [INFO] [BACKFILL] Backfilled L081G-SBI Focused Fund: 4910 days of history
+[2026-04-04 13:07:22] [INFO] [BACKFILL] Backfilled L103G-SBI Large Cap Fund: 4912 days of history
+[2026-04-04 13:07:23] [INFO] [BACKFILL] Backfilled 176TFGP-SUNDARAM ELSS TAX SAVER FUND: 1046 days of history
+[2026-04-04 13:07:24] [INFO] [BACKFILL] Backfilled 176MCDG-SUNDARAM MID CAP FUND: 3259 days of history
+[2026-04-04 13:07:25] [INFO] [BACKFILL] Backfilled 176DEGP-SUNDARAM VALUE FUND: 4915 days of history
+[2026-04-04 13:07:26] [INFO] [BACKFILL] Backfilled 176NHZG-SUNDARAM NIFTY 100 EQUAL WEIGHT FUND: 1046 days of history
+[2026-04-04 13:07:27] [INFO] [BACKFILL] Backfilled 108ETGPG-UTI ELSS Tax Saver Fund: 4918 days of history
+[2026-04-04 13:07:28] [INFO] [BACKFILL] Backfilled 108NID2G-UTI Nifty 50 Index Fund: 3260 days of history
+[2026-04-04 13:07:28] [INFO] [BACKFILL] Backfilled 108NYG1G-UTI Nifty Next 50 Index Fund: 1909 days of history
+[2026-04-04 13:07:29] [INFO] [BACKFILL] COMPLETE backfill: 49 success, 0 errors
+[2026-04-04 13:10:15] [INFO] [NAV] Source: NAVAll.txt (portal.amfiindia.com)
+[2026-04-04 13:10:15] [INFO] [NAV] Starting AMFI refresh: 54 funds to process
+[2026-04-04 13:10:15] [WARN] [NAV] ISIN not found in NAVAll.txt: INF209K01108 (B02G-Aditya Birla Sun Life ELSS Tax Saver Fund)
+[2026-04-04 13:10:15] [WARN] [NAV] ISIN not found in NAVAll.txt: INF194K01292 (G223-Bandhan ELSS Tax saver Fund)
+[2026-04-04 13:10:15] [WARN] [NAV] ISIN not found in NAVAll.txt: INF194K01V89 (GD201-Bandhan Large & Mid Cap Fund)
+[2026-04-04 13:10:15] [WARN] [NAV] ISIN not found in NAVAll.txt: INF761K01157 (GD201-Bandhan Large & Mid Cap Fund)
+[2026-04-04 13:10:15] [WARN] [NAV] ISIN not found in NAVAll.txt: INF760K01EI4 (101EQDGG-Canara Robeco Large and Mid Cap Fund)
+[2026-04-04 13:10:15] [WARN] [NAV] ISIN not found in NAVAll.txt: INF226401018 (183FCDGG-Capitalmind Flexi Cap Fund)
+[2026-04-04 13:10:15] [WARN] [NAV] ISIN not found in NAVAll.txt: INF740K01185 (D110-DSP ELSS Tax Saver Fund)
+[2026-04-04 13:10:15] [WARN] [NAV] ISIN not found in NAVAll.txt:  (FTI417-Franklin India Mid Cap FUND)
+[2026-04-04 13:10:15] [WARN] [NAV] ISIN not found in NAVAll.txt: INF090I01775 (FTI034-Franklin India ELSS Tax Saver Fund)
+[2026-04-04 13:10:15] [WARN] [NAV] ISIN not found in NAVAll.txt: INF090I01FN7 (FTI419-Franklin India Large Cap FUND)
+[2026-04-04 13:10:15] [WARN] [NAV] ISIN not found in NAVAll.txt: INF090I01GC8 (FTI425-Franklin INDIA OPPORTUNITIES FUND)
+[2026-04-04 13:10:15] [WARN] [NAV] ISIN not found in NAVAll.txt: INF090I01FE6 (FTI413-Franklin India Technology Fund)
+[2026-04-04 13:10:15] [WARN] [NAV] ISIN not found in NAVAll.txt: INF179K01UT0 (H02T-HDFC Flexi Cap Fund)
+[2026-04-04 13:10:15] [WARN] [NAV] ISIN not found in NAVAll.txt: INF179K01BB8 (H02T-HDFC Flexi Cap Fund)
+[2026-04-04 13:10:15] [WARN] [NAV] ISIN not found in NAVAll.txt: INF179K01BE2 (H44-HDFC Large Cap Fund)
+[2026-04-04 13:10:15] [WARN] [NAV] ISIN not found in NAVAll.txt: INF179K01YV8 (H44T-HDFC Large Cap Fund)
+[2026-04-04 13:10:15] [WARN] [NAV] ISIN not found in NAVAll.txt: INF179K01YC8 (H22T-HDFC Prudence Fund)
+[2026-04-04 13:10:15] [WARN] [NAV] ISIN not found in NAVAll.txt: INF179K01XQ0 (HMCOGT-HDFC Mid Cap Fund)
+[2026-04-04 13:10:15] [WARN] [NAV] ISIN not found in NAVAll.txt: INF179K01AV8 (H22-HDFC Prudence Fund)
+[2026-04-04 13:10:15] [WARN] [NAV] ISIN not found in NAVAll.txt: INF677K01064 (OFTAFG-HSBC ELSS Tax Saver Fund)
+[2026-04-04 13:10:15] [WARN] [NAV] ISIN not found in NAVAll.txt: INF917K01FZ1 (O17D-HSBC Midcap Fund)
+[2026-04-04 13:10:15] [WARN] [NAV] ISIN not found in NAVAll.txt: INF109K012K1 (P8176-ICICI Prudential Value Fund)
+[2026-04-04 13:10:15] [WARN] [NAV] ISIN not found in NAVAll.txt: INF109K01464 (P01-ICICI Prudential ELSS Tax Saver Fund)
+[2026-04-04 13:10:15] [WARN] [NAV] ISIN not found in NAVAll.txt: INF109KC1RH9 (P9453-ICICI Prudential India Opportunities Fund)
+[2026-04-04 13:10:15] [WARN] [NAV] ISIN not found in NAVAll.txt: INF109K011O (P8002-ICICI Prudential Large & Mid Cap Fund)
+[2026-04-04 13:10:15] [WARN] [NAV] ISIN not found in NAVAll.txt: INF109K01AF8 (PDFG-ICICI Prudential Value Fund)
+[2026-04-04 13:10:15] [WARN] [NAV] ISIN not found in NAVAll.txt: INF109K01Y80 (P8107-ICICI Prudential Nifty Next 50 Index Fund)
+[2026-04-04 13:10:15] [WARN] [NAV] ISIN not found in NAVAll.txt: INF205K01270 (120TPGPG-Invesco India ELSS Tax Saver Fund)
+[2026-04-04 13:10:15] [WARN] [NAV] ISIN not found in NAVAll.txt: INF205K01MA0 (120GFD1G-Invesco India Large & Mid Cap Fund)
+[2026-04-04 13:10:15] [WARN] [NAV] ISIN not found in NAVAll.txt: INF192K01BT3 (105BADGG-JM Value Fund)
+[2026-04-04 13:10:15] [WARN] [NAV] ISIN not found in NAVAll.txt: INF174K01LT0 (K123D-Kotak Midcap Fund)
+[2026-04-04 13:10:15] [WARN] [NAV] ISIN not found in NAVAll.txt: INF174K01369 (K144-Kotak ELSS Tax Saver Fund)
+[2026-04-04 13:10:15] [WARN] [NAV] ISIN not found in NAVAll.txt: INF769K01AX2 (117IOD1G-Mirae Asset Large Cap Fund)
+[2026-04-04 13:10:15] [WARN] [NAV] ISIN not found in NAVAll.txt: INF247L01957 (127NTGDG-Motilal Oswal Nifty 500 Index Fund)
+[2026-04-04 13:10:15] [WARN] [NAV] ISIN not found in NAVAll.txt: INF247L01502 (127CPGDG-Motilal Oswal Flexi Cap Fund)
+[2026-04-04 13:10:15] [WARN] [NAV] ISIN not found in NAVAll.txt: INF247L01189 (127MFGDG-Motilal Oswal Focused Fund)
+[2026-04-04 13:10:15] [WARN] [NAV] ISIN not found in NAVAll.txt: INF204K01XI3 (RMFEAAGG-NIPPON INDIA LARGE CAP FUND)
+[2026-04-04 13:10:15] [WARN] [NAV] ISIN not found in NAVAll.txt: INF204K01K15 (RMFSCAGG-NIPPON INDIA SMALL CAP FUND)
+[2026-04-04 13:10:15] [WARN] [NAV] ISIN not found in NAVAll.txt: INF879O01027 (PP001ZG-Parag Parikh Flexi Cap Fund)
+[2026-04-04 13:10:15] [WARN] [NAV] ISIN not found in NAVAll.txt: INF879O01332 (PPLCFGZ-Parag Parikh Large Cap Fund)
+[2026-04-04 13:10:15] [WARN] [NAV] ISIN not found in NAVAll.txt: INF966L01614 (166GFDGG-quant Multi Cap Fund)
+[2026-04-04 13:10:15] [WARN] [NAV] ISIN not found in NAVAll.txt: INF082J01036 (123EFGPG-Quantum Value Fund)
+[2026-04-04 13:10:15] [WARN] [NAV] ISIN not found in NAVAll.txt: INF200K01362 (L036G-SBI Contra Fund)
+[2026-04-04 13:10:15] [WARN] [NAV] ISIN not found in NAVAll.txt: INF200K01RJ1 (LD81G-SBI Focused Fund)
+[2026-04-04 13:10:15] [WARN] [NAV] ISIN not found in NAVAll.txt: INF200K01370 (L081G-SBI Focused Fund)
+[2026-04-04 13:10:15] [WARN] [NAV] ISIN not found in NAVAll.txt: INF200K01180 (L103G-SBI Large Cap Fund)
+[2026-04-04 13:10:15] [WARN] [NAV] ISIN not found in NAVAll.txt: INF173K01361 (176TFGP-SUNDARAM ELSS TAX SAVER FUND)
+[2026-04-04 13:10:15] [WARN] [NAV] ISIN not found in NAVAll.txt: INF903J01MJ3 (176MCDG-SUNDARAM MID CAP FUND)
+[2026-04-04 13:10:15] [WARN] [NAV] ISIN not found in NAVAll.txt: INF903J01538 (176DEGP-SUNDARAM VALUE FUND)
+[2026-04-04 13:10:15] [WARN] [NAV] ISIN not found in NAVAll.txt: INF173K01EZ4 (176NHZG-SUNDARAM NIFTY 100 EQUAL WEIGHT FUND)
+[2026-04-04 13:10:15] [WARN] [NAV] ISIN not found in NAVAll.txt: INF277K01I60 - Payout (TTSF-Tata ELSS Fund)
+[2026-04-04 13:10:15] [WARN] [NAV] ISIN not found in NAVAll.txt: INF789F01547 (108ETGPG-UTI ELSS Tax Saver Fund)
+[2026-04-04 13:10:15] [WARN] [NAV] ISIN not found in NAVAll.txt: INF789F01XA0 (108NID2G-UTI Nifty 50 Index Fund)
+[2026-04-04 13:10:15] [WARN] [NAV] ISIN not found in NAVAll.txt: INF789FC12T1 (108NYG1G-UTI Nifty Next 50 Index Fund)
+[2026-04-04 13:10:15] [INFO] [NAV] COMPLETE amfi-refresh: 0 updated, 54 not found, 0 errors
+[2026-04-04 13:10:24] [INFO] [NAV] Starting NAV update via NAVAll.txt
+[2026-04-04 13:10:24] [INFO] [NAV] Source: NAVAll.txt (portal.amfiindia.com)
+[2026-04-04 13:10:25] [INFO] [NAV] Starting AMFI refresh: 54 funds to process
+[2026-04-04 13:10:25] [WARN] [NAV] ISIN not found in NAVAll.txt: INF209K01108 (B02G-Aditya Birla Sun Life ELSS Tax Saver Fund)
+[2026-04-04 13:10:25] [WARN] [NAV] ISIN not found in NAVAll.txt: INF194K01292 (G223-Bandhan ELSS Tax saver Fund)
+[2026-04-04 13:10:25] [WARN] [NAV] ISIN not found in NAVAll.txt: INF194K01V89 (GD201-Bandhan Large & Mid Cap Fund)
+[2026-04-04 13:10:25] [WARN] [NAV] ISIN not found in NAVAll.txt: INF761K01157 (GD201-Bandhan Large & Mid Cap Fund)
+[2026-04-04 13:10:25] [WARN] [NAV] ISIN not found in NAVAll.txt: INF760K01EI4 (101EQDGG-Canara Robeco Large and Mid Cap Fund)
+[2026-04-04 13:10:25] [WARN] [NAV] ISIN not found in NAVAll.txt: INF226401018 (183FCDGG-Capitalmind Flexi Cap Fund)
+[2026-04-04 13:10:25] [WARN] [NAV] ISIN not found in NAVAll.txt: INF740K01185 (D110-DSP ELSS Tax Saver Fund)
+[2026-04-04 13:10:25] [WARN] [NAV] ISIN not found in NAVAll.txt:  (FTI417-Franklin India Mid Cap FUND)
+[2026-04-04 13:10:25] [WARN] [NAV] ISIN not found in NAVAll.txt: INF090I01775 (FTI034-Franklin India ELSS Tax Saver Fund)
+[2026-04-04 13:10:25] [WARN] [NAV] ISIN not found in NAVAll.txt: INF090I01FN7 (FTI419-Franklin India Large Cap FUND)
+[2026-04-04 13:10:25] [WARN] [NAV] ISIN not found in NAVAll.txt: INF090I01GC8 (FTI425-Franklin INDIA OPPORTUNITIES FUND)
+[2026-04-04 13:10:25] [WARN] [NAV] ISIN not found in NAVAll.txt: INF090I01FE6 (FTI413-Franklin India Technology Fund)
+[2026-04-04 13:10:25] [WARN] [NAV] ISIN not found in NAVAll.txt: INF179K01UT0 (H02T-HDFC Flexi Cap Fund)
+[2026-04-04 13:10:25] [WARN] [NAV] ISIN not found in NAVAll.txt: INF179K01BB8 (H02T-HDFC Flexi Cap Fund)
+[2026-04-04 13:10:25] [WARN] [NAV] ISIN not found in NAVAll.txt: INF179K01BE2 (H44-HDFC Large Cap Fund)
+[2026-04-04 13:10:25] [WARN] [NAV] ISIN not found in NAVAll.txt: INF179K01YV8 (H44T-HDFC Large Cap Fund)
+[2026-04-04 13:10:25] [WARN] [NAV] ISIN not found in NAVAll.txt: INF179K01YC8 (H22T-HDFC Prudence Fund)
+[2026-04-04 13:10:25] [WARN] [NAV] ISIN not found in NAVAll.txt: INF179K01XQ0 (HMCOGT-HDFC Mid Cap Fund)
+[2026-04-04 13:10:25] [WARN] [NAV] ISIN not found in NAVAll.txt: INF179K01AV8 (H22-HDFC Prudence Fund)
+[2026-04-04 13:10:25] [WARN] [NAV] ISIN not found in NAVAll.txt: INF677K01064 (OFTAFG-HSBC ELSS Tax Saver Fund)
+[2026-04-04 13:10:25] [WARN] [NAV] ISIN not found in NAVAll.txt: INF917K01FZ1 (O17D-HSBC Midcap Fund)
+[2026-04-04 13:10:25] [WARN] [NAV] ISIN not found in NAVAll.txt: INF109K012K1 (P8176-ICICI Prudential Value Fund)
+[2026-04-04 13:10:25] [WARN] [NAV] ISIN not found in NAVAll.txt: INF109K01464 (P01-ICICI Prudential ELSS Tax Saver Fund)
+[2026-04-04 13:10:25] [WARN] [NAV] ISIN not found in NAVAll.txt: INF109KC1RH9 (P9453-ICICI Prudential India Opportunities Fund)
+[2026-04-04 13:10:25] [WARN] [NAV] ISIN not found in NAVAll.txt: INF109K011O (P8002-ICICI Prudential Large & Mid Cap Fund)
+[2026-04-04 13:10:25] [WARN] [NAV] ISIN not found in NAVAll.txt: INF109K01AF8 (PDFG-ICICI Prudential Value Fund)
+[2026-04-04 13:10:25] [WARN] [NAV] ISIN not found in NAVAll.txt: INF109K01Y80 (P8107-ICICI Prudential Nifty Next 50 Index Fund)
+[2026-04-04 13:10:25] [WARN] [NAV] ISIN not found in NAVAll.txt: INF205K01270 (120TPGPG-Invesco India ELSS Tax Saver Fund)
+[2026-04-04 13:10:25] [WARN] [NAV] ISIN not found in NAVAll.txt: INF205K01MA0 (120GFD1G-Invesco India Large & Mid Cap Fund)
+[2026-04-04 13:10:25] [WARN] [NAV] ISIN not found in NAVAll.txt: INF192K01BT3 (105BADGG-JM Value Fund)
+[2026-04-04 13:10:25] [WARN] [NAV] ISIN not found in NAVAll.txt: INF174K01LT0 (K123D-Kotak Midcap Fund)
+[2026-04-04 13:10:25] [WARN] [NAV] ISIN not found in NAVAll.txt: INF174K01369 (K144-Kotak ELSS Tax Saver Fund)
+[2026-04-04 13:10:25] [WARN] [NAV] ISIN not found in NAVAll.txt: INF769K01AX2 (117IOD1G-Mirae Asset Large Cap Fund)
+[2026-04-04 13:10:25] [WARN] [NAV] ISIN not found in NAVAll.txt: INF247L01957 (127NTGDG-Motilal Oswal Nifty 500 Index Fund)
+[2026-04-04 13:10:25] [WARN] [NAV] ISIN not found in NAVAll.txt: INF247L01502 (127CPGDG-Motilal Oswal Flexi Cap Fund)
+[2026-04-04 13:10:25] [WARN] [NAV] ISIN not found in NAVAll.txt: INF247L01189 (127MFGDG-Motilal Oswal Focused Fund)
+[2026-04-04 13:10:25] [WARN] [NAV] ISIN not found in NAVAll.txt: INF204K01XI3 (RMFEAAGG-NIPPON INDIA LARGE CAP FUND)
+[2026-04-04 13:10:25] [WARN] [NAV] ISIN not found in NAVAll.txt: INF204K01K15 (RMFSCAGG-NIPPON INDIA SMALL CAP FUND)
+[2026-04-04 13:10:25] [WARN] [NAV] ISIN not found in NAVAll.txt: INF879O01027 (PP001ZG-Parag Parikh Flexi Cap Fund)
+[2026-04-04 13:10:25] [WARN] [NAV] ISIN not found in NAVAll.txt: INF879O01332 (PPLCFGZ-Parag Parikh Large Cap Fund)
+[2026-04-04 13:10:25] [WARN] [NAV] ISIN not found in NAVAll.txt: INF966L01614 (166GFDGG-quant Multi Cap Fund)
+[2026-04-04 13:10:25] [WARN] [NAV] ISIN not found in NAVAll.txt: INF082J01036 (123EFGPG-Quantum Value Fund)
+[2026-04-04 13:10:25] [WARN] [NAV] ISIN not found in NAVAll.txt: INF200K01362 (L036G-SBI Contra Fund)
+[2026-04-04 13:10:25] [WARN] [NAV] ISIN not found in NAVAll.txt: INF200K01RJ1 (LD81G-SBI Focused Fund)
+[2026-04-04 13:10:25] [WARN] [NAV] ISIN not found in NAVAll.txt: INF200K01370 (L081G-SBI Focused Fund)
+[2026-04-04 13:10:25] [WARN] [NAV] ISIN not found in NAVAll.txt: INF200K01180 (L103G-SBI Large Cap Fund)
+[2026-04-04 13:10:25] [WARN] [NAV] ISIN not found in NAVAll.txt: INF173K01361 (176TFGP-SUNDARAM ELSS TAX SAVER FUND)
+[2026-04-04 13:10:25] [WARN] [NAV] ISIN not found in NAVAll.txt: INF903J01MJ3 (176MCDG-SUNDARAM MID CAP FUND)
+[2026-04-04 13:10:25] [WARN] [NAV] ISIN not found in NAVAll.txt: INF903J01538 (176DEGP-SUNDARAM VALUE FUND)
+[2026-04-04 13:10:25] [WARN] [NAV] ISIN not found in NAVAll.txt: INF173K01EZ4 (176NHZG-SUNDARAM NIFTY 100 EQUAL WEIGHT FUND)
+[2026-04-04 13:10:25] [WARN] [NAV] ISIN not found in NAVAll.txt: INF277K01I60 - Payout (TTSF-Tata ELSS Fund)
+[2026-04-04 13:10:25] [WARN] [NAV] ISIN not found in NAVAll.txt: INF789F01547 (108ETGPG-UTI ELSS Tax Saver Fund)
+[2026-04-04 13:10:25] [WARN] [NAV] ISIN not found in NAVAll.txt: INF789F01XA0 (108NID2G-UTI Nifty 50 Index Fund)
+[2026-04-04 13:10:25] [WARN] [NAV] ISIN not found in NAVAll.txt: INF789FC12T1 (108NYG1G-UTI Nifty Next 50 Index Fund)
+[2026-04-04 13:10:25] [INFO] [NAV] COMPLETE amfi-refresh: 0 updated, 54 not found, 0 errors
+[2026-04-04 13:10:25] [INFO] [NAV] COMPLETE nav-update: 0 updated, 54 not found, 0 errors
+[2026-04-04 13:38:24] [INFO] [NAV] Source: NAVAll.txt (portal.amfiindia.com)
+[2026-04-04 13:38:25] [INFO] [NAV] Starting AMFI refresh: 54 funds to process
+[2026-04-04 13:38:25] [WARN] [NAV] ISIN not found in NAVAll.txt: INF209K01108 (B02G-Aditya Birla Sun Life ELSS Tax Saver Fund)
+[2026-04-04 13:38:25] [WARN] [NAV] ISIN not found in NAVAll.txt: INF194K01292 (G223-Bandhan ELSS Tax saver Fund)
+[2026-04-04 13:38:25] [WARN] [NAV] ISIN not found in NAVAll.txt: INF194K01V89 (GD201-Bandhan Large & Mid Cap Fund)
+[2026-04-04 13:38:25] [WARN] [NAV] ISIN not found in NAVAll.txt: INF761K01157 (GD201-Bandhan Large & Mid Cap Fund)
+[2026-04-04 13:38:25] [WARN] [NAV] ISIN not found in NAVAll.txt: INF760K01EI4 (101EQDGG-Canara Robeco Large and Mid Cap Fund)
+[2026-04-04 13:38:25] [WARN] [NAV] ISIN not found in NAVAll.txt: INF226401018 (183FCDGG-Capitalmind Flexi Cap Fund)
+[2026-04-04 13:38:25] [WARN] [NAV] ISIN not found in NAVAll.txt: INF740K01185 (D110-DSP ELSS Tax Saver Fund)
+[2026-04-04 13:38:25] [WARN] [NAV] ISIN not found in NAVAll.txt:  (FTI417-Franklin India Mid Cap FUND)
+[2026-04-04 13:38:25] [WARN] [NAV] ISIN not found in NAVAll.txt: INF090I01775 (FTI034-Franklin India ELSS Tax Saver Fund)
+[2026-04-04 13:38:25] [WARN] [NAV] ISIN not found in NAVAll.txt: INF090I01FN7 (FTI419-Franklin India Large Cap FUND)
+[2026-04-04 13:38:25] [WARN] [NAV] ISIN not found in NAVAll.txt: INF090I01GC8 (FTI425-Franklin INDIA OPPORTUNITIES FUND)
+[2026-04-04 13:38:25] [WARN] [NAV] ISIN not found in NAVAll.txt: INF090I01FE6 (FTI413-Franklin India Technology Fund)
+[2026-04-04 13:38:25] [WARN] [NAV] ISIN not found in NAVAll.txt: INF179K01UT0 (H02T-HDFC Flexi Cap Fund)
+[2026-04-04 13:38:25] [WARN] [NAV] ISIN not found in NAVAll.txt: INF179K01BB8 (H02T-HDFC Flexi Cap Fund)
+[2026-04-04 13:38:25] [WARN] [NAV] ISIN not found in NAVAll.txt: INF179K01BE2 (H44-HDFC Large Cap Fund)
+[2026-04-04 13:38:25] [WARN] [NAV] ISIN not found in NAVAll.txt: INF179K01YV8 (H44T-HDFC Large Cap Fund)
+[2026-04-04 13:38:25] [WARN] [NAV] ISIN not found in NAVAll.txt: INF179K01YC8 (H22T-HDFC Prudence Fund)
+[2026-04-04 13:38:25] [WARN] [NAV] ISIN not found in NAVAll.txt: INF179K01XQ0 (HMCOGT-HDFC Mid Cap Fund)
+[2026-04-04 13:38:25] [WARN] [NAV] ISIN not found in NAVAll.txt: INF179K01AV8 (H22-HDFC Prudence Fund)
+[2026-04-04 13:38:25] [WARN] [NAV] ISIN not found in NAVAll.txt: INF677K01064 (OFTAFG-HSBC ELSS Tax Saver Fund)
+[2026-04-04 13:38:25] [WARN] [NAV] ISIN not found in NAVAll.txt: INF917K01FZ1 (O17D-HSBC Midcap Fund)
+[2026-04-04 13:38:25] [WARN] [NAV] ISIN not found in NAVAll.txt: INF109K012K1 (P8176-ICICI Prudential Value Fund)
+[2026-04-04 13:38:25] [WARN] [NAV] ISIN not found in NAVAll.txt: INF109K01464 (P01-ICICI Prudential ELSS Tax Saver Fund)
+[2026-04-04 13:38:25] [WARN] [NAV] ISIN not found in NAVAll.txt: INF109KC1RH9 (P9453-ICICI Prudential India Opportunities Fund)
+[2026-04-04 13:38:25] [WARN] [NAV] ISIN not found in NAVAll.txt: INF109K011O (P8002-ICICI Prudential Large & Mid Cap Fund)
+[2026-04-04 13:38:25] [WARN] [NAV] ISIN not found in NAVAll.txt: INF109K01AF8 (PDFG-ICICI Prudential Value Fund)
+[2026-04-04 13:38:25] [WARN] [NAV] ISIN not found in NAVAll.txt: INF109K01Y80 (P8107-ICICI Prudential Nifty Next 50 Index Fund)
+[2026-04-04 13:38:25] [WARN] [NAV] ISIN not found in NAVAll.txt: INF205K01270 (120TPGPG-Invesco India ELSS Tax Saver Fund)
+[2026-04-04 13:38:25] [WARN] [NAV] ISIN not found in NAVAll.txt: INF205K01MA0 (120GFD1G-Invesco India Large & Mid Cap Fund)
+[2026-04-04 13:38:25] [WARN] [NAV] ISIN not found in NAVAll.txt: INF192K01BT3 (105BADGG-JM Value Fund)
+[2026-04-04 13:38:25] [WARN] [NAV] ISIN not found in NAVAll.txt: INF174K01LT0 (K123D-Kotak Midcap Fund)
+[2026-04-04 13:38:25] [WARN] [NAV] ISIN not found in NAVAll.txt: INF174K01369 (K144-Kotak ELSS Tax Saver Fund)
+[2026-04-04 13:38:25] [WARN] [NAV] ISIN not found in NAVAll.txt: INF769K01AX2 (117IOD1G-Mirae Asset Large Cap Fund)
+[2026-04-04 13:38:25] [WARN] [NAV] ISIN not found in NAVAll.txt: INF247L01957 (127NTGDG-Motilal Oswal Nifty 500 Index Fund)
+[2026-04-04 13:38:25] [WARN] [NAV] ISIN not found in NAVAll.txt: INF247L01502 (127CPGDG-Motilal Oswal Flexi Cap Fund)
+[2026-04-04 13:38:25] [WARN] [NAV] ISIN not found in NAVAll.txt: INF247L01189 (127MFGDG-Motilal Oswal Focused Fund)
+[2026-04-04 13:38:25] [WARN] [NAV] ISIN not found in NAVAll.txt: INF204K01XI3 (RMFEAAGG-NIPPON INDIA LARGE CAP FUND)
+[2026-04-04 13:38:25] [WARN] [NAV] ISIN not found in NAVAll.txt: INF204K01K15 (RMFSCAGG-NIPPON INDIA SMALL CAP FUND)
+[2026-04-04 13:38:25] [WARN] [NAV] ISIN not found in NAVAll.txt: INF879O01027 (PP001ZG-Parag Parikh Flexi Cap Fund)
+[2026-04-04 13:38:25] [WARN] [NAV] ISIN not found in NAVAll.txt: INF879O01332 (PPLCFGZ-Parag Parikh Large Cap Fund)
+[2026-04-04 13:38:25] [WARN] [NAV] ISIN not found in NAVAll.txt: INF966L01614 (166GFDGG-quant Multi Cap Fund)
+[2026-04-04 13:38:25] [WARN] [NAV] ISIN not found in NAVAll.txt: INF082J01036 (123EFGPG-Quantum Value Fund)
+[2026-04-04 13:38:25] [WARN] [NAV] ISIN not found in NAVAll.txt: INF200K01362 (L036G-SBI Contra Fund)
+[2026-04-04 13:38:25] [WARN] [NAV] ISIN not found in NAVAll.txt: INF200K01RJ1 (LD81G-SBI Focused Fund)
+[2026-04-04 13:38:25] [WARN] [NAV] ISIN not found in NAVAll.txt: INF200K01370 (L081G-SBI Focused Fund)
+[2026-04-04 13:38:25] [WARN] [NAV] ISIN not found in NAVAll.txt: INF200K01180 (L103G-SBI Large Cap Fund)
+[2026-04-04 13:38:25] [WARN] [NAV] ISIN not found in NAVAll.txt: INF173K01361 (176TFGP-SUNDARAM ELSS TAX SAVER FUND)
+[2026-04-04 13:38:25] [WARN] [NAV] ISIN not found in NAVAll.txt: INF903J01MJ3 (176MCDG-SUNDARAM MID CAP FUND)
+[2026-04-04 13:38:25] [WARN] [NAV] ISIN not found in NAVAll.txt: INF903J01538 (176DEGP-SUNDARAM VALUE FUND)
+[2026-04-04 13:38:25] [WARN] [NAV] ISIN not found in NAVAll.txt: INF173K01EZ4 (176NHZG-SUNDARAM NIFTY 100 EQUAL WEIGHT FUND)
+[2026-04-04 13:38:25] [WARN] [NAV] ISIN not found in NAVAll.txt: INF277K01I60 - Payout (TTSF-Tata ELSS Fund)
+[2026-04-04 13:38:25] [WARN] [NAV] ISIN not found in NAVAll.txt: INF789F01547 (108ETGPG-UTI ELSS Tax Saver Fund)
+[2026-04-04 13:38:25] [WARN] [NAV] ISIN not found in NAVAll.txt: INF789F01XA0 (108NID2G-UTI Nifty 50 Index Fund)
+[2026-04-04 13:38:25] [WARN] [NAV] ISIN not found in NAVAll.txt: INF789FC12T1 (108NYG1G-UTI Nifty Next 50 Index Fund)
+[2026-04-04 13:38:25] [INFO] [NAV] COMPLETE amfi-refresh: 0 updated, 54 not found, 0 errors
+[2026-04-04 13:38:31] [INFO] [BACKFILL] Starting NAV history backfill/sync: 49 funds to process
+[2026-04-04 13:38:33] [INFO] [BACKFILL] Incremental fill 123EFGPG-Quantum Value Fund: 0 new days, gap was 2 days
+[2026-04-04 13:38:33] [INFO] [BACKFILL] Incremental fill FTI034-Franklin India ELSS Tax Saver Fund: 0 new days, gap was 2 days
+[2026-04-04 13:38:34] [INFO] [BACKFILL] Incremental fill FTI413-Franklin India Technology Fund: 0 new days, gap was 2 days
+[2026-04-04 13:38:35] [INFO] [BACKFILL] Incremental fill FTI419-Franklin India Large Cap FUND: 0 new days, gap was 2 days
+[2026-04-04 13:38:35] [INFO] [BACKFILL] Incremental fill FTI425-Franklin INDIA OPPORTUNITIES FUND: 0 new days, gap was 2 days
+[2026-04-04 13:38:36] [INFO] [BACKFILL] Incremental fill P8176-ICICI Prudential Value Fund: 0 new days, gap was 2 days
+[2026-04-04 13:38:37] [INFO] [BACKFILL] Incremental fill P01-ICICI Prudential ELSS Tax Saver Fund: 0 new days, gap was 2 days
+[2026-04-04 13:38:38] [INFO] [BACKFILL] Incremental fill PDFG-ICICI Prudential Value Fund: 0 new days, gap was 2 days
+[2026-04-04 13:38:39] [INFO] [BACKFILL] Incremental fill P8107-ICICI Prudential Nifty Next 50 Index Fund: 0 new days, gap was 2 days
+[2026-04-04 13:38:40] [INFO] [BACKFILL] Incremental fill P9453-ICICI Prudential India Opportunities Fund: 0 new days, gap was 2 days
+[2026-04-04 13:38:40] [INFO] [BACKFILL] Incremental fill 176TFGP-SUNDARAM ELSS TAX SAVER FUND: 0 new days, gap was 2 days
+[2026-04-04 13:38:41] [INFO] [BACKFILL] Incremental fill 176NHZG-SUNDARAM NIFTY 100 EQUAL WEIGHT FUND: 0 new days, gap was 2 days
+[2026-04-04 13:38:42] [INFO] [BACKFILL] Incremental fill K144-Kotak ELSS Tax Saver Fund: 0 new days, gap was 2 days
+[2026-04-04 13:38:43] [INFO] [BACKFILL] Incremental fill K123D-Kotak Midcap Fund: 0 new days, gap was 2 days
+[2026-04-04 13:38:44] [INFO] [BACKFILL] Incremental fill H02T-HDFC Flexi Cap Fund: 0 new days, gap was 2 days
+[2026-04-04 13:38:45] [INFO] [BACKFILL] Incremental fill H44-HDFC Large Cap Fund: 0 new days, gap was 2 days
+[2026-04-04 13:38:46] [INFO] [BACKFILL] Incremental fill H02T-HDFC Flexi Cap Fund: 0 new days, gap was 2 days
+[2026-04-04 13:38:46] [INFO] [BACKFILL] Incremental fill HMCOGT-HDFC Mid Cap Fund: 0 new days, gap was 2 days
+[2026-04-04 13:38:47] [INFO] [BACKFILL] Incremental fill H44T-HDFC Large Cap Fund: 0 new days, gap was 2 days
+[2026-04-04 13:38:48] [INFO] [BACKFILL] Incremental fill 105BADGG-JM Value Fund: 0 new days, gap was 2 days
+[2026-04-04 13:38:49] [INFO] [BACKFILL] Incremental fill G223-Bandhan ELSS Tax saver Fund: 0 new days, gap was 2 days
+[2026-04-04 13:38:50] [INFO] [BACKFILL] Incremental fill GD201-Bandhan Large & Mid Cap Fund: 0 new days, gap was 2 days
+[2026-04-04 13:38:51] [INFO] [BACKFILL] Incremental fill L103G-SBI Large Cap Fund: 0 new days, gap was 2 days
+[2026-04-04 13:38:52] [INFO] [BACKFILL] Incremental fill L036G-SBI Contra Fund: 0 new days, gap was 2 days
+[2026-04-04 13:38:53] [INFO] [BACKFILL] Incremental fill L081G-SBI Focused Fund: 0 new days, gap was 2 days
+[2026-04-04 13:38:54] [INFO] [BACKFILL] Incremental fill LD81G-SBI Focused Fund: 0 new days, gap was 2 days
+[2026-04-04 13:38:54] [INFO] [BACKFILL] Incremental fill RMFSCAGG-NIPPON INDIA SMALL CAP FUND: 0 new days, gap was 2 days
+[2026-04-04 13:38:55] [INFO] [BACKFILL] Incremental fill RMFEAAGG-NIPPON INDIA LARGE CAP FUND: 0 new days, gap was 2 days
+[2026-04-04 13:38:56] [INFO] [BACKFILL] Incremental fill 120TPGPG-Invesco India ELSS Tax Saver Fund: 0 new days, gap was 2 days
+[2026-04-04 13:38:57] [INFO] [BACKFILL] Incremental fill 120GFD1G-Invesco India Large & Mid Cap Fund: 0 new days, gap was 2 days
+[2026-04-04 13:38:58] [INFO] [BACKFILL] Incremental fill B02G-Aditya Birla Sun Life ELSS Tax Saver Fund: 0 new days, gap was 2 days
+[2026-04-04 13:38:58] [INFO] [BACKFILL] Incremental fill 183FCDGG-Capitalmind Flexi Cap Fund: 0 new days, gap was 2 days
+[2026-04-04 13:38:59] [INFO] [BACKFILL] Incremental fill 127MFGDG-Motilal Oswal Focused Fund: 0 new days, gap was 2 days
+[2026-04-04 13:39:00] [INFO] [BACKFILL] Incremental fill 127CPGDG-Motilal Oswal Flexi Cap Fund: 0 new days, gap was 2 days
+[2026-04-04 13:39:01] [INFO] [BACKFILL] Incremental fill 127NTGDG-Motilal Oswal Nifty 500 Index Fund: 0 new days, gap was 2 days
+[2026-04-04 13:39:02] [INFO] [BACKFILL] Incremental fill OFTAFG-HSBC ELSS Tax Saver Fund: 0 new days, gap was 2 days
+[2026-04-04 13:39:03] [INFO] [BACKFILL] Incremental fill D110-DSP ELSS Tax Saver Fund: 0 new days, gap was 2 days
+[2026-04-04 13:39:04] [INFO] [BACKFILL] Incremental fill 101EQDGG-Canara Robeco Large and Mid Cap Fund: 0 new days, gap was 2 days
+[2026-04-04 13:39:05] [INFO] [BACKFILL] Incremental fill GD201-Bandhan Large & Mid Cap Fund: 0 new days, gap was 2 days
+[2026-04-04 13:39:06] [INFO] [BACKFILL] Incremental fill 117IOD1G-Mirae Asset Large Cap Fund: 0 new days, gap was 2 days
+[2026-04-04 13:39:07] [INFO] [BACKFILL] Incremental fill 108ETGPG-UTI ELSS Tax Saver Fund: 0 new days, gap was 2 days
+[2026-04-04 13:39:08] [INFO] [BACKFILL] Incremental fill 108NID2G-UTI Nifty 50 Index Fund: 0 new days, gap was 2 days
+[2026-04-04 13:39:09] [INFO] [BACKFILL] Incremental fill 108NYG1G-UTI Nifty Next 50 Index Fund: 0 new days, gap was 2 days
+[2026-04-04 13:39:10] [INFO] [BACKFILL] Incremental fill PP001ZG-Parag Parikh Flexi Cap Fund: 0 new days, gap was 2 days
+[2026-04-04 13:39:10] [INFO] [BACKFILL] Incremental fill PPLCFGZ-Parag Parikh Large Cap Fund: 0 new days, gap was 2 days
+[2026-04-04 13:39:11] [INFO] [BACKFILL] Incremental fill 176DEGP-SUNDARAM VALUE FUND: 0 new days, gap was 2 days
+[2026-04-04 13:39:12] [INFO] [BACKFILL] Incremental fill 176MCDG-SUNDARAM MID CAP FUND: 0 new days, gap was 2 days
+[2026-04-04 13:39:13] [INFO] [BACKFILL] Incremental fill O17D-HSBC Midcap Fund: 0 new days, gap was 2 days
+[2026-04-04 13:39:14] [INFO] [BACKFILL] Incremental fill 166GFDGG-quant Multi Cap Fund: 0 new days, gap was 2 days
+[2026-04-04 13:39:14] [INFO] [BACKFILL] COMPLETE backfill: 0 full, 49 incremental, 0 up-to-date, 0 errors

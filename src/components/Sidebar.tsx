@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { PieChart, RefreshCw, Database } from 'lucide-react';
 import { cn } from '../lib/utils';
-import { updateNavs, refreshAmfiCodes } from '../lib/api';
+import { updateNavs, refreshAmfiCodes, backfillNavHistory } from '../lib/api';
 
 interface SidebarProps {
   activeTab: string;
@@ -14,6 +14,7 @@ interface SidebarProps {
 export function Sidebar({ activeTab, setActiveTab, navItems, loading, onUpdateNavs }: SidebarProps) {
   const [updating, setUpdating] = useState(false);
   const [refreshingCodes, setRefreshingCodes] = useState(false);
+  const [backfilling, setBackfilling] = useState(false);
   const [errors, setErrors] = useState<{ name: string; error: string }[]>([]);
 
   const handleUpdateNavs = async () => {
@@ -45,6 +46,22 @@ export function Sidebar({ activeTab, setActiveTab, navItems, loading, onUpdateNa
       setErrors([{ name: 'AMFI Refresh', error: String(error) }]);
     } finally {
       setRefreshingCodes(false);
+    }
+  };
+
+  const handleBackfill = async () => {
+    setBackfilling(true);
+    setErrors([]);
+    try {
+      // The backfill can take a while, so we alert the user
+      const result = await backfillNavHistory();
+      alert(`Backfill complete: ${result.full_backfill} new, ${result.incremental} updated, ${result.up_to_date} current`);
+      onUpdateNavs();
+    } catch (error) {
+      console.error('Failed to backfill NAV history:', error);
+      setErrors([{ name: 'NAV Backfill', error: String(error) }]);
+    } finally {
+      setBackfilling(false);
     }
   };
 
@@ -95,6 +112,19 @@ export function Sidebar({ activeTab, setActiveTab, navItems, loading, onUpdateNa
         )}
       </nav>
       <div className="p-4 border-t border-slate-200 space-y-2">
+        {backfilling && (
+          <div className="text-[10px] text-slate-500 text-center animate-pulse mb-2">
+            Fetching history — this may take 2-3 mins
+          </div>
+        )}
+        <button 
+          onClick={handleBackfill}
+          disabled={backfilling || loading}
+          className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-slate-100 hover:bg-slate-200 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+        >
+          <Database className={cn("w-4 h-4", backfilling && "animate-pulse")} />
+          Backfill NAV History
+        </button>
         <button 
           onClick={handleRefreshCodes}
           disabled={refreshingCodes || loading}

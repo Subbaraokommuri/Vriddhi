@@ -73,6 +73,11 @@ export async function refreshAmfiCodes(): Promise<{ updated: number; notFound: n
   return handleResponse<{ updated: number; notFound: number; failedCount: number }>(res);
 }
 
+export async function backfillNavHistory(): Promise<{ full_backfill: number; incremental: number; up_to_date: number; failed: any[] }> {
+  const res = await fetch('/api/nav/backfill', { method: 'POST' });
+  return handleResponse<{ full_backfill: number; incremental: number; up_to_date: number; failed: any[] }>(res);
+}
+
 export async function fetchLogs(type: string, date: string): Promise<string> {
   const res = await fetch(`/api/logs?type=${type}&date=${date}`);
   if (!res.ok) {
