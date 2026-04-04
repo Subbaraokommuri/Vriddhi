@@ -4,11 +4,18 @@ import { cn } from '../lib/utils';
 import { fetchLogs } from '../lib/api';
 
 export function LogsView() {
-  const [type, setType] = useState<'app' | 'import' | 'benchmark'>('app');
+  const [type, setType] = useState<'app' | 'import' | 'benchmark' | 'nav'>('app');
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [content, setContent] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const logTypes = [
+    { id: 'app', label: 'App' },
+    { id: 'import', label: 'Import' },
+    { id: 'benchmark', label: 'Benchmark' },
+    { id: 'nav', label: 'NAV Updates' }
+  ] as const;
 
   const loadLogs = async () => {
     setLoading(true);
@@ -47,16 +54,16 @@ export function LogsView() {
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div className="flex bg-slate-100 p-1 rounded-xl">
-          {(['app', 'import', 'benchmark'] as const).map((t) => (
+          {logTypes.map((t) => (
             <button
-              key={t}
-              onClick={() => setType(t)}
+              key={t.id}
+              onClick={() => setType(t.id as any)}
               className={cn(
-                "px-4 py-2 rounded-lg text-sm font-bold transition-all capitalize",
-                type === t ? "bg-white text-[#01696f] shadow-sm" : "text-slate-500 hover:text-slate-700"
+                "px-4 py-2 rounded-lg text-sm font-bold transition-all whitespace-nowrap",
+                type === t.id ? "bg-white text-[#01696f] shadow-sm" : "text-slate-500 hover:text-slate-700"
               )}
             >
-              {t} Log
+              {t.label}
             </button>
           ))}
         </div>

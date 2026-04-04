@@ -12,3 +12,5 @@
 [2026-04-04 09:56:40] INFO Migrating data to benchmark_history
 [2026-04-04 12:12:52] INFO Migrating data to new nav_history schema
 [2026-04-04 12:12:52] INFO Migrating data to benchmark_history
+[2026-04-04 12:23:26] INFO Migrating data to new nav_history schema
+[2026-04-04 12:23:26] INFO Migrating data to benchmark_history

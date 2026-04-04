@@ -1,7 +1,7 @@
 import express from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { parse } from 'csv-parse/sync';
-import { db, appendLog } from '../lib/db.ts';
+import { db, log } from '../lib/db.ts';
 import { CONFIG } from '../lib/config.ts';
 import { refreshAmfiCodes } from './nav.ts';
 
@@ -98,10 +98,10 @@ router.post('/import-cas', async (req, res) => {
 
         if (result.changes > 0) {
           added++;
-          appendLog('import.log', 'INFO', `Processed: folio ${row.folio_num}, fund ${row.fund_name}, date ${isoDate}, amount ${amount}`);
+          log('import', 'INFO', 'IMPORT', `Processed: folio ${row.folio_num}, fund ${row.fund_name}, date ${isoDate}, amount ${amount}`);
         } else {
           skipped++;
-          appendLog('import.log', 'INFO', `Skipped duplicate: folio ${row.folio_num}, date ${isoDate}, amount ${amount}`);
+          log('import', 'INFO', 'IMPORT', `Skipped duplicate: folio ${row.folio_num}, date ${isoDate}, amount ${amount}`);
         }
 
         if (nav > 0 && isoDate && isin) {
@@ -109,23 +109,23 @@ router.post('/import-cas', async (req, res) => {
         }
       } catch (rowError) {
         const errorMsg = rowError instanceof Error ? rowError.message : String(rowError);
-        appendLog('import.log', 'ERROR', `Row ${records.indexOf(rawRow) + 1} failed: ${errorMsg}`);
+        log('import', 'ERROR', 'IMPORT', `Row ${records.indexOf(rawRow) + 1} failed: ${errorMsg}`);
         errors++;
       }
     }
     
     // Auto-refresh AMFI codes and NAVs after import
     try {
-      const { updated } = await refreshAmfiCodes();
-      appendLog('import.log', 'INFO', `Post-import AMFI refresh: ${updated} codes updated`);
+      const { updated, notFound } = await refreshAmfiCodes();
+      log('import', 'INFO', 'IMPORT', `Post-import AMFI refresh complete: ${updated} updated, ${notFound} not found`);
     } catch (refreshErr) {
-      appendLog('import.log', 'ERROR', `Post-import AMFI refresh failed: ${String(refreshErr)}`);
+      log('import', 'ERROR', 'IMPORT', `Post-import AMFI refresh failed: ${String(refreshErr)}`);
     }
 
-    appendLog('import.log', 'INFO', `Complete: ${added} added, ${skipped} skipped, ${errors} errors`);
+    log('import', 'INFO', 'IMPORT', `Complete: ${added} added, ${skipped} skipped, ${errors} errors`);
     res.json({ added, skipped, errors });
   } catch (parseError) {
-    appendLog('import.log', 'ERROR', `CSV Parse Error: ${String(parseError)}`);
+    log('import', 'ERROR', 'IMPORT', `CSV Parse Error: ${String(parseError)}`);
     res.status(400).json({ error: 'Failed to parse CSV data' });
   }
 });
