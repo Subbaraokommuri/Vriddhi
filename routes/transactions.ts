@@ -1,13 +1,22 @@
 import express from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { parse } from 'csv-parse/sync';
-import { db, log, sanitizeFolio } from '../lib/db.ts';
+import { db, appendLog } from '../lib/db.ts';
 import { CONFIG } from '../lib/config.ts';
-import { refreshAmfiCodes } from './nav.ts';
 
 const router = express.Router();
 
-router.post('/import-cas', async (req, res) => {
+function sanitizeFolio(raw: string | number | undefined): string {
+  if (!raw) return '';
+  const s = String(raw).trim();
+  // Handle scientific notation: "5.9935E+11" or "5.9935e+11"
+  if (/e[+-]?\d+$/i.test(s)) {
+    return BigInt(Math.round(Number(s))).toString();
+  }
+  return s;
+}
+
+router.post('/import-cas', (req, res) => {
   const { csvData } = req.body;
   let added = 0;
   let skipped = 0;
@@ -27,7 +36,7 @@ router.post('/import-cas', async (req, res) => {
       SELECT ?, ?, ?, ?, ?, ?, ?, ?, 'cas_import'
       WHERE NOT EXISTS (
         SELECT 1 FROM transactions 
-        WHERE folio_id = ? AND date = ? AND amount = ? AND units = ? AND transaction_type = ?
+        WHERE folio_id = ? AND date = ? AND amount = ? AND units = ? AND transaction_type = ? AND balance_units = ?
       )
     `);
 
@@ -51,7 +60,7 @@ router.post('/import-cas', async (req, res) => {
     for (const rawRow of records as any[]) {
       try {
         const row = {
-          folio_num: sanitizeFolio(rawRow.folio_num || rawRow.Folio),
+          folio_num: rawRow.folio_num || rawRow.Folio,
           isin: rawRow.isin || rawRow.ISIN,
           fund_name: rawRow.fund_name || rawRow.Fund_name,
           date: rawRow.date || rawRow.Date,
@@ -63,15 +72,22 @@ router.post('/import-cas', async (req, res) => {
           scheme_code: rawRow.scheme_code
         };
 
-        const isin = (row.isin || '').split(/[\s\-–]/)[0].trim().toUpperCase();
+        const cleanFolio = sanitizeFolio(row.folio_num);
+        const rawIsin = (row.isin || '').trim();
+        const cleanIsin = rawIsin.split(/[\s-]/)[0].trim();
+        const finalIsin = cleanIsin.length === 12 ? cleanIsin : null;
 
         if (!row.fund_name || !row.date) continue;
 
-        const fundId = isin || row.fund_name;
-        insertFund.run(fundId, row.fund_name, isin, row.scheme_code || null);
+        if (!finalIsin) {
+          appendLog('import.log', 'WARN', `Missing/invalid ISIN for fund: ${row.fund_name}, folio: ${cleanFolio}`);
+        }
 
-        const folioId = `${row.folio_num}_${fundId}`;
-        insertFolio.run(folioId, row.folio_num, fundId);
+        const fundId = finalIsin ?? row.fund_name;
+        insertFund.run(fundId, row.fund_name, finalIsin, row.scheme_code || null);
+
+        const folioId = `${cleanFolio}_${fundId}`;
+        insertFolio.run(folioId, cleanFolio, fundId);
 
         const isoDate = convertDate(row.date);
         
@@ -93,39 +109,31 @@ router.post('/import-cas', async (req, res) => {
 
         const result = insertTxn.run(
           uuidv4(), folioId, isoDate, type, amount, units, nav, balanceUnits,
-          folioId, isoDate, amount, units, type
+          folioId, isoDate, amount, units, type, balanceUnits
         );
 
         if (result.changes > 0) {
           added++;
-          log('import', 'INFO', 'IMPORT', `Processed: folio ${row.folio_num}, fund ${row.fund_name}, date ${isoDate}, amount ${amount}`);
+          appendLog('import.log', 'INFO', `Processed: folio ${cleanFolio}, fund ${row.fund_name}, date ${isoDate}, amount ${amount}`);
         } else {
           skipped++;
-          log('import', 'INFO', 'IMPORT', `Skipped duplicate: folio ${row.folio_num}, date ${isoDate}, amount ${amount}`);
+          appendLog('import.log', 'INFO', `Skipped duplicate: folio ${cleanFolio}, date ${isoDate}, amount ${amount}`);
         }
 
-        if (nav > 0 && isoDate && isin) {
-          db.prepare('INSERT OR REPLACE INTO nav_history (isin, nav_date, nav) VALUES (?, ?, ?)').run(isin, isoDate, nav);
+        if (nav > 0 && isoDate && finalIsin) {
+          db.prepare('INSERT OR REPLACE INTO nav_history (isin, nav_date, nav) VALUES (?, ?, ?)').run(finalIsin, isoDate, nav);
         }
       } catch (rowError) {
         const errorMsg = rowError instanceof Error ? rowError.message : String(rowError);
-        log('import', 'ERROR', 'IMPORT', `Row ${records.indexOf(rawRow) + 1} failed: ${errorMsg}`);
+        appendLog('import.log', 'ERROR', `Row ${records.indexOf(rawRow) + 1} failed: ${errorMsg}`);
         errors++;
       }
     }
     
-    // Auto-refresh AMFI codes and NAVs after import
-    try {
-      const { updated, notFound } = await refreshAmfiCodes();
-      log('import', 'INFO', 'IMPORT', `Post-import AMFI refresh complete: ${updated} updated, ${notFound} not found`);
-    } catch (refreshErr) {
-      log('import', 'ERROR', 'IMPORT', `Post-import AMFI refresh failed: ${String(refreshErr)}`);
-    }
-
-    log('import', 'INFO', 'IMPORT', `Complete: ${added} added, ${skipped} skipped, ${errors} errors`);
+    appendLog('import.log', 'INFO', `Complete: ${added} added, ${skipped} skipped, ${errors} errors`);
     res.json({ added, skipped, errors });
   } catch (parseError) {
-    log('import', 'ERROR', 'IMPORT', `CSV Parse Error: ${String(parseError)}`);
+    appendLog('import.log', 'ERROR', `CSV Parse Error: ${String(parseError)}`);
     res.status(400).json({ error: 'Failed to parse CSV data' });
   }
 });
