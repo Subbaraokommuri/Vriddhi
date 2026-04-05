@@ -30,7 +30,7 @@ router.post('/import-cas', (req, res) => {
     });
 
     const insertFund = db.prepare('INSERT OR IGNORE INTO funds (id, name, isin, scheme_code) VALUES (?, ?, ?, ?)');
-    const insertFolio = db.prepare('INSERT OR IGNORE INTO folios (id, folio_number, fund_id) VALUES (?, ?, ?)');
+    const insertFolio = db.prepare('INSERT OR IGNORE INTO folios (id, folio_number, fund_id, investor_name, pan_number) VALUES (?, ?, ?, ?, ?)');
     const insertTxn = db.prepare(`
       INSERT INTO transactions (id, folio_id, date, transaction_type, amount, units, nav, balance_units, source)
       SELECT ?, ?, ?, ?, ?, ?, ?, ?, 'cas_import'
@@ -62,14 +62,16 @@ router.post('/import-cas', (req, res) => {
         const row = {
           folio_num: rawRow.folio_num || rawRow.Folio,
           isin: rawRow.isin || rawRow.ISIN,
-          fund_name: rawRow.fund_name || rawRow.Fund_name,
+          fund_name: rawRow.fund_name || rawRow.Fund_name || rawRow.Fund_Name,
           date: rawRow.date || rawRow.Date,
           transaction_type: rawRow.transaction_type || rawRow.Description,
           amount: rawRow.amount || rawRow.Amount,
           units: rawRow.units || rawRow.Units,
           nav: rawRow.nav || rawRow.Price,
-          balance_units: rawRow.balance_units || rawRow.Unit_balance,
-          scheme_code: rawRow.scheme_code
+          balance_units: rawRow.balance_units || rawRow.Unit_balance || rawRow.Unit_Balance,
+          scheme_code: rawRow.scheme_code,
+          investor_name: rawRow.Investor_Name || rawRow.investor_name || '',
+          pan_number: rawRow.PAN_Number || rawRow.pan_number || '',
         };
 
         const cleanFolio = sanitizeFolio(row.folio_num);
@@ -87,7 +89,7 @@ router.post('/import-cas', (req, res) => {
         insertFund.run(fundId, row.fund_name, finalIsin, row.scheme_code || null);
 
         const folioId = `${cleanFolio}_${fundId}`;
-        insertFolio.run(folioId, cleanFolio, fundId);
+        insertFolio.run(folioId, cleanFolio, fundId, row.investor_name, row.pan_number);
 
         const isoDate = convertDate(row.date);
         
