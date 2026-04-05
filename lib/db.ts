@@ -259,12 +259,15 @@ export function initDb() {
     db.exec("ALTER TABLE funds ADD COLUMN nav_history_fetched INTEGER DEFAULT 0");
   }
 
-  const foliosCols = db.prepare("PRAGMA table_info(folios)").all() as any[];
-  if (!foliosCols.find(c => c.name === 'amfi_code')) {
-    db.exec("ALTER TABLE folios ADD COLUMN amfi_code TEXT");
+  const foliosCols = (db.prepare(
+    "PRAGMA table_info(folios)"
+  ).all() as any[]).map((c: any) => c.name);
+
+  if (!foliosCols.includes('investor_name')) {
+    db.exec("ALTER TABLE folios ADD COLUMN investor_name TEXT DEFAULT ''");
   }
-  if (!foliosCols.find(c => c.name === 'nav_history_fetched')) {
-    db.exec("ALTER TABLE folios ADD COLUMN nav_history_fetched INTEGER DEFAULT 0");
+  if (!foliosCols.includes('pan_number')) {
+    db.exec("ALTER TABLE folios ADD COLUMN pan_number TEXT DEFAULT ''");
   }
 
   const logDir = path.join(process.cwd(), CONFIG.LOG_DIR);
