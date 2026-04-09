@@ -1,0 +1,3 @@
+[2026-04-09 00:40:39] [INFO] [DB] Migrating data to new nav_history schema
+[2026-04-09 00:40:39] [INFO] [DB] Migrating data to benchmark_history
+[2026-04-09 00:40:39] [INFO] [APP] Application started, database initialized

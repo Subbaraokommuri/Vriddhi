@@ -24,7 +24,7 @@ import { FundsList } from './components/FundsList';
 import { TransactionsList } from './components/TransactionsList';
 import { BenchmarksManager } from './components/BenchmarksManager';
 import { LogsView } from './components/LogsView';
-import { CasImporter } from './components/CasImporter';
+import { CasImport } from './components/CasImport';
 import { Summary, Folio, Transaction } from './lib/types';
 import { fetchSummary, fetchFolios, fetchTransactions, fetchBenchmarks } from './lib/api';
 
@@ -73,7 +73,7 @@ export default function App() {
     { id: 'transactions', label: 'Transactions', icon: History },
     { id: 'benchmarks', label: 'Benchmarks', icon: PieChart },
     { id: 'logs', label: 'Logs', icon: FileText },
-    { id: 'import', label: 'Import CAS', icon: Upload },
+    { id: 'import', label: 'Import CAS PDF', icon: Upload },
   ];
 
   return (
@@ -127,7 +127,7 @@ export default function App() {
                 />
               )}
               {activeTab === 'logs' && <LogsView />}
-              {activeTab === 'import' && <CasImporter onImportSuccess={fetchData} />}
+              {activeTab === 'import' && <CasImport onImportSuccess={fetchData} />}
             </motion.div>
           </AnimatePresence>
         </div>
