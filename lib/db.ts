@@ -315,6 +315,75 @@ export function initDb() {
   }
 
   log('app', 'INFO', 'APP', 'Application started, database initialized');
+
+  // CAS IMPORT MIGRATIONS
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS investors (
+      pan        TEXT PRIMARY KEY,
+      name       TEXT,
+      email      TEXT,
+      mobile     TEXT,
+      kyc_ok     INTEGER DEFAULT 0,
+      updated_at TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS cas_imports (
+      id                   TEXT PRIMARY KEY,
+      imported_at          TEXT NOT NULL DEFAULT (datetime('now')),
+      period_from          TEXT,
+      period_to            TEXT,
+      investor_name        TEXT,
+      total_folios         INTEGER DEFAULT 0,
+      total_schemes        INTEGER DEFAULT 0,
+      total_transactions   INTEGER DEFAULT 0,
+      new_transactions     INTEGER DEFAULT 0,
+      skipped_transactions INTEGER DEFAULT 0
+    );
+
+    DELETE FROM transactions
+    WHERE rowid NOT IN (
+      SELECT MIN(rowid)
+      FROM transactions
+      GROUP BY folio_id, date, transaction_type, units, nav, balance_units
+    );
+
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_txn_dedup
+    ON transactions(folio_id, date, transaction_type, units, nav, balance_units);
+  `);
+
+  // New columns on existing tables
+  const fundsColsMigrate = db.prepare("PRAGMA table_info(funds)").all() as any[];
+  if (!fundsColsMigrate.find(c => c.name === 'plan')) {
+    db.exec("ALTER TABLE funds ADD COLUMN plan TEXT DEFAULT 'Unknown'");
+  }
+  if (!fundsColsMigrate.find(c => c.name === 'fund_option')) {
+    db.exec("ALTER TABLE funds ADD COLUMN fund_option TEXT DEFAULT 'Unknown'");
+  }
+  if (!fundsColsMigrate.find(c => c.name === 'registrar')) {
+    db.exec("ALTER TABLE funds ADD COLUMN registrar TEXT DEFAULT ''");
+  }
+
+  const foliosColsMigrate = db.prepare("PRAGMA table_info(folios)").all() as any[];
+  if (!foliosColsMigrate.find(c => c.name === 'kyc_ok')) {
+    db.exec("ALTER TABLE folios ADD COLUMN kyc_ok INTEGER DEFAULT 0");
+  }
+  if (!foliosColsMigrate.find(c => c.name === 'stated_balance')) {
+    db.exec("ALTER TABLE folios ADD COLUMN stated_balance REAL DEFAULT 0");
+  }
+  if (!foliosColsMigrate.find(c => c.name === 'stated_cost')) {
+    db.exec("ALTER TABLE folios ADD COLUMN stated_cost REAL DEFAULT 0");
+  }
+  if (!foliosColsMigrate.find(c => c.name === 'stated_market_value')) {
+    db.exec("ALTER TABLE folios ADD COLUMN stated_market_value REAL DEFAULT 0");
+  }
+  if (!foliosColsMigrate.find(c => c.name === 'cas_updated_at')) {
+    db.exec("ALTER TABLE folios ADD COLUMN cas_updated_at TEXT");
+  }
+
+  const transactionsColsMigrate = db.prepare("PRAGMA table_info(transactions)").all() as any[];
+  if (!transactionsColsMigrate.find(c => c.name === 'description')) {
+    db.exec("ALTER TABLE transactions ADD COLUMN description TEXT DEFAULT ''");
+  }
 }
 
 /**

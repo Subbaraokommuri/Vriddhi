@@ -12,7 +12,7 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
 
-type State = 'IDLE' | 'LOADING' | 'PREVIEW' | 'ERROR';
+type State = 'IDLE' | 'LOADING' | 'PREVIEW' | 'ERROR' | 'SUCCESS';
 
 interface CasImportProps {
   onImportSuccess?: () => void;
@@ -25,6 +25,13 @@ export function CasImport({ onImportSuccess }: CasImportProps) {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [previewData, setPreviewData] = useState<{ html: string; stats: any; ok: boolean } | null>(null);
+  const [importResult, setImportResult] = useState<{
+    message: string;
+    new_transactions: number;
+    skipped_transactions: number;
+    schemes_updated: number;
+    import_id: string;
+  } | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -96,10 +103,35 @@ export function CasImport({ onImportSuccess }: CasImportProps) {
     setError(null);
   };
 
-  const handleConfirmImport = () => {
-    console.log('Confirm & Import clicked. Data:', previewData?.stats);
-    // DB write logic will be implemented in the next task
-    if (onImportSuccess) onImportSuccess();
+  const handleConfirmImport = async () => {
+    if (!file) return;
+
+    setState('LOADING');
+    setError(null);
+
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('password', password);
+
+    try {
+      const response = await fetch('/api/cas/confirm', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Import failed');
+      }
+
+      setImportResult(result);
+      setState('SUCCESS');
+      if (onImportSuccess) onImportSuccess();
+    } catch (err: any) {
+      setError(err.message);
+      setState('ERROR');
+    }
   };
 
   const formatSize = (bytes: number) => {
@@ -323,6 +355,44 @@ export function CasImport({ onImportSuccess }: CasImportProps) {
             >
               <ArrowLeft className="w-5 h-5" />
               Try Again
+            </button>
+          </motion.div>
+        )}
+
+        {state === 'SUCCESS' && importResult && (
+          <motion.div
+            key="success"
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.9 }}
+            className="max-w-md mx-auto text-center space-y-8 py-12"
+          >
+            <div className="w-24 h-24 bg-emerald-50 rounded-[2.5rem] flex items-center justify-center mx-auto shadow-inner">
+              <CheckCircle className="w-12 h-12 text-[#01696f]" />
+            </div>
+            
+            <div className="space-y-2">
+              <h3 className="text-3xl font-bold text-slate-900">Import Complete</h3>
+              <p className="text-slate-500">Your portfolio has been updated</p>
+            </div>
+
+            <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm space-y-4">
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-slate-500 font-medium">New Transactions</span>
+                <span className="text-lg font-bold text-emerald-600">+{importResult.new_transactions}</span>
+              </div>
+              <div className="w-full h-px bg-slate-50" />
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-slate-500 font-medium">Skipped (Duplicates)</span>
+                <span className="text-lg font-bold text-slate-400">{importResult.skipped_transactions}</span>
+              </div>
+            </div>
+
+            <button
+              onClick={reset}
+              className="w-full py-4 rounded-2xl font-bold text-white bg-[#01696f] hover:bg-[#014f53] transition-all shadow-lg shadow-[#01696f]/20"
+            >
+              Import Another File
             </button>
           </motion.div>
         )}
