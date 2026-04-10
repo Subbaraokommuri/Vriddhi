@@ -10,3 +10,12 @@
 [2026-04-09 01:20:52] [INFO] [DB] Migrating data to new nav_history schema
 [2026-04-09 01:20:52] [INFO] [DB] Migrating data to benchmark_history
 [2026-04-09 01:20:52] [INFO] [APP] Application started, database initialized
+[2026-04-09 01:25:09] [INFO] [DB] Migrating data to new nav_history schema
+[2026-04-09 01:25:09] [INFO] [DB] Migrating data to benchmark_history
+[2026-04-09 01:25:09] [INFO] [APP] Application started, database initialized
+[2026-04-09 01:29:41] [INFO] [DB] Migrating data to new nav_history schema
+[2026-04-09 01:29:41] [INFO] [DB] Migrating data to benchmark_history
+[2026-04-09 01:29:41] [INFO] [APP] Application started, database initialized
+[2026-04-09 01:48:26] [INFO] [DB] Migrating data to new nav_history schema
+[2026-04-09 01:48:26] [INFO] [DB] Migrating data to benchmark_history
+[2026-04-09 01:48:26] [INFO] [APP] Application started, database initialized

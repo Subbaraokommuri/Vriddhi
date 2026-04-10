@@ -27,13 +27,13 @@ router.get('/benchmark-xirr', (req, res) => {
       let currentUnits = 0;
 
       for (const t of txns) {
-        const type = t.transaction_type as 'buy' | 'sell';
-        const amount = type === 'buy' ? -t.amount : t.amount;
-        cashflows.push({ date: new Date(t.date), amount, type });
-        allCf.push({ date: new Date(t.date), amount });
-        if (type === 'buy') currentUnits += t.units;
-        else currentUnits -= t.units;
+        currentUnits += t.units;
+        const cfAmount = -(t.amount);
+        allCf.push({ date: new Date(t.date), amount: cfAmount });
+        cashflows.push({ date: new Date(t.date), amount: cfAmount,
+                         type: t.transaction_type as 'buy' | 'sell' });
       }
+      currentUnits = Math.max(0, currentUnits);
       if (currentUnits > 0 && nav > 0) {
         totalCurrentValue += currentUnits * nav;
       }
@@ -62,13 +62,13 @@ router.get('/benchmark-xirr', (req, res) => {
       let currentUnits = 0;
 
       for (const t of txns) {
-        const type = t.transaction_type as 'buy' | 'sell';
-        const amount = type === 'buy' ? -t.amount : t.amount;
-        cashflows.push({ date: new Date(t.date), amount, type });
-        allCf.push({ date: new Date(t.date), amount });
-        if (type === 'buy') currentUnits += t.units;
-        else currentUnits -= t.units;
+        currentUnits += t.units;
+        const cfAmount = -(t.amount);
+        allCf.push({ date: new Date(t.date), amount: cfAmount });
+        cashflows.push({ date: new Date(t.date), amount: cfAmount,
+                         type: t.transaction_type as 'buy' | 'sell' });
       }
+      currentUnits = Math.max(0, currentUnits);
       if (currentUnits > 0 && nav > 0) {
         totalCurrentValue += currentUnits * nav;
       }
@@ -93,13 +93,13 @@ router.get('/benchmark-xirr', (req, res) => {
     const allCf: { date: Date; amount: number }[] = [];
 
     for (const t of txns) {
-      const type = t.transaction_type as 'buy' | 'sell';
-      const amount = type === 'buy' ? -t.amount : t.amount;
-      cashflows.push({ date: new Date(t.date), amount, type });
-      allCf.push({ date: new Date(t.date), amount });
-      if (type === 'buy') currentUnits += t.units;
-      else currentUnits -= t.units;
+      currentUnits += t.units;
+      const cfAmount = -(t.amount);
+      allCf.push({ date: new Date(t.date), amount: cfAmount });
+      cashflows.push({ date: new Date(t.date), amount: cfAmount,
+                       type: t.transaction_type as 'buy' | 'sell' });
     }
+    currentUnits = Math.max(0, currentUnits);
     if (currentUnits > 0 && nav > 0) {
       allCf.push({ date: new Date(), amount: currentUnits * nav });
     }
@@ -117,8 +117,8 @@ router.get('/benchmark-xirr', (req, res) => {
     if (b) {
       const context = folio_id ? `folio ${folio_id}` : (portfolio_id === 'all' ? 'all portfolios' : `portfolio ${portfolio_id}`);
       
-      const benchmarkPrices = db.prepare('SELECT date, close FROM benchmark_prices WHERE symbol = ?').all(b.symbol) as any[];
-      const latestPriceRow = db.prepare('SELECT close FROM benchmark_prices WHERE symbol = ? ORDER BY date DESC LIMIT 1').get(b.symbol) as any;
+      const benchmarkPrices = db.prepare('SELECT price_date as date, value as close FROM benchmark_history WHERE index_name = ?').all(b.symbol) as any[];
+      const latestPriceRow = db.prepare('SELECT value as close FROM benchmark_history WHERE index_name = ? ORDER BY price_date DESC LIMIT 1').get(b.symbol) as any;
       const latestPrice = latestPriceRow ? latestPriceRow.close : null;
 
       const bResult = calcMirrorXirr(cashflows, benchmarkPrices, latestPrice, {

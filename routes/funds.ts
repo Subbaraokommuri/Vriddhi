@@ -32,23 +32,15 @@ router.get('/folios', (req, res) => {
     const navDate = latestNav ? latestNav.date : null;
 
     let currentUnits = 0;
-    let grossInvested = 0;
-    let totalRedeemed = 0;
+    let investedAmount = 0;
     const cashflows: { date: Date; amount: number }[] = [];
 
     for (const t of txns) {
-      if (t.transaction_type === 'buy') {
-        currentUnits += t.units;
-        grossInvested += t.amount;
-        cashflows.push({ date: new Date(t.date), amount: -t.amount });
-      } else {
-        currentUnits -= t.units;
-        totalRedeemed += t.amount;
-        cashflows.push({ date: new Date(t.date), amount: t.amount });
-      }
+      currentUnits += t.units;
+      investedAmount += t.amount;
+      cashflows.push({ date: new Date(t.date), amount: -(t.amount) });
     }
-
-    const investedAmount = grossInvested - totalRedeemed;
+    currentUnits = Math.max(0, currentUnits);
 
     if (currentUnits > 0 && nav > 0) {
       cashflows.push({ date: new Date(), amount: currentUnits * nav });
@@ -68,8 +60,8 @@ router.get('/folios', (req, res) => {
       ...folio,
       currentUnits,
       investedAmount,
-      grossInvested,
-      totalRedeemed,
+      stated_balance: folio.stated_balance,
+      stated_market_value: folio.stated_market_value,
       currentValue: currentUnits * nav,
       nav,
       navDate,
@@ -119,14 +111,10 @@ router.get('/export-holdings-csv', (req, res) => {
       let investedAmount = 0;
 
       for (const t of txns) {
-        if (t.transaction_type === 'buy') {
-          currentUnits += t.units;
-          investedAmount += t.amount;
-        } else {
-          currentUnits -= t.units;
-          investedAmount -= t.amount;
-        }
+        currentUnits += t.units;
+        investedAmount += t.amount;
       }
+      currentUnits = Math.max(0, currentUnits);
 
       const marketValue = currentUnits * nav;
       
