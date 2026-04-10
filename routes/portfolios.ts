@@ -31,27 +31,18 @@ router.get('/portfolios', (req, res) => {
 
     for (const folio of folios) {
       const txns = db.prepare('SELECT date, amount, units, transaction_type FROM transactions WHERE folio_id = ?').all(folio.id) as any[];
-      const fund = db.prepare('SELECT isin FROM funds WHERE id = ?').get(folio.fund_id) as any;
-      const latestNav = fund?.isin
-        ? db.prepare('SELECT nav FROM nav_history WHERE isin = ? ORDER BY nav_date DESC LIMIT 1').get(fund.isin) as any
-        : null;
-      const nav = latestNav ? latestNav.nav : 0;
-
+      
       let currentUnits = 0;
       for (const t of txns) {
-        const amount = t.transaction_type === 'buy' ? -t.amount : t.amount;
-        allCashflows.push({ date: new Date(t.date), amount });
-        if (t.transaction_type === 'buy') {
-          currentUnits += t.units;
-          investedAmount += t.amount;
-        } else {
-          currentUnits -= t.units;
-          investedAmount -= t.amount;
-        }
+        currentUnits += t.units;
+        allCashflows.push({ date: new Date(t.date), amount: -(t.amount) });
       }
-      if (currentUnits > 0 && nav > 0) {
-        currentValue += currentUnits * nav;
-      }
+      currentUnits = Math.max(0, currentUnits);
+      folio.currentUnits = currentUnits;
+
+      // Use stated values for portfolio totals
+      investedAmount += (folio.stated_cost || 0);
+      currentValue += (folio.stated_market_value || 0);
     }
 
     // Terminal cashflow pushed ONCE after the folios loop

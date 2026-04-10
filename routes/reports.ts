@@ -6,13 +6,12 @@ const router = express.Router();
 
 router.get('/summary', (req, res) => {
   const folios = db.prepare(`
-    SELECT f.id, fu.isin, 
-           SUM(CASE WHEN t.transaction_type = 'buy' THEN t.units ELSE -t.units END) as current_units,
-           SUM(CASE WHEN t.transaction_type = 'buy' THEN t.amount ELSE -t.amount END) as invested_amount
+    SELECT f.id, fu.isin,
+      f.stated_balance,
+      f.stated_cost,
+      f.stated_market_value
     FROM folios f
-    JOIN transactions t ON f.id = t.folio_id
     JOIN funds fu ON f.fund_id = fu.id
-    GROUP BY f.id
   `).all() as any[];
 
   let totalInvested = 0;
@@ -20,18 +19,22 @@ router.get('/summary', (req, res) => {
   const allCashflows: { date: Date; amount: number }[] = [];
 
   for (const folio of folios) {
-    const latestNav = db.prepare('SELECT nav FROM nav_history WHERE isin = ? ORDER BY nav_date DESC LIMIT 1').get(folio.isin) as any;
-    const nav = latestNav ? latestNav.nav : 0;
+    // Use stated values directly from CAS — authoritative and correct
+    totalInvested += (folio.stated_cost || 0);
     
-    totalInvested += folio.invested_amount;
-    currentValue += folio.current_units * nav;
+    // Current value = stated_balance × latest NAV (live price)
+    const latestNav = db.prepare(
+      'SELECT nav FROM nav_history WHERE isin = ? ORDER BY nav_date DESC LIMIT 1'
+    ).get(folio.isin) as any;
+    const nav = latestNav ? latestNav.nav : 0;
+    currentValue += (folio.stated_balance || 0) * nav;
 
-    const txns = db.prepare('SELECT date, amount, transaction_type FROM transactions WHERE folio_id = ?').all(folio.id) as any[];
+    // XIRR cashflows — use natural signs, negate amount for convention
+    const txns = db.prepare(
+      'SELECT date, amount FROM transactions WHERE folio_id = ?'
+    ).all(folio.id) as any[];
     for (const t of txns) {
-      allCashflows.push({
-        date: new Date(t.date),
-        amount: t.transaction_type === 'buy' ? -t.amount : t.amount
-      });
+      allCashflows.push({ date: new Date(t.date), amount: -(t.amount) });
     }
   }
 
@@ -53,12 +56,18 @@ router.get('/summary', (req, res) => {
     console.warn('Overall XIRR calculation failed:', e);
   }
 
-  const currentYear = new Date().getFullYear().toString();
+  const now = new Date();
+  const fyStart = now.getMonth() >= 3  // April = month 3 (0-indexed)
+    ? `${now.getFullYear()}-04-01`
+    : `${now.getFullYear() - 1}-04-01`;
+  
   const yearlyInvested = db.prepare(`
-    SELECT SUM(amount) as total 
-    FROM transactions 
-    WHERE transaction_type = 'buy' AND date LIKE ?
-  `).get(`${currentYear}%`) as any;
+    SELECT SUM(amount) as total
+    FROM transactions
+    WHERE transaction_type = 'buy'
+    AND amount > 0
+    AND date >= ?
+  `).get(fyStart) as any;
 
   res.json({
     totalInvested,

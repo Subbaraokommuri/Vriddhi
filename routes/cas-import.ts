@@ -223,13 +223,30 @@
           skipped_transactions
         );
       })();
+      
+      const portfolioCount = db.prepare(
+        'SELECT COUNT(*) as c FROM portfolios'
+      ).get() as any;
+
+      if (portfolioCount.c === 0) {
+        db.prepare(`
+          INSERT OR IGNORE INTO portfolios (id, name, description, color)
+          VALUES ('default', 'My Portfolio', 'Imported from CAS', '#01696f')
+        `).run();
+      }
+
+      db.prepare(`
+        INSERT OR IGNORE INTO portfolio_assets (portfolio_id, asset_id, asset_type)
+        SELECT 'default', id, 'mf' FROM folios
+      `).run();
 
       res.json({
         message: "Import complete",
         new_transactions,
         skipped_transactions,
         schemes_updated,
-        import_id
+        import_id,
+        portfolio_id: 'default'
       });
 
     } catch (err: any) {
