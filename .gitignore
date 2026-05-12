@@ -1,6 +1,21 @@
-*.db
-*.db-shm
-*.db-wal
+# Database — never commit
+tracker.db
+
+# Secrets — never commit
+.env.local
+
+# Generated files
+logs/
+metadata.json
+
+# Dependencies — reinstalled via npm install
 node_modules/
+
+# Build output
 dist/
-.env
+
+# Mac system files
+.DS_Store
+
+# TypeScript build cache
+*.tsbuildinfo
