@@ -19,3 +19,5 @@ dist/
 
 # TypeScript build cache
 *.tsbuildinfo
+
+**/.DS_Store
