@@ -37,16 +37,14 @@ export const CONFIG = {
     FY_START_MONTH: 3, // April (0-indexed)
   },
   
-  // Default Benchmarks
+  // ETF proxies track TRI (dividends reinvested in NAV). Marginal ~0.1% expense ratio drag is acceptable.
+  // PRI indices (^NSEI, ^BSESN) do not include dividends — use ETF proxies for fund comparison.
   DEFAULT_BENCHMARKS: [
-    { symbol: '^NSEI', name: 'Nifty 50', source: 'yahoo', category: 'broad_market', color: '#01696f' },
-    { symbol: 'NIFTYTR1.NS', name: 'Nifty 50 TRI', source: 'yahoo', category: 'broad_market', color: '#01696f' },
-    { symbol: '^BSESN', name: 'Sensex', source: 'yahoo', category: 'broad_market', color: '#01696f' },
-    { symbol: 'NIFTYNXT50.NS', name: 'Nifty Next 50', source: 'yahoo', category: 'broad_market', color: '#01696f' },
-    { symbol: 'NIFTYMIDCAP150.NS', name: 'Nifty Midcap 150', source: 'yahoo', category: 'broad_market', color: '#01696f' },
-    { symbol: 'NIFTYSMLCAP250.NS', name: 'Nifty Smallcap 250', source: 'yahoo', category: 'broad_market', color: '#01696f' },
-    { symbol: 'NIFTY_LOW_VOL30.NS', name: 'Nifty Low Volatility 30', source: 'yahoo', category: 'broad_market', color: '#01696f' },
-    { symbol: 'NIFTYALPHA50.NS', name: 'Nifty Alpha 50', source: 'yahoo', category: 'broad_market', color: '#01696f' },
+    { symbol: '^NSEI',         name: 'Nifty 50 (PRI)',                  source: 'manual', category: 'broad_market', color: '#01696f' },
+    { symbol: '^BSESN',        name: 'Sensex (PRI)',                     source: 'manual', category: 'broad_market', color: '#01696f' },
+    { symbol: 'NIFTYBEES.NS',  name: 'Nifty 50 TRI (ETF proxy)',        source: 'manual', category: 'broad_market', color: '#4f98a3' },
+    { symbol: 'JUNIORBEES.NS', name: 'Nifty Next 50 TRI (ETF proxy)',   source: 'manual', category: 'mid_cap',      color: '#da7101' },
+    { symbol: 'MAFANG.NS',     name: 'Nifty Midcap 150 (ETF proxy)',    source: 'manual', category: 'mid_cap',      color: '#d19900' },
   ],
   
   // Date Mapping

@@ -2,12 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { AlertCircle } from 'lucide-react';
 import { cn, formatCurrency, formatPercent } from '../lib/utils';
 import { Folio } from '../lib/types';
-import { BenchmarkXirrCell } from './BenchmarkXirrCell';
 import { fetchFolios, fetchBenchmarks } from '../lib/api';
 
 export function XirrReport() {
   const [folios, setFolios] = useState<Folio[]>([]);
-  const [userBenchmarks, setUserBenchmarks] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   
@@ -21,22 +19,16 @@ export function XirrReport() {
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>(() => {
     return (localStorage.getItem('xirrSortDir') as 'asc' | 'desc') || 'desc';
   });
-  const [selectedBenchmarkIds, setSelectedBenchmarkIds] = useState<string[]>(() => {
-    const saved = localStorage.getItem('selectedBenchmarkIds');
-    return saved ? JSON.parse(saved) : [];
-  });
 
   useEffect(() => {
     const loadData = async () => {
       setLoading(true);
       setError(null);
       try {
-        const [foliosRes, benchmarksRes] = await Promise.all([
-          fetchFolios(),
-          fetchBenchmarks()
+        const [foliosRes] = await Promise.all([
+          fetchFolios()
         ]);
         setFolios(foliosRes);
-        setUserBenchmarks(benchmarksRes);
       } catch (err) {
         console.error('XirrReport fetch failed:', err);
         setError('Failed to load performance report');
@@ -50,10 +42,6 @@ export function XirrReport() {
   useEffect(() => {
     localStorage.setItem('activeOnlyXirr', activeOnlyXirr.toString());
   }, [activeOnlyXirr]);
-
-  useEffect(() => {
-    localStorage.setItem('selectedBenchmarkIds', JSON.stringify(selectedBenchmarkIds));
-  }, [selectedBenchmarkIds]);
 
   useEffect(() => {
     localStorage.setItem('xirrSortKey', sortKey);
@@ -195,17 +183,12 @@ export function XirrReport() {
               >
                 Your XIRR {sortKey === 'xirr' && (sortDir === 'asc' ? '↑' : '↓')}
               </th>
-              {selectedBenchmarkIds.map(id => (
-                <th key={id} className="px-6 py-4 text-xs font-bold text-slate-500 uppercase text-right">
-                  {userBenchmarks.find(b => b.id === id)?.name}
-                </th>
-              ))}
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-200">
             {sortedFolios.length === 0 ? (
               <tr>
-                <td colSpan={6 + selectedBenchmarkIds.length} className="px-6 py-12 text-center text-slate-500">
+                <td colSpan={6} className="px-6 py-12 text-center text-slate-500">
                   No folios found.
                 </td>
               </tr>
@@ -248,7 +231,6 @@ export function XirrReport() {
                   )}>
                     {formatPercent(folio.xirr)}
                   </td>
-                  <BenchmarkXirrCell folioId={folio.id} benchmarkIds={selectedBenchmarkIds} actualXirr={folio.xirr} />
                 </tr>
               ))
             )}

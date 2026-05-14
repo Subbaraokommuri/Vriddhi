@@ -45,6 +45,43 @@ export async function fetchBenchmarks(): Promise<any[]> {
   return handleResponse<any[]>(res);
 }
 
+export async function addUserBenchmark(data: { symbol: string; name: string; source: string; category: string; color: string }): Promise<{ id: string }> {
+  const res = await fetch('/api/user-benchmarks', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data)
+  });
+  if (!res.ok) throw new Error('Failed to add benchmark');
+  return res.json();
+}
+
+export async function deleteUserBenchmark(id: string): Promise<void> {
+  const res = await fetch(`/api/user-benchmarks/${id}`, { method: 'DELETE' });
+  if (!res.ok) throw new Error('Failed to delete benchmark');
+}
+
+export async function importBenchmarkCsv(benchmarkId: string, file: File): Promise<{ inserted: number; skipped: number; total: number }> {
+  const formData = new FormData();
+  formData.append('benchmarkId', benchmarkId);
+  formData.append('file', file);
+
+  const res = await fetch('/api/benchmarks/import-csv', {
+    method: 'POST',
+    body: formData
+  });
+  return handleResponse<{ inserted: number; skipped: number; total: number }>(res);
+}
+
+export async function getBenchmarkDataSummary(id: string): Promise<{ oldest: string; latest: string; count: number } | null> {
+  const res = await fetch(`/api/benchmarks/${id}/data-summary`);
+  return handleResponse<{ oldest: string; latest: string; count: number } | null>(res);
+}
+
+export async function fetchBenchmarkData(id: string): Promise<{ inserted: number; total: number }> {
+  const res = await fetch(`/api/benchmarks/${id}/fetch`, { method: 'POST' });
+  return handleResponse<{ inserted: number; total: number }>(res);
+}
+
 export async function fetchBenchmarkXirr(params: { folioId?: string; portfolioId?: string; benchmarkIds: string[] }): Promise<any> {
   const query = new URLSearchParams();
   if (params.folioId) query.append('folio_id', params.folioId);
@@ -90,11 +127,6 @@ export async function fetchLogs(type: string, date: string): Promise<string> {
     throw new Error(`No logs found for ${type} on ${date}`);
   }
   return res.text();
-}
-
-export async function fetchAllBenchmarks(): Promise<{ updated: any[] }> {
-  const res = await fetch('/api/fetch-all-benchmarks', { method: 'POST' });
-  return handleResponse<{ updated: any[] }>(res);
 }
 
 // TAG MANAGEMENT API
