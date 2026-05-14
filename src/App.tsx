@@ -12,23 +12,39 @@ import {
   History, 
   Upload, 
   TrendingUp, 
-  FileText
+  FileText,
+  Tag
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Sidebar } from './components/Sidebar';
-import { Header } from './components/Header';
-import { Dashboard } from './components/Dashboard';
-import { XirrReport } from './components/XirrReport';
-import { Portfolios } from './components/Portfolios';
-import { FundsList } from './components/FundsList';
-import { TransactionsList } from './components/TransactionsList';
-import { BenchmarksManager } from './components/BenchmarksManager';
-import { LogsView } from './components/LogsView';
-import { CasImport } from './components/CasImport';
-import { Summary, Folio, Transaction } from './lib/types';
-import { fetchSummary, fetchFolios, fetchTransactions, fetchBenchmarks } from './lib/api';
+import { Sidebar } from './components/Sidebar.tsx';
+import { Header } from './components/Header.tsx';
+import { Dashboard } from './components/Dashboard.tsx';
+import { XirrReport } from './components/XirrReport.tsx';
+import { Portfolios } from './components/Portfolios.tsx';
+import { FundsList } from './components/FundsList.tsx';
+import { TransactionsList } from './components/TransactionsList.tsx';
+import { BenchmarksManager } from './components/BenchmarksManager.tsx';
+import { LogsView } from './components/LogsView.tsx';
+import { CasImport } from './components/CasImport.tsx';
+import { TagManager } from './components/TagManager.tsx';
+import { Summary, Folio, Transaction, TagTheme } from './lib/types.ts';
+import { 
+  fetchSummary, 
+  fetchFolios, 
+  fetchTransactions, 
+  fetchBenchmarks,
+  getTagThemes,
+  getUnassignedTags,
+  createTagTheme,
+  renameTagTheme,
+  deleteTagTheme,
+  addTagToTheme,
+  renameTag,
+  deleteTag,
+  deleteUnassignedTag
+} from './lib/api.ts';
 
-type Tab = 'dashboard' | 'xirr' | 'portfolios' | 'funds' | 'transactions' | 'benchmarks' | 'logs' | 'import';
+type Tab = 'dashboard' | 'xirr' | 'portfolios' | 'funds' | 'transactions' | 'benchmarks' | 'logs' | 'import' | 'tags';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<Tab>('dashboard');
@@ -37,6 +53,8 @@ export default function App() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [userBenchmarks, setUserBenchmarks] = useState<any[]>([]);
   const [selectedBenchmarkIds, setSelectedBenchmarkIds] = useState<string[]>([]);
+  const [tagThemes, setTagThemes] = useState<TagTheme[]>([]);
+  const [unassignedTags, setUnassignedTags] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeOnlyFunds, setActiveOnlyFunds] = useState(false);
   const [activeOnlyXirr, setActiveOnlyXirr] = useState(false);
@@ -44,16 +62,20 @@ export default function App() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [summaryRes, foliosRes, transactionsRes, benchmarksRes] = await Promise.all([
+      const [summaryRes, foliosRes, transactionsRes, benchmarksRes, tagThemesRes, unassignedTagsRes] = await Promise.all([
         fetchSummary(),
         fetchFolios(),
         fetchTransactions(),
         fetchBenchmarks(),
+        getTagThemes(),
+        getUnassignedTags()
       ]);
       setSummary(summaryRes);
       setFolios(foliosRes);
       setTransactions(transactionsRes);
       setUserBenchmarks(benchmarksRes);
+      setTagThemes(tagThemesRes);
+      setUnassignedTags(unassignedTagsRes);
     } catch (error) {
       console.error('Error fetching data:', error);
     } finally {
@@ -72,6 +94,7 @@ export default function App() {
     { id: 'funds', label: 'Funds', icon: Database },
     { id: 'transactions', label: 'Transactions', icon: History },
     { id: 'benchmarks', label: 'Benchmarks', icon: PieChart },
+    { id: 'tags', label: 'Tag Manager', icon: Tag },
     { id: 'logs', label: 'Logs', icon: FileText },
     { id: 'import', label: 'Import CAS PDF', icon: Upload },
   ];
@@ -116,7 +139,14 @@ export default function App() {
                 />
               )}
               {activeTab === 'portfolios' && <Portfolios />}
-              {activeTab === 'funds' && <FundsList folios={folios} activeOnly={activeOnlyFunds} />}
+              {activeTab === 'funds' && (
+                <FundsList 
+                  themes={tagThemes} 
+                  folios={folios} 
+                  activeOnly={activeOnlyFunds} 
+                  setActiveOnly={setActiveOnlyFunds}
+                />
+              )}
               {activeTab === 'transactions' && <TransactionsList transactions={transactions} />}
               {activeTab === 'benchmarks' && (
                 <BenchmarksManager 
@@ -128,6 +158,40 @@ export default function App() {
               )}
               {activeTab === 'logs' && <LogsView />}
               {activeTab === 'import' && <CasImport onImportSuccess={fetchData} />}
+              {activeTab === 'tags' && (
+                <TagManager 
+                  themes={tagThemes}
+                  unassignedTags={unassignedTags}
+                  onCreateTheme={async (name) => {
+                    await createTagTheme(name);
+                    fetchData();
+                  }}
+                  onRenameTheme={async (id, name) => {
+                    await renameTagTheme(id, name);
+                    fetchData();
+                  }}
+                  onDeleteTheme={async (id) => {
+                    await deleteTagTheme(id);
+                    fetchData();
+                  }}
+                  onAddTag={async (id, tag) => {
+                    await addTagToTheme(id, tag);
+                    fetchData();
+                  }}
+                  onRenameTag={async (id, old, newTag) => {
+                    await renameTag(id, old, newTag);
+                    fetchData();
+                  }}
+                  onDeleteTag={async (id, tag) => {
+                    await deleteTag(id, tag);
+                    fetchData();
+                  }}
+                  onDeleteUnassignedTag={async (tag) => {
+                    await deleteUnassignedTag(tag);
+                    fetchData();
+                  }}
+                />
+              )}
             </motion.div>
           </AnimatePresence>
         </div>

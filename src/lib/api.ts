@@ -1,10 +1,16 @@
-import { Summary, Folio, Portfolio, Transaction, Fund } from './types';
+import { Summary, Folio, Portfolio, Transaction, Fund, TagTheme, FolioTagDetail } from './types.ts';
 
 async function handleResponse<T>(response: Response): Promise<T> {
   if (!response.ok) {
     const errorText = await response.text();
-    throw new Error(errorText || `Request failed with status ${response.status}`);
+    let errorMsg = errorText;
+    try {
+      const parsed = JSON.parse(errorText);
+      if (parsed.error) errorMsg = parsed.error;
+    } catch (e) {}
+    throw new Error(errorMsg || `Request failed with status ${response.status}`);
   }
+  if (response.status === 204) return {} as T;
   return response.json();
 }
 
@@ -89,4 +95,90 @@ export async function fetchLogs(type: string, date: string): Promise<string> {
 export async function fetchAllBenchmarks(): Promise<{ updated: any[] }> {
   const res = await fetch('/api/fetch-all-benchmarks', { method: 'POST' });
   return handleResponse<{ updated: any[] }>(res);
+}
+
+// TAG MANAGEMENT API
+
+export async function getTagThemes(): Promise<TagTheme[]> {
+  const res = await fetch('/api/tags/themes');
+  return handleResponse<TagTheme[]>(res);
+}
+
+export async function createTagTheme(name: string): Promise<void> {
+  const res = await fetch('/api/tags/themes', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name }),
+  });
+  return handleResponse<void>(res);
+}
+
+export async function renameTagTheme(id: string, name: string): Promise<void> {
+  const res = await fetch(`/api/tags/themes/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name }),
+  });
+  return handleResponse<void>(res);
+}
+
+export async function deleteTagTheme(id: string): Promise<void> {
+  const res = await fetch(`/api/tags/themes/${id}`, { method: 'DELETE' });
+  return handleResponse<void>(res);
+}
+
+export async function addTagToTheme(themeId: string, tag: string): Promise<void> {
+  const res = await fetch(`/api/tags/themes/${themeId}/tags`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ tag }),
+  });
+  return handleResponse<void>(res);
+}
+
+export async function renameTag(themeId: string, oldTag: string, newTag: string): Promise<void> {
+  const res = await fetch(`/api/tags/themes/${themeId}/tags/${encodeURIComponent(oldTag)}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ newTag }),
+  });
+  return handleResponse<void>(res);
+}
+
+export async function deleteTag(themeId: string, tag: string): Promise<void> {
+  const res = await fetch(`/api/tags/themes/${themeId}/tags/${encodeURIComponent(tag)}`, { method: 'DELETE' });
+  return handleResponse<void>(res);
+}
+
+export async function getUnassignedTags(): Promise<string[]> {
+  const res = await fetch('/api/tags/unassigned');
+  return handleResponse<string[]>(res);
+}
+
+export async function deleteUnassignedTag(tag: string): Promise<void> {
+  const res = await fetch(`/api/tags/unassigned/${encodeURIComponent(tag)}`, { method: 'DELETE' });
+  return handleResponse<void>(res);
+}
+
+// Folio-level Tag API
+
+export async function getFolioTags(folioId: string): Promise<FolioTagDetail[]> {
+  const res = await fetch(`/api/folios/${folioId}/tags`);
+  return handleResponse<FolioTagDetail[]>(res);
+}
+
+export async function assignTagToFolio(folioId: string, tag: string, themeId: string | null): Promise<void> {
+  const res = await fetch(`/api/folios/${folioId}/tags`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ tag, theme_id: themeId }),
+  });
+  return handleResponse<void>(res);
+}
+
+export async function removeTagFromFolio(folioId: string, tag: string): Promise<void> {
+  const res = await fetch(`/api/folios/${folioId}/tags/${encodeURIComponent(tag)}`, {
+    method: 'DELETE',
+  });
+  return handleResponse<void>(res);
 }

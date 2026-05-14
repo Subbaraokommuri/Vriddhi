@@ -1,5 +1,6 @@
 import express from 'express';
-import { db, log } from '../lib/db.ts';
+import { db } from '../lib/db.ts';
+import { log } from '../lib/logger.ts';
 import { xirr, calcMirrorXirr } from '../lib/xirr.ts';
 import { CONFIG } from '../lib/config.ts';
 

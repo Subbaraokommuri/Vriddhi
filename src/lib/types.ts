@@ -54,3 +54,22 @@ export interface Summary {
   xirr: number | null;
   yearlyInvested: number;
 }
+
+export interface TagTheme {
+  id: string;
+  name: string;
+  sort_order: number;
+  tags: string[];
+}
+
+export interface FolioTag {
+  folio_id: string;
+  tag: string;
+  theme_id: string | null;
+}
+
+export interface FolioTagDetail {
+  tag: string;
+  theme_id: string | null;
+  theme_name: string | null;
+}
