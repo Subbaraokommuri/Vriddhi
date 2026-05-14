@@ -68,9 +68,15 @@ export function Sidebar({ activeTab, setActiveTab, navItems, loading, onUpdateNa
   return (
     <aside className="w-64 bg-white border-r border-slate-200 flex flex-col">
       <div className="p-6">
-        <div className="flex items-center gap-2 text-[#01696f] font-bold text-xl">
-          <PieChart className="w-8 h-8" />
-          <span>FolioTracker</span>
+        <div className="flex flex-col gap-0.5 text-[#01696f]">
+          <div className="flex items-center gap-2 font-bold text-2xl">
+            <PieChart className="w-8 h-8" />
+            <span>Vriddhi</span>
+          </div>
+          <p className="text-[10px] font-medium text-slate-400 pl-10 leading-tight">
+            Personal Finance App<br />
+            Developed by Subbarao Kommuri
+          </p>
         </div>
       </div>
       <nav className="flex-1 px-4 space-y-1 overflow-y-auto">
