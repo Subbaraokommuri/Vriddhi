@@ -1,14 +1,18 @@
 import express from 'express';
 import { v4 as uuidv4 } from 'uuid';
-import yahooFinance from 'yahoo-finance2';
 import { db } from '../lib/db.ts';
 import { log } from '../lib/logger.ts';
-import { CONFIG } from '../lib/config.ts';
+import { fetchFullNiftyTRIHistory } from '../lib/benchmarks.ts';
 
 const router = express.Router();
 
 router.get('/user-benchmarks', (req, res) => {
-  const benchmarks = db.prepare('SELECT * FROM user_benchmarks').all();
+  const benchmarks = db.prepare(`
+    SELECT ub.*, COUNT(bh.price_date) as data_count
+    FROM user_benchmarks ub
+    LEFT JOIN benchmark_history bh ON bh.index_name = ub.symbol
+    GROUP BY ub.id
+  `).all();
   res.json(benchmarks);
 });
 
@@ -25,71 +29,58 @@ router.delete('/user-benchmarks/:id', (req, res) => {
   res.json({ success: true });
 });
 
-router.post('/fetch-all-benchmarks', async (req, res) => {
-  const benchmarks = db.prepare('SELECT * FROM user_benchmarks WHERE is_active = 1').all() as any[];
-  const updated = [];
-
-  for (const b of benchmarks) {
-    try {
-      if (b.source === 'yahoo') {
-        const result = await yahooFinance.historical(b.symbol, { period1: '2010-01-01' }) as any[];
-        const insert = db.prepare('INSERT OR REPLACE INTO benchmark_history (index_name, price_date, value) VALUES (?, ?, ?)');
-        const transaction = db.transaction((data) => {
-          for (const item of data) {
-            insert.run(b.symbol, item.date.toISOString().split('T')[0], item.close);
-          }
-        });
-        transaction(result);
-        updated.push({ name: b.name, days_fetched: result.length });
-      } else if (b.source === 'mf') {
-        const response = await fetch(`${CONFIG.APIS.MF_DATA}${b.symbol}`);
-        const data = await response.json() as any;
-        if (data && data.data) {
-          const insert = db.prepare('INSERT OR REPLACE INTO benchmark_history (index_name, price_date, value) VALUES (?, ?, ?)');
-          const transaction = db.transaction((items) => {
-            for (const item of items) {
-              const [d, m, y] = item.date.split('-');
-              const isoDate = `${y}-${m}-${d}`;
-              insert.run(b.symbol, isoDate, parseFloat(item.nav));
-            }
-          });
-          transaction(data.data);
-          updated.push({ name: b.name, days_fetched: data.data.length });
-        }
-      }
-    } catch (e) {
-      log('benchmark', 'ERROR', 'BENCHMARK', `Failed to fetch benchmark ${b.name}: ${String(e)}`);
-      console.error(`Failed to fetch benchmark ${b.name}`, e);
-    }
+router.get('/benchmarks/:id/data-summary', (req, res) => {
+  const { id } = req.params;
+  const benchmark = db.prepare('SELECT symbol FROM user_benchmarks WHERE id = ?').get(id) as { symbol: string } | undefined;
+  
+  if (!benchmark) {
+    return res.status(404).json({ error: 'Benchmark not found' });
   }
-  log('benchmark', 'INFO', 'BENCHMARK', `Benchmark update complete: ${updated.length} benchmarks updated`);
-  res.json({ updated });
+
+  const summary = db.prepare(`
+    SELECT 
+      MIN(price_date) as oldest,
+      MAX(price_date) as latest,
+      COUNT(*) as count
+    FROM benchmark_history 
+    WHERE index_name = ?
+  `).get(benchmark.symbol) as { oldest: string | null; latest: string | null; count: number };
+
+  res.json(summary.count > 0 ? summary : null);
 });
 
-router.post('/fetch-mf-benchmark', async (req, res) => {
-  const { amfi_code, name } = req.body;
+router.post('/benchmarks/:id/fetch', async (req, res) => {
+  const { id } = req.params;
   try {
-    const response = await fetch(`${CONFIG.APIS.MF_DATA}${amfi_code}`);
-    const data = await response.json() as any;
-    if (data && data.data) {
-      const insert = db.prepare('INSERT OR REPLACE INTO benchmark_history (index_name, price_date, value) VALUES (?, ?, ?)');
-      const transaction = db.transaction((items) => {
-        for (const item of items) {
-          const [d, m, y] = item.date.split('-');
-          const isoDate = `${y}-${m}-${d}`;
-          insert.run(amfi_code, isoDate, parseFloat(item.nav));
-        }
-      });
-      transaction(data.data);
-      log('benchmark', 'INFO', 'BENCHMARK', `Fetched MF benchmark ${name} (${amfi_code}): ${data.data.length} days`);
-      res.json({ count: data.data.length });
-    } else {
-      log('benchmark', 'WARN', 'BENCHMARK', `MF benchmark ${name} (${amfi_code}) not found`);
-      res.status(404).json({ error: 'MF not found' });
+    const benchmark = db.prepare('SELECT symbol, name FROM user_benchmarks WHERE id = ?').get(id) as { symbol: string; name: string } | undefined;
+    
+    if (!benchmark) {
+      return res.status(404).json({ error: 'Benchmark not found' });
     }
-  } catch (e) {
-    log('benchmark', 'ERROR', 'BENCHMARK', `Failed to fetch MF benchmark ${name} (${amfi_code}): ${String(e)}`);
-    res.status(500).json({ error: String(e) });
+
+    log('benchmark', 'INFO', 'FETCH', `Starting automatic fetch for ${benchmark.name} (${benchmark.symbol})`);
+
+    const data = await fetchFullNiftyTRIHistory(benchmark.symbol);
+    
+    const insert = db.prepare('INSERT OR IGNORE INTO benchmark_history (index_name, price_date, value) VALUES (?, ?, ?)');
+    let inserted = 0;
+
+    const transaction = db.transaction((rows: Array<{date: string, value: number}>) => {
+      for (const row of rows) {
+        const result = insert.run(benchmark.symbol, row.date, row.value);
+        if (result.changes > 0) {
+          inserted++;
+        }
+      }
+    });
+
+    transaction(data);
+
+    log('benchmark', 'INFO', 'FETCH', `Fetched ${data.length} rows for ${benchmark.symbol}, inserted ${inserted} new records`);
+    res.json({ inserted, total: data.length });
+  } catch (err) {
+    log('benchmark', 'ERROR', 'FETCH', `Failed to fetch benchmark data: ${String(err)}`);
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Internal server error' });
   }
 });
 

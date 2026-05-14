@@ -52,7 +52,6 @@ export default function App() {
   const [folios, setFolios] = useState<Folio[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [userBenchmarks, setUserBenchmarks] = useState<any[]>([]);
-  const [selectedBenchmarkIds, setSelectedBenchmarkIds] = useState<string[]>([]);
   const [tagThemes, setTagThemes] = useState<TagTheme[]>([]);
   const [unassignedTags, setUnassignedTags] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
@@ -134,8 +133,6 @@ export default function App() {
                 <XirrReport 
                   folios={folios}
                   activeOnlyXirr={activeOnlyXirr}
-                  selectedBenchmarkIds={selectedBenchmarkIds} 
-                  userBenchmarks={userBenchmarks} 
                 />
               )}
               {activeTab === 'portfolios' && <Portfolios />}
@@ -151,8 +148,6 @@ export default function App() {
               {activeTab === 'benchmarks' && (
                 <BenchmarksManager 
                   userBenchmarks={userBenchmarks} 
-                  selectedBenchmarkIds={selectedBenchmarkIds} 
-                  setSelectedBenchmarkIds={setSelectedBenchmarkIds}
                   onRefresh={fetchData}
                 />
               )}
