@@ -1,7 +1,8 @@
 import express from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { parse } from 'csv-parse/sync';
-import { db, appendLog } from '../lib/db.ts';
+import { db } from '../lib/db.ts';
+import { appendLog } from '../lib/logger.ts';
 import { CONFIG } from '../lib/config.ts';
 
 const router = express.Router();

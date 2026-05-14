@@ -1,6 +1,7 @@
 import express from 'express';
 import { v4 as uuidv4 } from 'uuid';
-import { db, log } from '../lib/db.ts';
+import { db } from '../lib/db.ts';
+import { log } from '../lib/logger.ts';
 import { xirr } from '../lib/xirr.ts';
 import { CONFIG } from '../lib/config.ts';
 

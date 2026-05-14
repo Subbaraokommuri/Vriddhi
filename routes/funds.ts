@@ -1,6 +1,7 @@
 import express from 'express';
 import { v4 as uuidv4 } from 'uuid';
-import { db, log } from '../lib/db.ts';
+import { db } from '../lib/db.ts';
+import { log } from '../lib/logger.ts';
 import { xirr } from '../lib/xirr.ts';
 import { CONFIG } from '../lib/config.ts';
 
@@ -163,6 +164,175 @@ router.get('/export-holdings-csv', (req, res) => {
   } catch (error) {
     log('app', 'ERROR', 'FUNDS', `Export failed: ${String(error)}`);
     res.status(500).json({ error: error instanceof Error ? error.message : 'Unknown error' });
+  }
+});
+
+// TAG MANAGEMENT ENDPOINTS
+
+router.get('/tags/themes', (req, res) => {
+  try {
+    const themes = db.prepare('SELECT * FROM tag_themes ORDER BY sort_order ASC, name ASC').all() as any[];
+    const result = themes.map(theme => {
+      const tags = db.prepare('SELECT tag FROM theme_tags WHERE theme_id = ?').all(theme.id) as { tag: string }[];
+      return {
+        ...theme,
+        tags: tags.map(t => t.tag)
+      };
+    });
+    res.json(result);
+  } catch (error) {
+    log('app', 'ERROR', 'TAGS', `Failed to get themes: ${String(error)}`);
+    res.status(500).json({ error: 'Failed to get themes' });
+  }
+});
+
+router.post('/tags/themes', (req, res) => {
+  try {
+    const { name } = req.body;
+    if (!name) return res.status(400).json({ error: 'Name is required' });
+    const id = uuidv4();
+    db.prepare('INSERT INTO tag_themes (id, name) VALUES (?, ?)').run(id, name);
+    res.json({ id });
+  } catch (error) {
+    log('app', 'ERROR', 'TAGS', `Failed to create theme: ${String(error)}`);
+    res.status(500).json({ error: 'Failed to create theme' });
+  }
+});
+
+router.put('/tags/themes/:id', (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name } = req.body;
+    if (!name) return res.status(400).json({ error: 'Name is required' });
+    db.prepare('UPDATE tag_themes SET name = ? WHERE id = ?').run(name, id);
+    res.json({ success: true });
+  } catch (error) {
+    log('app', 'ERROR', 'TAGS', `Failed to update theme: ${String(error)}`);
+    res.status(500).json({ error: 'Failed to update theme' });
+  }
+});
+
+router.delete('/tags/themes/:id', (req, res) => {
+  try {
+    const { id } = req.params;
+    db.transaction(() => {
+      db.prepare('UPDATE folio_tags SET theme_id = NULL WHERE theme_id = ?').run(id);
+      db.prepare('DELETE FROM theme_tags WHERE theme_id = ?').run(id);
+      db.prepare('DELETE FROM tag_themes WHERE id = ?').run(id);
+    })();
+    res.json({ success: true });
+  } catch (error) {
+    log('app', 'ERROR', 'TAGS', `Failed to delete theme: ${String(error)}`);
+    res.status(500).json({ error: 'Failed to delete theme' });
+  }
+});
+
+router.post('/tags/themes/:id/tags', (req, res) => {
+  try {
+    const { id } = req.params;
+    const { tag } = req.body;
+    if (!tag) return res.status(400).json({ error: 'Tag is required' });
+    
+    db.prepare('INSERT OR IGNORE INTO theme_tags (theme_id, tag) VALUES (?, ?)').run(id, tag);
+    res.json({ success: true });
+  } catch (error) {
+    log('app', 'ERROR', 'TAGS', `Failed to add tag to theme: ${String(error)}`);
+    res.status(500).json({ error: 'Failed to add tag to theme' });
+  }
+});
+
+router.put('/tags/themes/:id/tags/:tag', (req, res) => {
+  try {
+    const { id, tag } = req.params;
+    const { newTag } = req.body;
+    if (!newTag) return res.status(400).json({ error: 'New tag name is required' });
+    
+    db.transaction(() => {
+      db.prepare('UPDATE theme_tags SET tag = ? WHERE theme_id = ? AND tag = ?').run(newTag, id, tag);
+      db.prepare('UPDATE folio_tags SET tag = ? WHERE theme_id = ? AND tag = ?').run(newTag, id, tag);
+    })();
+    res.json({ success: true });
+  } catch (error) {
+    log('app', 'ERROR', 'TAGS', `Failed to rename tag: ${String(error)}`);
+    res.status(500).json({ error: 'Failed to rename tag' });
+  }
+});
+
+router.delete('/tags/themes/:id/tags/:tag', (req, res) => {
+  try {
+    const { id, tag } = req.params;
+    db.transaction(() => {
+      db.prepare('DELETE FROM theme_tags WHERE theme_id = ? AND tag = ?').run(id, tag);
+      db.prepare('DELETE FROM folio_tags WHERE theme_id = ? AND tag = ?').run(id, tag);
+    })();
+    res.json({ success: true });
+  } catch (error) {
+    log('app', 'ERROR', 'TAGS', `Failed to delete tag: ${String(error)}`);
+    res.status(500).json({ error: 'Failed to delete tag' });
+  }
+});
+
+router.get('/tags/unassigned', (req, res) => {
+  try {
+    const tags = db.prepare('SELECT DISTINCT tag FROM folio_tags WHERE theme_id IS NULL').all() as { tag: string }[];
+    res.json(tags.map(t => t.tag));
+  } catch (error) {
+    log('app', 'ERROR', 'TAGS', `Failed to get unassigned tags: ${String(error)}`);
+    res.status(500).json({ error: 'Failed to get unassigned tags' });
+  }
+});
+
+router.delete('/tags/unassigned/:tag', (req, res) => {
+  try {
+    const { tag } = req.params;
+    db.prepare('DELETE FROM folio_tags WHERE tag = ? AND theme_id IS NULL').run(tag);
+    res.json({ success: true });
+  } catch (error) {
+    log('app', 'ERROR', 'TAGS', `Failed to delete unassigned tag: ${String(error)}`);
+    res.status(500).json({ error: 'Failed to delete unassigned tag' });
+  }
+});
+
+// FOLIO TAGS ENDPOINTS
+
+router.get('/folios/:id/tags', (req, res) => {
+  try {
+    const { id } = req.params;
+    const tags = db.prepare(`
+      SELECT ft.tag, ft.theme_id, tt.name as theme_name
+      FROM folio_tags ft
+      LEFT JOIN tag_themes tt ON ft.theme_id = tt.id
+      WHERE ft.folio_id = ?
+    `).all(id) as any[];
+    res.json(tags);
+  } catch (error) {
+    log('app', 'ERROR', 'TAGS', `Failed to get folio tags: ${String(error)}`);
+    res.status(500).json({ error: 'Failed to get folio tags' });
+  }
+});
+
+router.post('/folios/:id/tags', (req, res) => {
+  try {
+    const { id } = req.params;
+    const { tag, theme_id } = req.body;
+    if (!tag) return res.status(400).json({ error: 'Tag is required' });
+    
+    db.prepare('INSERT OR IGNORE INTO folio_tags (folio_id, tag, theme_id) VALUES (?, ?, ?)').run(id, tag, theme_id || null);
+    res.json({ success: true });
+  } catch (error) {
+    log('app', 'ERROR', 'TAGS', `Failed to assign tag to folio: ${String(error)}`);
+    res.status(500).json({ error: 'Failed to assign tag to folio' });
+  }
+});
+
+router.delete('/folios/:id/tags/:tag', (req, res) => {
+  try {
+    const { id, tag } = req.params;
+    db.prepare('DELETE FROM folio_tags WHERE folio_id = ? AND tag = ?').run(id, tag);
+    res.json({ success: true });
+  } catch (error) {
+    log('app', 'ERROR', 'TAGS', `Failed to remove tag from folio: ${String(error)}`);
+    res.status(500).json({ error: 'Failed to remove tag from folio' });
   }
 });
 
