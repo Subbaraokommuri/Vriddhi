@@ -73,3 +73,35 @@ export interface FolioTagDetail {
   theme_id: string | null;
   theme_name: string | null;
 }
+
+export interface RelativePerformanceFolio {
+  id: string;
+  folio_number: string;
+  fund_name: string;
+  invested: number;
+  currentValue: number;
+}
+
+export interface RelativePerformanceTimePoint {
+  date: string;
+  portfolioValue: number;
+  benchmarkValue: number;
+  investedValue: number;
+}
+
+export interface RelativePerformanceResult {
+  tag: string;
+  theme: string;
+  benchmarkName: string;
+  folioCount: number;
+  fundCount: number;
+  portfolioXirr: number | null;
+  benchmarkXirr: number | null;
+  alpha: number | null;
+  investedAmount: number;
+  currentValue: number;
+  unrealisedPnl: number;
+  xirrWarning: boolean;
+  timeSeries: RelativePerformanceTimePoint[];
+  folios: RelativePerformanceFolio[];
+}

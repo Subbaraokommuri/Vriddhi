@@ -13,7 +13,8 @@ import {
   Upload, 
   TrendingUp, 
   FileText,
-  Tag
+  Tag,
+  BarChart2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Sidebar } from './components/Sidebar.tsx';
@@ -27,6 +28,7 @@ import { BenchmarksManager } from './components/BenchmarksManager.tsx';
 import { LogsView } from './components/LogsView.tsx';
 import { CasImport } from './components/CasImport.tsx';
 import { TagManager } from './components/TagManager.tsx';
+import { RelativePerformance } from './components/RelativePerformance.tsx';
 import { Summary, Folio, Transaction, TagTheme } from './lib/types.ts';
 import { 
   fetchSummary, 
@@ -44,7 +46,7 @@ import {
   deleteUnassignedTag
 } from './lib/api.ts';
 
-type Tab = 'dashboard' | 'xirr' | 'portfolios' | 'funds' | 'transactions' | 'benchmarks' | 'logs' | 'import' | 'tags';
+type Tab = 'dashboard' | 'xirr' | 'portfolios' | 'funds' | 'transactions' | 'benchmarks' | 'logs' | 'import' | 'tags' | 'performance';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<Tab>('dashboard');
@@ -94,6 +96,7 @@ export default function App() {
     { id: 'transactions', label: 'Transactions', icon: History },
     { id: 'benchmarks', label: 'Benchmarks', icon: PieChart },
     { id: 'tags', label: 'Tag Manager', icon: Tag },
+    { id: 'performance', label: 'Performance', icon: BarChart2 },
     { id: 'logs', label: 'Logs', icon: FileText },
     { id: 'import', label: 'Import CAS PDF', icon: Upload },
   ];
@@ -185,6 +188,12 @@ export default function App() {
                     await deleteUnassignedTag(tag);
                     fetchData();
                   }}
+                />
+              )}
+              {activeTab === 'performance' && (
+                <RelativePerformance
+                  themes={tagThemes}
+                  benchmarks={userBenchmarks.filter(b => b.is_active).map((b: any) => ({ symbol: b.symbol, name: b.name }))}
                 />
               )}
             </motion.div>
