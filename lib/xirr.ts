@@ -107,6 +107,22 @@ export function calcMirrorXirr(
         mirrorCashflows.push({ date: cf.date, amount: -Math.abs(cf.amount) });
       }
     } else {
+      // Find closest benchmark price on sell date
+      const cfDate = cf.date.getTime();
+      let closest: { date: string; close: number } | null = null;
+      let minDiff = Infinity;
+      for (const p of benchmarkPrices) {
+        const pDate = new Date(p.date).getTime();
+        const diff = Math.abs(pDate - cfDate) / (1000 * 60 * 60 * 24);
+        if (diff <= options.toleranceDays && diff < minDiff) {
+          minDiff = diff;
+          closest = p;
+        }
+      }
+      if (closest) {
+        const unitsToSell = Math.abs(cf.amount) / closest.close;
+        totalBenchmarkUnits = Math.max(0, totalBenchmarkUnits - unitsToSell);
+      }
       mirrorCashflows.push({ date: cf.date, amount: Math.abs(cf.amount) });
     }
   }
