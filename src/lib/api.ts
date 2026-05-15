@@ -1,4 +1,13 @@
-import { Summary, Folio, Portfolio, Transaction, Fund, TagTheme, FolioTagDetail } from './types.ts';
+import { 
+  Summary, 
+  Folio, 
+  Portfolio, 
+  Transaction, 
+  Fund, 
+  TagTheme, 
+  FolioTagDetail,
+  RelativePerformanceResult 
+} from './types.ts';
 
 async function handleResponse<T>(response: Response): Promise<T> {
   if (!response.ok) {
@@ -12,6 +21,17 @@ async function handleResponse<T>(response: Response): Promise<T> {
   }
   if (response.status === 204) return {} as T;
   return response.json();
+}
+
+export async function fetchRelativePerformance(
+  themeId: string,
+  tag: string,
+  benchmarkSymbol: string
+): Promise<RelativePerformanceResult> {
+  const res = await fetch(
+    `/api/relative-performance?theme_id=${encodeURIComponent(themeId)}&tag=${encodeURIComponent(tag)}&benchmark_symbol=${encodeURIComponent(benchmarkSymbol)}`
+  );
+  return handleResponse<RelativePerformanceResult>(res);
 }
 
 export async function fetchSummary(): Promise<Summary> {

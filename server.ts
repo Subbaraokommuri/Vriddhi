@@ -18,6 +18,7 @@ import reportsRouter from './routes/reports.ts';
 import xirrRouter from './routes/xirr.ts';
 import logsRouter from './routes/logs.ts';
 import casRouter from './routes/cas-import.ts';
+import relativePerformanceRouter from './routes/relative-performance.ts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -36,6 +37,7 @@ async function startServer() {
   app.use('/api', reportsRouter);
   app.use('/api', xirrRouter);
   app.use('/api', logsRouter);
+  app.use('/api', relativePerformanceRouter);
   app.use('/api/cas', casRouter);
 
   // Vite setup
