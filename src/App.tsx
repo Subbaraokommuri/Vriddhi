@@ -43,7 +43,8 @@ import {
   addTagToTheme,
   renameTag,
   deleteTag,
-  deleteUnassignedTag
+  deleteUnassignedTag,
+  assignAllMfTag
 } from './lib/api.ts';
 
 type Tab = 'dashboard' | 'xirr' | 'portfolios' | 'funds' | 'transactions' | 'benchmarks' | 'logs' | 'import' | 'tags' | 'performance';
@@ -187,6 +188,11 @@ export default function App() {
                   onDeleteUnassignedTag={async (tag) => {
                     await deleteUnassignedTag(tag);
                     fetchData();
+                  }}
+                  onSyncAllMf={async () => {
+                    const result = await assignAllMfTag();
+                    fetchData();
+                    return result;
                   }}
                 />
               )}

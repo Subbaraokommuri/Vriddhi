@@ -336,4 +336,37 @@ router.delete('/folios/:id/tags/:tag', (req, res) => {
   }
 });
 
+router.post('/tags/assign-all-mf', (req, res) => {
+  try {
+    const theme = db.prepare('SELECT id FROM tag_themes WHERE name = ?').get('Portfolio') as { id: string } | undefined;
+    if (!theme) {
+      return res.status(404).json({ error: 'Portfolio theme not seeded' });
+    }
+
+    const folios = db.prepare('SELECT id FROM folios').all() as { id: string }[];
+    let assigned = 0;
+
+    const sync = db.transaction((themeId: string, folioIds: string[]) => {
+      for (const fId of folioIds) {
+        const result = db.prepare('INSERT OR IGNORE INTO folio_tags (folio_id, tag, theme_id) VALUES (?, ?, ?)')
+          .run(fId, 'All MF', themeId);
+        if (result.changes > 0) {
+          assigned++;
+        }
+      }
+    });
+
+    sync(theme.id, folios.map(f => f.id));
+
+    const total = folios.length;
+    const skipped = total - assigned;
+
+    log('app', 'INFO', 'TAGS', `All MF sync: ${assigned} assigned, ${skipped} skipped`);
+    res.json({ assigned, skipped, total });
+  } catch (error) {
+    log('app', 'ERROR', 'TAGS', `All MF sync failed: ${String(error)}`);
+    res.status(500).json({ error: 'Internal server error while syncing All MF tags' });
+  }
+});
+
 export default router;

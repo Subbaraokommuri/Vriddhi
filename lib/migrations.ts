@@ -386,4 +386,14 @@ export function runMigrations(db: Database.Database) {
   db.prepare("UPDATE user_benchmarks SET name = 'Nifty Next 50 TRI (ETF proxy)'   WHERE symbol = 'JUNIORBEES.NS' AND name NOT LIKE '%(ETF proxy)%'").run();
   db.prepare("UPDATE user_benchmarks SET name = 'Nifty Midcap 150 (ETF proxy)'    WHERE symbol = 'MAFANG.NS'     AND name NOT LIKE '%(ETF proxy)%'").run();
   log('app', 'INFO', 'DB', 'Benchmark symbol migration complete');
+
+  // Seed: Portfolio theme + All MF tag
+  db.prepare(`
+    INSERT OR IGNORE INTO tag_themes (id, name, sort_order)
+    VALUES ('seed-portfolio-theme', 'Portfolio', 0)
+  `).run();
+  db.prepare(`
+    INSERT OR IGNORE INTO theme_tags (theme_id, tag)
+    VALUES ('seed-portfolio-theme', 'All MF')
+  `).run();
 }

@@ -234,3 +234,8 @@ export async function removeTagFromFolio(folioId: string, tag: string): Promise<
   });
   return handleResponse<void>(res);
 }
+
+export async function assignAllMfTag(): Promise<{ assigned: number; skipped: number; total: number }> {
+  const res = await fetch('/api/tags/assign-all-mf', { method: 'POST' });
+  return handleResponse<{ assigned: number; skipped: number; total: number }>(res);
+}
