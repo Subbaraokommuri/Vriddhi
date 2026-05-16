@@ -120,7 +120,15 @@ export const CONFIG = {
   MONTH_MAP: {
     'jan': '01', 'feb': '02', 'mar': '03', 'apr': '04', 'may': '05', 'jun': '06',
     'jul': '07', 'aug': '08', 'sep': '09', 'oct': '10', 'nov': '11', 'dec': '12'
-  } as Record<string, string>
+  } as Record<string, string>,
+  
+  // Investment Trend Analysis
+  INVESTMENT_TREND: {
+    MIN_MEANINGFUL_BASE_INR: 100000, // suppress YoY% when prior year netInvested < ₹1L
+    YOY_AXIS_MIN: -100,              // right Y-axis domain floor (%)
+    YOY_AXIS_MAX: 300,               // right Y-axis domain ceiling (%)
+    LEFT_AXIS_MAX: 10000000,         // left Y-axis ceiling (₹1 Cr)
+  }
 };
 
 export const ACTIVE_AMC_LIST: string[] = [

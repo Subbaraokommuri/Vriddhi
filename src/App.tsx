@@ -29,7 +29,7 @@ import { LogsView } from './components/LogsView.tsx';
 import { CasImport } from './components/CasImport.tsx';
 import { TagManager } from './components/TagManager.tsx';
 import { RelativePerformance } from './components/RelativePerformance.tsx';
-import { Summary, Folio, Transaction, TagTheme, UserBenchmark } from './lib/types.ts';
+import { Summary, Folio, Transaction, TagTheme, UserBenchmark, InvestmentTrendPoint } from './lib/types.ts';
 import { 
   fetchSummary, 
   fetchFolios, 
@@ -45,7 +45,8 @@ import {
   deleteTag,
   deleteUnassignedTag,
   assignAllMfTag,
-  getUserBenchmarks
+  getUserBenchmarks,
+  getInvestmentTrend
 } from './lib/api.ts';
 
 type Tab = 'dashboard' | 'xirr' | 'portfolios' | 'funds' | 'transactions' | 'benchmarks' | 'logs' | 'import' | 'tags' | 'performance';
@@ -58,6 +59,7 @@ export default function App() {
   const [userBenchmarks, setUserBenchmarks] = useState<UserBenchmark[]>([]);
   const [tagThemes, setTagThemes] = useState<TagTheme[]>([]);
   const [unassignedTags, setUnassignedTags] = useState<string[]>([]);
+  const [investmentTrend, setInvestmentTrend] = useState<InvestmentTrendPoint[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeOnlyFunds, setActiveOnlyFunds] = useState(false);
   const [activeOnlyXirr, setActiveOnlyXirr] = useState(false);
@@ -70,13 +72,14 @@ export default function App() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [summaryRes, foliosRes, transactionsRes, benchmarksRes, tagThemesRes, unassignedTagsRes] = await Promise.all([
+      const [summaryRes, foliosRes, transactionsRes, benchmarksRes, tagThemesRes, unassignedTagsRes, trendRes] = await Promise.all([
         fetchSummary(),
         fetchFolios(),
         fetchTransactions(),
         fetchBenchmarks(),
         getTagThemes(),
-        getUnassignedTags()
+        getUnassignedTags(),
+        getInvestmentTrend()
       ]);
       setSummary(summaryRes);
       setFolios(foliosRes);
@@ -84,6 +87,7 @@ export default function App() {
       setUserBenchmarks(benchmarksRes);
       setTagThemes(tagThemesRes);
       setUnassignedTags(unassignedTagsRes);
+      setInvestmentTrend(trendRes.data);
     } catch (error) {
       console.error('Error fetching data:', error);
     } finally {
@@ -147,7 +151,7 @@ export default function App() {
               exit={{ opacity: 0, y: -10 }}
               transition={{ duration: 0.2 }}
             >
-              {activeTab === 'dashboard' && <Dashboard />}
+              {activeTab === 'dashboard' && <Dashboard investmentTrend={investmentTrend} />}
               {activeTab === 'xirr' && (
                 <XirrReport 
                   folios={folios}

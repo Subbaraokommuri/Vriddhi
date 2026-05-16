@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   PieChart, 
   Briefcase, 
@@ -20,10 +20,12 @@ import {
   ResponsiveContainer, 
   Cell,
   PieChart as RePieChart,
-  Pie
+  Pie,
+  ComposedChart,
+  ReferenceLine
 } from 'recharts';
 import { cn, formatCurrency, formatIndianNumber, formatPercent } from '../lib/utils';
-import { Summary, Folio } from '../lib/types';
+import { Summary, Folio, InvestmentTrendPoint } from '../lib/types';
 import { 
   fetchSummary, 
   fetchFolios, 
@@ -32,13 +34,33 @@ import {
   fetchPortfolioGrowth 
 } from '../lib/api';
 
-export function Dashboard() {
+interface DashboardProps {
+  investmentTrend: InvestmentTrendPoint[];
+}
+
+export function Dashboard({ investmentTrend }: DashboardProps) {
   const [summary, setSummary] = useState<Summary | null>(null);
   const [folios, setFolios] = useState<Folio[]>([]);
   const [overallBenchmarkData, setOverallBenchmarkData] = useState<any>(null);
   const [growthData, setGrowthData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Dynamic colors from theme
+  const [chartColors, setChartColors] = useState({
+    primary: '#01696f',
+    gold: '#fbbf24',
+    orange: '#f97316'
+  });
+
+  useEffect(() => {
+    const style = getComputedStyle(document.documentElement);
+    setChartColors({
+      primary: style.getPropertyValue('--color-primary').trim() || '#01696f',
+      gold: style.getPropertyValue('--color-gold').trim() || '#fbbf24',
+      orange: style.getPropertyValue('--color-orange').trim() || '#f97316'
+    });
+  }, []);
 
   useEffect(() => {
     const loadData = async () => {
@@ -208,6 +230,114 @@ export function Dashboard() {
               </LineChart>
             </ResponsiveContainer>
           </div>
+        </div>
+        <div className="bg-white p-8 rounded-2xl shadow-sm border border-slate-200 lg:col-span-2">
+          <h3 className="text-lg font-bold mb-6">Investment Trend</h3>
+          {investmentTrend.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-48 bg-slate-50 rounded-xl border border-dashed border-slate-200">
+              <p className="text-slate-400 font-medium">No transaction data available</p>
+            </div>
+          ) : (
+            <div className="h-80">
+              <ResponsiveContainer width="100%" height="100%">
+                <ComposedChart data={investmentTrend}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                  <XAxis 
+                    dataKey="year" 
+                    axisLine={false} 
+                    tickLine={false} 
+                    tick={{ fontSize: 12, fill: '#64748b' }}
+                    tickFormatter={(v, index) => {
+                      const point = investmentTrend[index];
+                      return point?.isPartialYear ? `${v}*` : v;
+                    }}
+                  />
+                  <YAxis 
+                    yAxisId="left"
+                    axisLine={false} 
+                    tickLine={false} 
+                    tick={{ fontSize: 12, fill: '#64748b' }}
+                    domain={[0, 10000000]}
+                    ticks={[0, 2500000, 5000000, 7500000, 10000000]}
+                    tickFormatter={(v) => {
+                      if (v === 0) return '₹0';
+                      if (v === 10000000) return '₹1Cr';
+                      return `₹${v / 100000}L`;
+                    }}
+                  />
+                  <YAxis 
+                    yAxisId="right"
+                    orientation="right"
+                    axisLine={false} 
+                    tickLine={false} 
+                    tick={{ fontSize: 12, fill: '#64748b' }}
+                    domain={[-100, 300]}
+                    ticks={[-100, -50, 0, 50, 100, 150, 200, 250, 300]}
+                    tickFormatter={(v) => `${Math.round(v)}%`}
+                  />
+                  <Tooltip 
+                    content={({ active, payload }) => {
+                      if (active && payload && payload.length) {
+                        const data = payload[0].payload as InvestmentTrendPoint;
+                        return (
+                          <div className="bg-white p-4 border border-slate-200 rounded-xl shadow-xl">
+                            <p className="font-bold text-slate-900 mb-2">
+                              {data.year}{data.isPartialYear ? ' (partial)' : ''}
+                            </p>
+                            <div className="space-y-1">
+                              <div className="text-sm flex justify-between gap-4">
+                                <span className="text-slate-500">Net Invested:</span>
+                                <span className="font-medium">{formatCurrency(data.netInvested)}</span>
+                              </div>
+                              <div className="text-sm flex justify-between gap-4">
+                                <span className="text-slate-500">YoY Growth:</span>
+                                <span className={cn("font-medium", data.yoyGrowth !== null && data.yoyGrowth > 0 ? "text-emerald-600" : data.yoyGrowth !== null && data.yoyGrowth < 0 ? "text-rose-600" : "text-slate-900")}>
+                                  {data.yoyGrowth !== null ? `${data.yoyGrowth > 0 ? '+' : ''}${data.yoyGrowth.toFixed(0)}%${(data.yoyGrowth < -100 || data.yoyGrowth > 300) ? ' (off-chart)' : ''}` : '—'}
+                                </span>
+                              </div>
+                              <div className="text-sm flex justify-between gap-4">
+                                <span className="text-slate-500">Rolling Avg (3y):</span>
+                                <span className={cn("font-medium", data.rollingAvgGrowth !== null && data.rollingAvgGrowth > 0 ? "text-emerald-600" : data.rollingAvgGrowth !== null && data.rollingAvgGrowth < 0 ? "text-rose-600" : "text-slate-900")}>
+                                  {data.rollingAvgGrowth !== null ? `${data.rollingAvgGrowth > 0 ? '+' : ''}${data.rollingAvgGrowth.toFixed(0)}%${(data.rollingAvgGrowth < -100 || data.rollingAvgGrowth > 300) ? ' (off-chart)' : ''}` : '—'}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      }
+                      return null;
+                    }}
+                  />
+                  <Legend verticalAlign="top" height={36} formatter={(value) => {
+                    if (value === 'netInvested') return 'Net Invested';
+                    if (value === 'yoyGrowth') return 'YoY Growth %';
+                    if (value === 'rollingAvgGrowth') return '3-yr Rolling Avg %';
+                    return value;
+                  }} />
+                  <ReferenceLine y={0} yAxisId="right" stroke="#e2e8f0" />
+                  <Bar yAxisId="left" dataKey="netInvested" fill={chartColors.primary} radius={[4, 4, 0, 0]} />
+                  <Line
+                    yAxisId="right"
+                    type="monotone"
+                    dataKey="yoyGrowth"
+                    stroke={chartColors.gold}
+                    strokeDasharray="5 5"
+                    dot={true}
+                    connectNulls={false}
+                  />
+                  <Line
+                    yAxisId="right"
+                    type="monotone"
+                    dataKey="rollingAvgGrowth"
+                    stroke={chartColors.orange}
+                    strokeWidth={2}
+                    dot={false}
+                    connectNulls={false}
+                  />
+                </ComposedChart>
+              </ResponsiveContainer>
+            </div>
+          )}
         </div>
       </div>
     </motion.div>
