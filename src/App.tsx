@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
   LayoutDashboard, 
   PieChart, 
@@ -29,7 +29,7 @@ import { LogsView } from './components/LogsView.tsx';
 import { CasImport } from './components/CasImport.tsx';
 import { TagManager } from './components/TagManager.tsx';
 import { RelativePerformance } from './components/RelativePerformance.tsx';
-import { Summary, Folio, Transaction, TagTheme } from './lib/types.ts';
+import { Summary, Folio, Transaction, TagTheme, UserBenchmark } from './lib/types.ts';
 import { 
   fetchSummary, 
   fetchFolios, 
@@ -44,7 +44,8 @@ import {
   renameTag,
   deleteTag,
   deleteUnassignedTag,
-  assignAllMfTag
+  assignAllMfTag,
+  getUserBenchmarks
 } from './lib/api.ts';
 
 type Tab = 'dashboard' | 'xirr' | 'portfolios' | 'funds' | 'transactions' | 'benchmarks' | 'logs' | 'import' | 'tags' | 'performance';
@@ -54,12 +55,17 @@ export default function App() {
   const [summary, setSummary] = useState<Summary | null>(null);
   const [folios, setFolios] = useState<Folio[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [userBenchmarks, setUserBenchmarks] = useState<any[]>([]);
+  const [userBenchmarks, setUserBenchmarks] = useState<UserBenchmark[]>([]);
   const [tagThemes, setTagThemes] = useState<TagTheme[]>([]);
   const [unassignedTags, setUnassignedTags] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeOnlyFunds, setActiveOnlyFunds] = useState(false);
   const [activeOnlyXirr, setActiveOnlyXirr] = useState(false);
+
+  // Performance Selection State (Lifted for persistence)
+  const [perfThemeId, setPerfThemeId] = useState<string>('');
+  const [perfTag, setPerfTag] = useState<string>('');
+  const [perfBenchmark, setPerfBenchmark] = useState<string>('');
 
   const fetchData = async () => {
     setLoading(true);
@@ -84,6 +90,15 @@ export default function App() {
       setLoading(false);
     }
   };
+
+  const refreshBenchmarks = useCallback(async () => {
+    try {
+      const data = await getUserBenchmarks();
+      setUserBenchmarks(data);
+    } catch (error) {
+      console.error('Error refreshing benchmarks:', error);
+    }
+  }, []);
 
   useEffect(() => {
     fetchData();
@@ -153,6 +168,7 @@ export default function App() {
                 <BenchmarksManager 
                   userBenchmarks={userBenchmarks} 
                   onRefresh={fetchData}
+                  onBenchmarkAdded={refreshBenchmarks}
                 />
               )}
               {activeTab === 'logs' && <LogsView />}
@@ -196,14 +212,21 @@ export default function App() {
                   }}
                 />
               )}
-              {activeTab === 'performance' && (
-                <RelativePerformance
-                  themes={tagThemes}
-                  benchmarks={userBenchmarks.filter(b => b.is_active).map((b: any) => ({ symbol: b.symbol, name: b.name }))}
-                />
-              )}
             </motion.div>
           </AnimatePresence>
+
+          <div style={{ display: activeTab === 'performance' ? 'block' : 'none' }}>
+            <RelativePerformance
+              themes={tagThemes}
+              benchmarks={userBenchmarks.filter(b => b.is_active).map((b: any) => ({ symbol: b.symbol, name: b.name }))}
+              selectedThemeId={perfThemeId}
+              selectedTag={perfTag}
+              selectedBenchmark={perfBenchmark}
+              onThemeChange={setPerfThemeId}
+              onTagChange={setPerfTag}
+              onBenchmarkChange={setPerfBenchmark}
+            />
+          </div>
         </div>
       </main>
     </div>

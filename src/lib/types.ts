@@ -105,3 +105,23 @@ export interface RelativePerformanceResult {
   timeSeries: RelativePerformanceTimePoint[];
   folios: RelativePerformanceFolio[];
 }
+
+export interface NiftyTRIEntry {
+  symbol: string;
+  name: string;
+  category: string;
+  description: string;
+}
+
+export interface UserBenchmark {
+  id: string;
+  symbol: string;
+  name: string;
+  source: string;
+  category: string;
+  color: string;
+  is_active: number;        // SQLite stores as 0/1
+  benchmark_type: string;   // 'yahoo' | 'nifty_tri' | 'mf_nav'
+  amfi_code: string | null;
+  data_count: number;       // count from the data-summary query
+}

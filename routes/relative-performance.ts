@@ -15,11 +15,22 @@ router.get('/relative-performance', (req, res) => {
 
   try {
     // Step 1 — Resolve inputs
-    const benchmarkPrices = db.prepare('SELECT price_date as date, value as close FROM benchmark_history WHERE index_name = ? ORDER BY price_date ASC').all(benchmark_symbol) as { date: string; close: number }[];
-    const benchmarkInfo = db.prepare('SELECT name FROM user_benchmarks WHERE symbol = ? AND is_active = 1').get(benchmark_symbol) as { name: string } | undefined;
+    const benchmark = db.prepare('SELECT id, symbol, name, benchmark_type, amfi_code FROM user_benchmarks WHERE symbol = ? AND is_active = 1').get(benchmark_symbol) as { id: string; symbol: string; name: string; benchmark_type: string; amfi_code: string | null } | undefined;
+
+    if (!benchmark) return res.status(404).json({ error: 'Benchmark not found or inactive' });
+
+    let benchmarkPrices: { date: string; close: number }[] = [];
+    if (benchmark.benchmark_type === 'mf_nav') {
+      if (!benchmark.amfi_code) {
+        return res.status(400).json({ error: 'Mutual fund benchmark missing AMFI code' });
+      }
+      benchmarkPrices = db.prepare('SELECT nav_date as date, nav as close FROM nav_history WHERE isin = ? ORDER BY nav_date ASC').all(benchmark.amfi_code) as { date: string; close: number }[];
+    } else {
+      benchmarkPrices = db.prepare('SELECT price_date as date, value as close FROM benchmark_history WHERE index_name = ? ORDER BY price_date ASC').all(benchmark_symbol) as { date: string; close: number }[];
+    }
+
     const themeInfo = db.prepare('SELECT name FROM tag_themes WHERE id = ?').get(theme_id) as { name: string } | undefined;
 
-    if (!benchmarkInfo) return res.status(404).json({ error: 'Benchmark not found or inactive' });
     if (benchmarkPrices.length === 0) return res.status(404).json({ error: 'No history data for benchmark' });
     if (!themeInfo) return res.status(404).json({ error: 'Theme not found' });
 
@@ -221,7 +232,7 @@ router.get('/relative-performance', (req, res) => {
     res.json({
       tag,
       theme: themeInfo.name,
-      benchmarkName: benchmarkInfo.name,
+      benchmarkName: benchmark.name,
       folioCount: folioIds.length,
       fundCount: new Set(foliosSummaryData.map(f => f.fund_id)).size,
       portfolioXirr,
