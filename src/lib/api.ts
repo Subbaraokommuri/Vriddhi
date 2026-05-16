@@ -65,7 +65,17 @@ export async function fetchBenchmarks(): Promise<any[]> {
   return handleResponse<any[]>(res);
 }
 
-export async function addUserBenchmark(data: { symbol: string; name: string; source: string; category: string; color: string }): Promise<{ id: string }> {
+export const getUserBenchmarks = fetchBenchmarks;
+
+export async function addUserBenchmark(data: { 
+  symbol: string; 
+  name: string; 
+  source: string; 
+  category: string; 
+  color: string;
+  benchmark_type?: string;
+  amfi_code?: string;
+}): Promise<{ id: string }> {
   const res = await fetch('/api/user-benchmarks', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -73,6 +83,26 @@ export async function addUserBenchmark(data: { symbol: string; name: string; sou
   });
   if (!res.ok) throw new Error('Failed to add benchmark');
   return res.json();
+}
+
+export async function searchAmfiMetadata(q: string): Promise<{ results: { amfi_code: string; name: string; fundHouse: string }[]; total: number }> {
+  const res = await fetch(`/api/amfi-search?q=${encodeURIComponent(q)}`);
+  return handleResponse<{ results: { amfi_code: string; name: string; fundHouse: string }[]; total: number }>(res);
+}
+
+export async function refreshAmfiMetadata(): Promise<{ success: boolean; count: number }> {
+  const res = await fetch('/api/amfi-metadata/refresh', { method: 'POST' });
+  return handleResponse<{ success: boolean; count: number }>(res);
+}
+
+export async function getAmfiMetadataStatus(): Promise<{ exists: boolean; count: number }> {
+  const res = await fetch('/api/amfi-metadata/status');
+  return handleResponse<{ exists: boolean; count: number }>(res);
+}
+
+export async function getAmfiFundHouses(): Promise<{ fundHouses: string[] }> {
+  const res = await fetch('/api/amfi-metadata/fund-houses');
+  return handleResponse<{ fundHouses: string[] }>(res);
 }
 
 export async function deleteUserBenchmark(id: string): Promise<void> {

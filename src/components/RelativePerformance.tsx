@@ -25,12 +25,24 @@ import { formatCurrency, formatPercent, cn } from '../lib/utils.ts';
 interface RelativePerformanceProps {
   themes: TagTheme[];
   benchmarks: { symbol: string; name: string }[];
+  selectedThemeId: string;
+  selectedTag: string;
+  selectedBenchmark: string;
+  onThemeChange: (id: string) => void;
+  onTagChange: (tag: string) => void;
+  onBenchmarkChange: (symbol: string) => void;
 }
 
-export function RelativePerformance({ themes, benchmarks }: RelativePerformanceProps) {
-  const [selectedThemeId, setSelectedThemeId] = useState<string>('');
-  const [selectedTag, setSelectedTag] = useState<string>('');
-  const [selectedBenchmark, setSelectedBenchmark] = useState<string>('');
+export function RelativePerformance({ 
+  themes, 
+  benchmarks,
+  selectedThemeId,
+  selectedTag,
+  selectedBenchmark,
+  onThemeChange,
+  onTagChange,
+  onBenchmarkChange
+}: RelativePerformanceProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<RelativePerformanceResult | null>(null);
@@ -38,7 +50,7 @@ export function RelativePerformance({ themes, benchmarks }: RelativePerformanceP
   const selectedTheme = themes.find(t => t.id === selectedThemeId);
 
   useEffect(() => {
-    setSelectedTag('');
+    onTagChange('');
   }, [selectedThemeId]);
 
   const handleRun = async () => {
@@ -71,7 +83,7 @@ export function RelativePerformance({ themes, benchmarks }: RelativePerformanceP
           <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Theme</label>
           <select 
             value={selectedThemeId}
-            onChange={(e) => setSelectedThemeId(e.target.value)}
+            onChange={(e) => onThemeChange(e.target.value)}
             className="w-full h-11 px-4 rounded-xl border border-slate-200 bg-slate-50 focus:ring-2 focus:ring-primary/20 appearance-none text-sm cursor-pointer"
           >
             <option value="">Select Theme</option>
@@ -85,7 +97,7 @@ export function RelativePerformance({ themes, benchmarks }: RelativePerformanceP
           <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Tag</label>
           <select 
             value={selectedTag}
-            onChange={(e) => setSelectedTag(e.target.value)}
+            onChange={(e) => onTagChange(e.target.value)}
             disabled={!selectedThemeId}
             className="w-full h-11 px-4 rounded-xl border border-slate-200 bg-slate-50 focus:ring-2 focus:ring-primary/20 appearance-none text-sm cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
           >
@@ -100,7 +112,7 @@ export function RelativePerformance({ themes, benchmarks }: RelativePerformanceP
           <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Benchmark</label>
           <select 
             value={selectedBenchmark}
-            onChange={(e) => setSelectedBenchmark(e.target.value)}
+            onChange={(e) => onBenchmarkChange(e.target.value)}
             className="w-full h-11 px-4 rounded-xl border border-slate-200 bg-slate-50 focus:ring-2 focus:ring-primary/20 appearance-none text-sm cursor-pointer"
           >
             <option value="">Select Benchmark</option>
