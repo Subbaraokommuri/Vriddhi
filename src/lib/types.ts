@@ -125,3 +125,11 @@ export interface UserBenchmark {
   amfi_code: string | null;
   data_count: number;       // count from the data-summary query
 }
+
+export interface InvestmentTrendPoint {
+  year: string;
+  netInvested: number;
+  yoyGrowth: number | null;
+  rollingAvgGrowth: number | null;
+  isPartialYear: boolean;
+}

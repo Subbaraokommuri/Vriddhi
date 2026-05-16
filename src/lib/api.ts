@@ -6,7 +6,8 @@ import {
   Fund, 
   TagTheme, 
   FolioTagDetail,
-  RelativePerformanceResult 
+  RelativePerformanceResult,
+  InvestmentTrendPoint 
 } from './types.ts';
 
 async function handleResponse<T>(response: Response): Promise<T> {
@@ -268,4 +269,9 @@ export async function removeTagFromFolio(folioId: string, tag: string): Promise<
 export async function assignAllMfTag(): Promise<{ assigned: number; skipped: number; total: number }> {
   const res = await fetch('/api/tags/assign-all-mf', { method: 'POST' });
   return handleResponse<{ assigned: number; skipped: number; total: number }>(res);
+}
+
+export async function getInvestmentTrend(): Promise<{ data: InvestmentTrendPoint[] }> {
+  const res = await fetch('/api/investment-trend');
+  return handleResponse<{ data: InvestmentTrendPoint[] }>(res);
 }

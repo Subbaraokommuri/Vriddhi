@@ -1,6 +1,8 @@
 import express from 'express';
 import { db } from '../lib/db.ts';
 import { xirr } from '../lib/xirr.ts';
+import { groupTransactionsByCY, calcYoYGrowth, calcRollingAvgGrowth } from '../lib/finance.ts';
+import { log } from '../lib/logger.ts';
 
 const router = express.Router();
 
@@ -76,6 +78,33 @@ router.get('/summary', (req, res) => {
     xirr: overallXirr,
     yearlyInvested: yearlyInvested ? yearlyInvested.total : 0
   });
+});
+
+router.get('/investment-trend', (req, res) => {
+  try {
+    const rawTxns = db.prepare('SELECT date, amount FROM transactions ORDER BY date ASC').all() as any[];
+    
+    const transactions = rawTxns.map(t => ({
+      date: t.date,
+      amount: t.amount
+    }));
+
+    const grouped = groupTransactionsByCY(transactions);
+    const withYoY = calcYoYGrowth(grouped);
+    const withRolling = calcRollingAvgGrowth(withYoY);
+
+    const currentYear = new Date().getFullYear().toString();
+    const data = withRolling.map(row => ({
+      ...row,
+      isPartialYear: row.year === currentYear
+    }));
+
+    res.json({ data });
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
+    log('app', 'ERROR', 'investment-trend', msg);
+    res.status(500).json({ error: msg });
+  }
 });
 
 export default router;
