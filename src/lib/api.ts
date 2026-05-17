@@ -35,6 +35,21 @@ export async function fetchRelativePerformance(
   return handleResponse<RelativePerformanceResult>(res);
 }
 
+export async function getDashboardPerformance(
+  benchmarkSymbol: string
+): Promise<RelativePerformanceResult | null> {
+  try {
+    const res = await fetch(
+      `/api/relative-performance?theme_id=seed-portfolio-theme` +
+      `&tag=${encodeURIComponent('All MF')}` +
+      `&benchmark_symbol=${encodeURIComponent(benchmarkSymbol)}`
+    );
+    return handleResponse<RelativePerformanceResult>(res);
+  } catch {
+    return null;
+  }
+}
+
 export async function fetchSummary(): Promise<Summary> {
   const res = await fetch('/api/summary');
   return handleResponse<Summary>(res);

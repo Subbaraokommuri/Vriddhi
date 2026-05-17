@@ -27,7 +27,7 @@ import { LogsView } from './components/LogsView.tsx';
 import { CasImport } from './components/CasImport.tsx';
 import { TagManager } from './components/TagManager.tsx';
 import { RelativePerformance } from './components/RelativePerformance.tsx';
-import { Summary, Folio, Transaction, TagTheme, UserBenchmark, InvestmentTrendPoint } from './lib/types.ts';
+import { Summary, Folio, Transaction, TagTheme, UserBenchmark, InvestmentTrendPoint, RelativePerformanceResult } from './lib/types.ts';
 import { 
   fetchSummary, 
   fetchFolios, 
@@ -44,7 +44,8 @@ import {
   deleteUnassignedTag,
   assignAllMfTag,
   getUserBenchmarks,
-  getInvestmentTrend
+  getInvestmentTrend,
+  getDashboardPerformance
 } from './lib/api.ts';
 
 type Tab = 'dashboard' | 'xirr' | 'funds' | 'transactions' | 'benchmarks' | 'logs' | 'import' | 'tags' | 'performance';
@@ -58,6 +59,7 @@ export default function App() {
   const [tagThemes, setTagThemes] = useState<TagTheme[]>([]);
   const [unassignedTags, setUnassignedTags] = useState<string[]>([]);
   const [investmentTrend, setInvestmentTrend] = useState<InvestmentTrendPoint[]>([]);
+  const [dashboardPerf, setDashboardPerf] = useState<RelativePerformanceResult | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeOnlyFunds, setActiveOnlyFunds] = useState(false);
   const [activeOnlyXirr, setActiveOnlyXirr] = useState(false);
@@ -86,6 +88,21 @@ export default function App() {
       setTagThemes(tagThemesRes);
       setUnassignedTags(unassignedTagsRes);
       setInvestmentTrend(trendRes.data);
+
+      // Dashbord Performance Wiring
+      try {
+        const nifty50 = benchmarksRes.find((b: any) => 
+          b.is_active && b.symbol.toLowerCase().includes('nifty 50'));
+        if (nifty50) {
+          const perfRes = await getDashboardPerformance(nifty50.symbol);
+          setDashboardPerf(perfRes);
+        } else {
+          setDashboardPerf(null);
+        }
+      } catch (err) {
+        console.error('Error fetching dashboard performance:', err);
+        setDashboardPerf(null);
+      }
     } catch (error) {
       console.error('Error fetching data:', error);
     } finally {
@@ -145,7 +162,14 @@ export default function App() {
               exit={{ opacity: 0, y: -10 }}
               transition={{ duration: 0.2 }}
             >
-              {activeTab === 'dashboard' && <Dashboard investmentTrend={investmentTrend} />}
+              {activeTab === 'dashboard' && (
+                <Dashboard 
+                  summary={summary}
+                  folios={folios}
+                  dashboardPerf={dashboardPerf}
+                  investmentTrend={investmentTrend} 
+                />
+              )}
               {activeTab === 'xirr' && (
                 <XirrReport 
                   folios={folios}
