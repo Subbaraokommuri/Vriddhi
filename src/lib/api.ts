@@ -8,7 +8,8 @@ import {
   FolioTagDetail,
   RelativePerformanceResult,
   InvestmentTrendPoint,
-  DashboardStats
+  DashboardStats,
+  TransactionFilters
 } from './types.ts';
 
 async function handleResponse<T>(response: Response): Promise<T> {
@@ -71,10 +72,27 @@ export async function fetchPortfolios(): Promise<Portfolio[]> {
   return handleResponse<Portfolio[]>(res);
 }
 
-export async function fetchTransactions(folioId?: string): Promise<Transaction[]> {
-  const url = folioId ? `/api/transactions?folio_id=${folioId}` : '/api/transactions';
-  const res = await fetch(url);
-  return handleResponse<Transaction[]>(res);
+
+export async function getTransactions(filters?: TransactionFilters): Promise<Transaction[]> {
+  const params = new URLSearchParams();
+  if (filters?.dateFrom) params.set('dateFrom', filters.dateFrom);
+  if (filters?.dateTo) params.set('dateTo', filters.dateTo);
+  if (filters?.type) params.set('type', filters.type);
+  if (filters?.fundId) params.set('fundId', filters.fundId);
+  if (filters?.folio) params.set('folio', filters.folio);
+  if (filters?.amountMin != null) params.set('amountMin', String(filters.amountMin));
+  if (filters?.amountMax != null) params.set('amountMax', String(filters.amountMax));
+  const query = params.toString();
+  const res = await fetch(`/api/transactions${query ? '?' + query : ''}`);
+  if (!res.ok) throw new Error('Failed to fetch transactions');
+  return res.json();
+}
+
+export async function getTransactionFundsList(): Promise<{ id: string; name: string }[]> {
+  const res = await fetch('/api/transactions/funds-list');
+  if (!res.ok) throw new Error('Failed to fetch funds list');
+  const data = await res.json();
+  return data.funds;
 }
 
 export async function fetchBenchmarks(): Promise<any[]> {

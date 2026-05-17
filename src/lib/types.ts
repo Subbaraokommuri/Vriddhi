@@ -134,6 +134,16 @@ export interface InvestmentTrendPoint {
   isPartialYear: boolean;
 }
 
+export interface TransactionFilters {
+  dateFrom?: string;
+  dateTo?: string;
+  type?: 'buy' | 'sell';
+  fundId?: string;
+  folio?: string;
+  amountMin?: number;
+  amountMax?: number;
+}
+
 export interface DashboardStats {
   totalFolios: number;
   activeFolios: number;

@@ -142,21 +142,72 @@ router.post('/import-cas', (req, res) => {
 });
 
 router.get('/transactions', (req, res) => {
-  const { folio_id } = req.query;
-  let query = `
-    SELECT t.*, f.folio_number, fu.name as fund_name
-    FROM transactions t
-    JOIN folios f ON t.folio_id = f.id
-    JOIN funds fu ON f.fund_id = fu.id
-  `;
-  const params: any[] = [];
-  if (folio_id) {
-    query += ' WHERE t.folio_id = ?';
-    params.push(folio_id);
+  try {
+    const { dateFrom, dateTo, type, fundId, folio, amountMin, amountMax } = req.query;
+    
+    let query = `
+      SELECT t.*, f.folio_number, fu.name as fund_name
+      FROM transactions t
+      JOIN folios f ON t.folio_id = f.id
+      JOIN funds fu ON f.fund_id = fu.id
+      WHERE 1=1
+    `;
+    
+    const params: any[] = [];
+
+    if (dateFrom) {
+      query += ' AND t.date >= ?';
+      params.push(dateFrom);
+    }
+    if (dateTo) {
+      query += ' AND t.date <= ?';
+      params.push(dateTo);
+    }
+    if (type === 'buy' || type === 'sell') {
+      query += ' AND t.transaction_type = ?';
+      params.push(type);
+    }
+    if (fundId) {
+      query += ' AND f.fund_id = ?';
+      params.push(fundId);
+    }
+    if (folio) {
+      query += ' AND f.folio_number LIKE ?';
+      params.push(`%${folio}%`);
+    }
+    if (amountMin) {
+      query += ' AND ABS(t.amount) >= ?';
+      params.push(Number(amountMin));
+    }
+    if (amountMax) {
+      query += ' AND ABS(t.amount) <= ?';
+      params.push(Number(amountMax));
+    }
+
+    query += ' ORDER BY t.date DESC';
+    
+    const txns = db.prepare(query).all(...params);
+    res.json(txns);
+  } catch (err: any) {
+    appendLog('app.log', 'ERROR', `transactions: ${err.message}`);
+    res.status(500).json({ error: 'Failed to load transactions' });
   }
-  query += ' ORDER BY t.date DESC';
-  const txns = db.prepare(query).all(...params);
-  res.json(txns);
+});
+
+router.get('/transactions/funds-list', (req, res) => {
+  try {
+    const fundsList = db.prepare(`
+      SELECT DISTINCT fu.id, fu.name 
+      FROM funds fu 
+      JOIN folios f ON f.fund_id = fu.id 
+      JOIN transactions t ON t.folio_id = f.id 
+      ORDER BY fu.name
+    `).all();
+    res.json({ funds: fundsList });
+  } catch (err: any) {
+    appendLog('app.log', 'ERROR', `transactions-funds-list: ${err.message}`);
+    res.status(500).json({ error: 'Failed to load funds list' });
+  }
 });
 
 export default router;
