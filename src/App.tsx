@@ -27,7 +27,7 @@ import { LogsView } from './components/LogsView.tsx';
 import { CasImport } from './components/CasImport.tsx';
 import { TagManager } from './components/TagManager.tsx';
 import { RelativePerformance } from './components/RelativePerformance.tsx';
-import { Summary, Folio, Transaction, TagTheme, UserBenchmark, InvestmentTrendPoint, RelativePerformanceResult } from './lib/types.ts';
+import { Summary, Folio, Transaction, TagTheme, UserBenchmark, InvestmentTrendPoint, RelativePerformanceResult, DashboardStats } from './lib/types.ts';
 import { 
   fetchSummary, 
   fetchFolios, 
@@ -45,7 +45,8 @@ import {
   assignAllMfTag,
   getUserBenchmarks,
   getInvestmentTrend,
-  getDashboardPerformance
+  getDashboardPerformance,
+  getDashboardStats
 } from './lib/api.ts';
 
 type Tab = 'dashboard' | 'xirr' | 'funds' | 'transactions' | 'benchmarks' | 'logs' | 'import' | 'tags' | 'performance';
@@ -60,6 +61,7 @@ export default function App() {
   const [unassignedTags, setUnassignedTags] = useState<string[]>([]);
   const [investmentTrend, setInvestmentTrend] = useState<InvestmentTrendPoint[]>([]);
   const [dashboardPerf, setDashboardPerf] = useState<RelativePerformanceResult | null>(null);
+  const [dashboardStats, setDashboardStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeOnlyFunds, setActiveOnlyFunds] = useState(false);
   const [activeOnlyXirr, setActiveOnlyXirr] = useState(false);
@@ -72,14 +74,15 @@ export default function App() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [summaryRes, foliosRes, transactionsRes, benchmarksRes, tagThemesRes, unassignedTagsRes, trendRes] = await Promise.all([
+      const [summaryRes, foliosRes, transactionsRes, benchmarksRes, tagThemesRes, unassignedTagsRes, trendRes, statsRes] = await Promise.all([
         fetchSummary(),
         fetchFolios(),
         fetchTransactions(),
         fetchBenchmarks(),
         getTagThemes(),
         getUnassignedTags(),
-        getInvestmentTrend()
+        getInvestmentTrend(),
+        getDashboardStats()
       ]);
       setSummary(summaryRes);
       setFolios(foliosRes);
@@ -88,6 +91,7 @@ export default function App() {
       setTagThemes(tagThemesRes);
       setUnassignedTags(unassignedTagsRes);
       setInvestmentTrend(trendRes.data);
+      setDashboardStats(statsRes);
 
       // Dashbord Performance Wiring
       try {
@@ -168,6 +172,7 @@ export default function App() {
                   folios={folios}
                   dashboardPerf={dashboardPerf}
                   investmentTrend={investmentTrend} 
+                  dashboardStats={dashboardStats}
                 />
               )}
               {activeTab === 'xirr' && (

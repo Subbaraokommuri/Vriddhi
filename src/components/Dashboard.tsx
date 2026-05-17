@@ -26,7 +26,7 @@ import {
   ReferenceLine
 } from 'recharts';
 import { cn, formatCurrency, formatIndianNumber, formatPercent } from '../lib/utils';
-import { Summary, Folio, InvestmentTrendPoint, RelativePerformanceResult } from '../lib/types';
+import { Summary, Folio, InvestmentTrendPoint, RelativePerformanceResult, DashboardStats } from '../lib/types';
 import { 
   // API imports removed - now prop driven
 } from '../lib/api';
@@ -36,9 +36,10 @@ interface DashboardProps {
   folios: Folio[];
   dashboardPerf: RelativePerformanceResult | null;
   investmentTrend: InvestmentTrendPoint[];
+  dashboardStats: DashboardStats | null;
 }
 
-export function Dashboard({ summary, folios, dashboardPerf, investmentTrend }: DashboardProps) {
+export function Dashboard({ summary, folios, dashboardPerf, investmentTrend, dashboardStats }: DashboardProps) {
   const [privacyMode, setPrivacyMode] = useState(true);
 
   const blur = privacyMode ? 'blur-sm select-none' : '';
@@ -64,17 +65,6 @@ export function Dashboard({ summary, folios, dashboardPerf, investmentTrend }: D
   const PIE_COLORS = ['#01696f', '#0891b2', '#7c3aed', '#d97706', '#dc2626', '#94a3b8'];
 
   const overallXirr = dashboardPerf?.portfolioXirr ?? summary?.xirr ?? null;
-
-  const sideStats = useMemo(() => {
-    const activeFolios = folios.filter(f => f.currentValue > 0);
-    const directCount = activeFolios.filter(f => f.fund_name.toLowerCase().includes('direct')).length;
-    return {
-      totalFolios: folios.length,
-      activeFolioCount: activeFolios.length,
-      directCount,
-      regularCount: activeFolios.length - directCount,
-    };
-  }, [folios]);
 
   const kpiCards = [
     { label: 'Current Value', value: summary?.currentValue, sub: 'Net Worth', icon: PieChart, color: 'text-[#01696f]' },
@@ -201,36 +191,71 @@ export function Dashboard({ summary, folios, dashboardPerf, investmentTrend }: D
             <div className="bg-white rounded-2xl shadow-sm border border-slate-200 px-6 py-4">
               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Folios</p>
               <p className={cn("text-sm font-bold text-slate-800", blur)}>
-                {sideStats.totalFolios} total · {sideStats.activeFolioCount} active
+                {dashboardStats
+                  ? `${dashboardStats.activeFolios} folios · ${dashboardStats.activeFunds} funds`
+                  : '—'}
               </p>
+              {dashboardStats && (
+                <p className="text-xs text-slate-400 mt-0.5">
+                  {dashboardStats.totalFolios} total incl. redeemed
+                </p>
+              )}
             </div>
 
             {/* Card 2: PLAN MIX (ACTIVE) */}
             <div className="bg-white rounded-2xl shadow-sm border border-slate-200 px-6 py-4">
               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Plan Mix (Active)</p>
               <p className={cn("text-sm font-bold text-slate-800", blur)}>
-                {sideStats.directCount} Direct · {sideStats.regularCount} Regular
+                {dashboardStats
+                  ? `${dashboardStats.directCount} Direct · ${dashboardStats.regularCount} Regular`
+                  : '—'}
               </p>
             </div>
 
-            {/* TODO Step 7: replace placeholder with dashboardStats.highestXirrFund etc. */}
-            {/* Card 3: HIGHEST XIRR FUND */}
+            {/* Card 3: BEST RETURN FUND */}
             <div className="bg-white rounded-2xl shadow-sm border border-slate-200 px-6 py-4">
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Highest XIRR Fund</p>
-              <p className={cn("text-sm font-bold text-slate-400 italic", blur)}>—</p>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Best Return Fund</p>
+              <p className={cn(
+                "text-sm font-bold",
+                dashboardStats?.bestReturnFund ? "text-emerald-600" : "text-slate-800",
+                blur
+              )}>
+                {dashboardStats?.bestReturnFund ? dashboardStats.bestReturnFund.name : '—'}
+              </p>
+              <p className="text-xs text-slate-400 mt-0.5">
+                {dashboardStats?.bestReturnFund
+                  ? `+${formatPercent(dashboardStats.bestReturnFund.gainPercent / 100)} absolute gain`
+                  : 'Active funds only'}
+              </p>
             </div>
 
             {/* Card 4: HIGHEST LOSS FUND */}
             <div className="bg-white rounded-2xl shadow-sm border border-slate-200 px-6 py-4">
               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Highest Loss Fund</p>
-              <p className={cn("text-sm font-bold text-slate-400 italic", blur)}>—</p>
+              <p className={cn(
+                "text-sm font-bold",
+                dashboardStats?.highestLossFund ? "text-rose-600" : "text-slate-800",
+                dashboardStats?.highestLossFund ? "" : (dashboardStats ? "" : "italic text-slate-400"),
+                blur
+              )}>
+                {dashboardStats?.highestLossFund
+                  ? dashboardStats.highestLossFund.name
+                  : (dashboardStats ? 'All funds in profit 🎉' : '—')}
+              </p>
+              {dashboardStats?.highestLossFund && (
+                <p className="text-xs text-slate-400 mt-0.5">
+                  {formatCurrency(dashboardStats.highestLossFund.absoluteLoss)} unrealised loss
+                </p>
+              )}
             </div>
 
             {/* Card 5: AVG. HOLDING AGE */}
             <div className="bg-white rounded-2xl shadow-sm border border-slate-200 px-6 py-4">
               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Avg. Holding Age</p>
-              <p className={cn("text-sm font-bold text-slate-400 italic", blur)}>—</p>
-              <p className="text-xs text-slate-400 mt-0.5">Active funds</p>
+              <p className={cn("text-sm font-bold text-slate-800", blur)}>
+                {dashboardStats ? `${dashboardStats.avgHoldingAgeYears} years` : '—'}
+              </p>
+              <p className="text-xs text-slate-400 mt-0.5">Across active funds</p>
             </div>
           </div>
         </div>
