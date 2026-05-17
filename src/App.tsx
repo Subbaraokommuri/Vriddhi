@@ -31,7 +31,7 @@ import { Summary, Folio, Transaction, TagTheme, UserBenchmark, InvestmentTrendPo
 import { 
   fetchSummary, 
   fetchFolios, 
-  fetchTransactions, 
+  getTransactions,
   fetchBenchmarks,
   getTagThemes,
   getUnassignedTags,
@@ -77,7 +77,7 @@ export default function App() {
       const [summaryRes, foliosRes, transactionsRes, benchmarksRes, tagThemesRes, unassignedTagsRes, trendRes, statsRes] = await Promise.all([
         fetchSummary(),
         fetchFolios(),
-        fetchTransactions(),
+        getTransactions(),
         fetchBenchmarks(),
         getTagThemes(),
         getUnassignedTags(),
