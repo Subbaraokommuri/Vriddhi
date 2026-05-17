@@ -1,0 +1,75 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <!-- 
+    VRIDDHI APP ICON & LOGO
+    - Leaf removed: 4 perfectly symmetrical ascending bars
+    - Shield reverted to straight-angle top
+    - Large text & maximized space utilization retained
+  -->
+
+  <!-- Background: Dark Rounded App Icon (Transparent outside) -->
+  <rect x="0" y="0" width="512" height="512" rx="112" fill="#2B3033" />
+
+  <!-- =============================== -->
+  <!-- BARS (Pure Ascending Growth)    -->
+  <!-- =============================== -->
+  <g id="growth-chart">
+    <!-- Bar 1 -->
+    <rect x="120" y="280" width="56" height="60" rx="10" fill="#32D1AC" />
+    
+    <!-- Bar 2 -->
+    <rect x="192" y="220" width="56" height="120" rx="10" fill="#32D1AC" />
+    
+    <!-- Bar 3 -->
+    <rect x="264" y="160" width="56" height="180" rx="10" fill="#32D1AC" />
+
+    <!-- Bar 4 (Standard bar matching the others, no leaf) -->
+    <rect x="336" y="100" width="56" height="240" rx="10" fill="#32D1AC" />
+  </g>
+
+  <!-- =============================== -->
+  <!-- SHIELD & BRANDING               -->
+  <!-- =============================== -->
+  
+  <g id="brand-group">
+    <!-- Shield Positioning (Aligned with the left edge of Bar 1) -->
+    <g transform="translate(120, 385)">
+      
+      <!-- Outer Golden Shield (Straight angled top) -->
+      <path d="M 20 0 L 40 8 L 40 24 C 40 38, 28 48, 20 54 C 12 48, 0 38, 0 24 L 0 8 Z" 
+            fill="none" 
+            stroke="#D2B46C" 
+            stroke-width="2.5" 
+            stroke-linejoin="round" />
+            
+      <!-- Inner Solid Golden Shield -->
+      <path d="M 20 6 L 34 12 L 34 24 C 34 35, 25 42, 20 46 C 15 42, 6 35, 6 24 L 6 12 Z" 
+            fill="#D2B46C" />
+            
+      <!-- Negative Space Checkmark Cutout -->
+      <path d="M 12 25 L 18 31 L 28 17" 
+            fill="none" 
+            stroke="#2B3033" 
+            stroke-width="3.5" 
+            stroke-linecap="round" 
+            stroke-linejoin="round" />
+    </g>
+
+    <!-- Prominent "VRIDDHI" Text -->
+    <text x="176" y="427" 
+          font-family="system-ui, -apple-system, sans-serif" 
+          font-weight="800" 
+          font-size="44" 
+          fill="#FFFFFF" 
+          letter-spacing="2">VRIDDHI</text>
+  </g>
+
+  <!-- Tagline nicely anchored in the bottom empty space -->
+  <text x="256" y="475" 
+        font-family="system-ui, -apple-system, sans-serif" 
+        font-size="20" 
+        fill="#C8D0D5" 
+        font-weight="300" 
+        text-anchor="middle" 
+        letter-spacing="0.5">Track the growth. Keep the privacy</text>
+
+</svg>

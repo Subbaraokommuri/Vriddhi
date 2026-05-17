@@ -7,7 +7,6 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { 
   LayoutDashboard, 
   PieChart, 
-  Briefcase, 
   Database, 
   History, 
   Upload, 
@@ -21,7 +20,6 @@ import { Sidebar } from './components/Sidebar.tsx';
 import { Header } from './components/Header.tsx';
 import { Dashboard } from './components/Dashboard.tsx';
 import { XirrReport } from './components/XirrReport.tsx';
-import { Portfolios } from './components/Portfolios.tsx';
 import { FundsList } from './components/FundsList.tsx';
 import { TransactionsList } from './components/TransactionsList.tsx';
 import { BenchmarksManager } from './components/BenchmarksManager.tsx';
@@ -49,7 +47,7 @@ import {
   getInvestmentTrend
 } from './lib/api.ts';
 
-type Tab = 'dashboard' | 'xirr' | 'portfolios' | 'funds' | 'transactions' | 'benchmarks' | 'logs' | 'import' | 'tags' | 'performance';
+type Tab = 'dashboard' | 'xirr' | 'funds' | 'transactions' | 'benchmarks' | 'logs' | 'import' | 'tags' | 'performance';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<Tab>('dashboard');
@@ -111,7 +109,6 @@ export default function App() {
   const navItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'xirr', label: 'XIRR Report', icon: TrendingUp },
-    { id: 'portfolios', label: 'Portfolios', icon: Briefcase },
     { id: 'funds', label: 'Funds', icon: Database },
     { id: 'transactions', label: 'Transactions', icon: History },
     { id: 'benchmarks', label: 'Benchmarks', icon: PieChart },
@@ -127,14 +124,11 @@ export default function App() {
         activeTab={activeTab} 
         setActiveTab={setActiveTab} 
         navItems={navItems} 
-        loading={loading}
-        onUpdateNavs={fetchData}
       />
       
       <main className="flex-1 overflow-y-auto">
         <Header 
           activeTab={activeTab} 
-          summary={summary}
           folios={folios}
           activeOnlyFunds={activeOnlyFunds}
           setActiveOnlyFunds={setActiveOnlyFunds}
@@ -158,7 +152,6 @@ export default function App() {
                   activeOnlyXirr={activeOnlyXirr}
                 />
               )}
-              {activeTab === 'portfolios' && <Portfolios />}
               {activeTab === 'funds' && (
                 <FundsList 
                   themes={tagThemes} 
