@@ -3,7 +3,9 @@ import {
   PieChart, 
   Briefcase, 
   TrendingUp,
-  AlertCircle
+  AlertCircle,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { 
@@ -24,59 +26,22 @@ import {
   ReferenceLine
 } from 'recharts';
 import { cn, formatCurrency, formatIndianNumber, formatPercent } from '../lib/utils';
-import { Summary, Folio, InvestmentTrendPoint } from '../lib/types';
+import { Summary, Folio, InvestmentTrendPoint, RelativePerformanceResult } from '../lib/types';
 import { 
-  fetchSummary, 
-  fetchFolios, 
-  fetchBenchmarks, 
-  fetchBenchmarkXirr, 
-  fetchPortfolioGrowth 
+  // API imports removed - now prop driven
 } from '../lib/api';
 
 interface DashboardProps {
+  summary: Summary | null;
+  folios: Folio[];
+  dashboardPerf: RelativePerformanceResult | null;
   investmentTrend: InvestmentTrendPoint[];
 }
 
-export function Dashboard({ investmentTrend }: DashboardProps) {
-  const [summary, setSummary] = useState<Summary | null>(null);
-  const [folios, setFolios] = useState<Folio[]>([]);
-  const [overallBenchmarkData, setOverallBenchmarkData] = useState<any>(null);
-  const [growthData, setGrowthData] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+export function Dashboard({ summary, folios, dashboardPerf, investmentTrend }: DashboardProps) {
+  const [privacyMode, setPrivacyMode] = useState(true);
 
-  useEffect(() => {
-    const loadData = async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        const [summaryRes, foliosRes, benchmarksRes] = await Promise.all([
-          fetchSummary(),
-          fetchFolios(),
-          fetchBenchmarks(),
-        ]);
-        setSummary(summaryRes);
-        setFolios(foliosRes);
-
-        // Fetch overall benchmark comparison (Nifty 50)
-        const nifty = benchmarksRes.find((b: any) => b.symbol === '^NSEI');
-        if (nifty) {
-          const [benchmarkXirrRes, growthRes] = await Promise.all([
-            fetchBenchmarkXirr({ portfolioId: 'all', benchmarkIds: [nifty.id] }),
-            fetchPortfolioGrowth('^NSEI')
-          ]);
-          setOverallBenchmarkData(benchmarkXirrRes);
-          setGrowthData(growthRes);
-        }
-      } catch (err) {
-        console.error('Dashboard data fetch failed:', err);
-        setError('Failed to load dashboard data. Please try again later.');
-      } finally {
-        setLoading(false);
-      }
-    };
-    loadData();
-  }, []);
+  const blur = privacyMode ? 'blur-sm select-none' : '';
 
   const allocationData = useMemo(() => {
     // TODO Step 11: replace cleanName with formatFundName()
@@ -98,23 +63,18 @@ export function Dashboard({ investmentTrend }: DashboardProps) {
 
   const PIE_COLORS = ['#01696f', '#0891b2', '#7c3aed', '#d97706', '#dc2626', '#94a3b8'];
 
-  if (loading) {
-    return (
-      <div className="flex flex-col items-center justify-center h-64 gap-4">
-        <div className="w-8 h-8 border-4 border-[#01696f] border-t-transparent rounded-full animate-spin" />
-        <p className="text-slate-400 font-medium">Loading Dashboard...</p>
-      </div>
-    );
-  }
+  const overallXirr = dashboardPerf?.portfolioXirr ?? summary?.xirr ?? null;
 
-  if (error) {
-    return (
-      <div className="p-8 bg-rose-50 text-rose-700 rounded-2xl border border-rose-100 flex items-center gap-3">
-        <AlertCircle className="w-6 h-6" />
-        <p className="font-bold">{error}</p>
-      </div>
-    );
-  }
+  const sideStats = useMemo(() => {
+    const activeFolios = folios.filter(f => f.currentValue > 0);
+    const directCount = activeFolios.filter(f => f.fund_name.toLowerCase().includes('direct')).length;
+    return {
+      totalFolios: folios.length,
+      activeFolioCount: activeFolios.length,
+      directCount,
+      regularCount: activeFolios.length - directCount,
+    };
+  }, [folios]);
 
   const kpiCards = [
     { label: 'Current Value', value: summary?.currentValue, sub: 'Net Worth', icon: PieChart, color: 'text-[#01696f]' },
@@ -135,15 +95,15 @@ export function Dashboard({ investmentTrend }: DashboardProps) {
       color: (summary?.gain ?? 0) >= 0 ? 'text-emerald-600' : 'text-rose-600',
       isRaw: true 
     },
-    { label: 'Overall XIRR', value: summary?.xirr ? formatPercent(summary.xirr) : 'N/A', sub: 'Annualised', icon: TrendingUp, color: 'text-indigo-600', isRaw: true },
+    { label: 'Overall XIRR', value: overallXirr ? formatPercent(overallXirr) : 'N/A', sub: 'Annualised', icon: TrendingUp, color: 'text-indigo-600', isRaw: true },
     { 
       label: 'vs Benchmark', 
-      value: overallBenchmarkData?.benchmarks?.[0]?.diff !== undefined 
-        ? `${overallBenchmarkData.benchmarks[0].diff >= 0 ? '+' : ''}${formatPercent(overallBenchmarkData.benchmarks[0].diff)}` 
+      value: dashboardPerf?.alpha !== null && dashboardPerf?.alpha !== undefined 
+        ? `${dashboardPerf.alpha >= 0 ? '+' : ''}${formatPercent(dashboardPerf.alpha)}` 
         : 'N/A', 
-      sub: 'Alpha (Nifty 50)', 
+      sub: dashboardPerf ? `Alpha vs ${dashboardPerf.benchmarkName}` : 'Alpha (Nifty 50)', 
       icon: PieChart, 
-      color: overallBenchmarkData?.benchmarks?.[0]?.diff >= 0 ? 'text-emerald-600' : 'text-rose-600', 
+      color: (dashboardPerf?.alpha ?? 0) >= 0 ? 'text-emerald-600' : 'text-rose-600', 
       isRaw: true 
     },
   ];
@@ -155,6 +115,21 @@ export function Dashboard({ investmentTrend }: DashboardProps) {
       exit={{ opacity: 0, y: -20 }}
       className="space-y-8"
     >
+      <div className="flex items-center justify-between mb-2">
+        <h2 className="text-xl font-bold text-slate-800">Dashboard</h2>
+        <button
+          onClick={() => setPrivacyMode(!privacyMode)}
+          className="rounded-xl p-2 bg-white border border-slate-200 shadow-sm hover:bg-slate-50 transition-colors"
+          title={privacyMode ? "Show values" : "Hide values"}
+        >
+          {privacyMode ? (
+            <EyeOff className="w-5 h-5 text-slate-500" />
+          ) : (
+            <Eye className="w-5 h-5 text-slate-500" />
+          )}
+        </button>
+      </div>
+
       {/* KPI Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {kpiCards.map((card, i) => (
@@ -165,96 +140,177 @@ export function Dashboard({ investmentTrend }: DashboardProps) {
               </div>
             </div>
             <p className="text-sm font-medium text-slate-500 mb-1">{card.label}</p>
-            <p className="text-2xl font-bold tabular-nums">
-              {card.isRaw ? card.value : formatCurrency(card.value || 0)}
+            <p className={cn("text-2xl font-bold tabular-nums", blur)}>
+              {card.isRaw ? card.value : formatCurrency(Number(card.value) || 0)}
             </p>
             <p className={cn("text-xs font-semibold mt-2", card.color)}>{card.sub}</p>
           </div>
         ))}
       </div>
-
+      
       {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        <div className="bg-white p-8 rounded-2xl shadow-sm border border-slate-200">
-          <h3 className="text-lg font-bold mb-6">Portfolio Allocation</h3>
-          <div className="h-96">
-            <div className="flex items-center gap-6 h-full">
-              <div className="flex-shrink-0" style={{ width: '55%', height: '100%' }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <RePieChart>
-                    <Pie
-                      data={allocationData}
-                      dataKey="value"
-                      nameKey="name"
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={70}
-                      outerRadius={120}
-                      paddingAngle={3}
-                    >
-                      {allocationData.map((_entry, index) => (
-                        <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
-                      ))}
-                    </Pie>
-                    <Tooltip formatter={(value: number) => formatCurrency(value)} />
-                  </RePieChart>
-                </ResponsiveContainer>
-              </div>
-              <div className="flex flex-col gap-3 flex-1 min-w-0">
-                {allocationData.map((entry, index) => (
-                  <div key={index} className="flex items-center gap-2 min-w-0">
-                    <div
-                      className="w-3 h-3 rounded-full flex-shrink-0"
-                      style={{ backgroundColor: PIE_COLORS[index % PIE_COLORS.length] }}
-                    />
-                    <span className="text-xs text-slate-600 truncate" title={entry.name}>
-                      {entry.name.length > 28 ? `${entry.name.substring(0, 28)}…` : entry.name}
-                    </span>
-                  </div>
-                ))}
+        {/* Top row: Pie + Stat Cards */}
+        <div className="lg:col-span-2 grid grid-cols-1 lg:grid-cols-2 gap-8">
+          {/* Left: Portfolio Allocation Pie */}
+          <div className="bg-white p-8 rounded-2xl shadow-sm border border-slate-200">
+            <h3 className="text-lg font-bold mb-6">Portfolio Allocation</h3>
+            <div className="h-96">
+              <div className="flex items-center gap-6 h-full">
+                <div className={cn("flex-shrink-0", blur)} style={{ width: '55%', height: '100%' }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <RePieChart>
+                      <Pie
+                        data={allocationData}
+                        dataKey="value"
+                        nameKey="name"
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={70}
+                        outerRadius={120}
+                        paddingAngle={3}
+                      >
+                        {allocationData.map((_entry, index) => (
+                          <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <Tooltip formatter={(value: number) => formatCurrency(value)} />
+                    </RePieChart>
+                  </ResponsiveContainer>
+                </div>
+                <div className="flex flex-col gap-3 flex-1 min-w-0">
+                  {allocationData.map((entry, index) => (
+                    <div key={index} className="flex items-center gap-2 min-w-0">
+                      <div
+                        className="w-3 h-3 rounded-full flex-shrink-0"
+                        style={{ backgroundColor: PIE_COLORS[index % PIE_COLORS.length] }}
+                      />
+                      <span className="text-xs text-slate-600 truncate" title={entry.name}>
+                        {entry.name.length > 28 ? `${entry.name.substring(0, 28)}…` : entry.name}
+                      </span>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
           </div>
-        </div>
-        <div></div> {/* Spacer for Category removal */}
-        <div className="bg-white p-8 rounded-2xl shadow-sm border border-slate-200 lg:col-span-2">
-          <h3 className="text-lg font-bold mb-6">Growth Comparison (Indexed to 100)</h3>
-          <div className="h-80">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={growthData}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                <XAxis 
-                  dataKey="date" 
-                  axisLine={false} 
-                  tickLine={false} 
-                  tick={{ fontSize: 10, fill: '#64748b' }}
-                  tickFormatter={(v) => new Date(v).toLocaleDateString('en-IN', { month: 'short', year: '2-digit' })}
-                />
-                <YAxis 
-                  axisLine={false} 
-                  tickLine={false} 
-                  tick={{ fontSize: 12, fill: '#64748b' }}
-                  domain={['auto', 'auto']}
-                />
-                <Tooltip 
-                  formatter={(value: number) => value.toFixed(2)}
-                  labelFormatter={(label) => new Date(label).toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })}
-                />
-                <Legend />
-                <Line type="monotone" dataKey="portfolio" name="Your Portfolio" stroke="#01696f" strokeWidth={3} dot={false} />
-                <Line type="monotone" dataKey="benchmark" name="Nifty 50" stroke="#94a3b8" strokeWidth={2} strokeDasharray="5 5" dot={false} />
-              </LineChart>
-            </ResponsiveContainer>
+
+          {/* Right: Stat Cards stack */}
+          <div className="flex flex-col gap-4">
+            {/* Card 1: FOLIOS */}
+            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 px-6 py-4">
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Folios</p>
+              <p className={cn("text-sm font-bold text-slate-800", blur)}>
+                {sideStats.totalFolios} total · {sideStats.activeFolioCount} active
+              </p>
+            </div>
+
+            {/* Card 2: PLAN MIX (ACTIVE) */}
+            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 px-6 py-4">
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Plan Mix (Active)</p>
+              <p className={cn("text-sm font-bold text-slate-800", blur)}>
+                {sideStats.directCount} Direct · {sideStats.regularCount} Regular
+              </p>
+            </div>
+
+            {/* TODO Step 7: replace placeholder with dashboardStats.highestXirrFund etc. */}
+            {/* Card 3: HIGHEST XIRR FUND */}
+            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 px-6 py-4">
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Highest XIRR Fund</p>
+              <p className={cn("text-sm font-bold text-slate-400 italic", blur)}>—</p>
+            </div>
+
+            {/* Card 4: HIGHEST LOSS FUND */}
+            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 px-6 py-4">
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Highest Loss Fund</p>
+              <p className={cn("text-sm font-bold text-slate-400 italic", blur)}>—</p>
+            </div>
+
+            {/* Card 5: AVG. HOLDING AGE */}
+            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 px-6 py-4">
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Avg. Holding Age</p>
+              <p className={cn("text-sm font-bold text-slate-400 italic", blur)}>—</p>
+              <p className="text-xs text-slate-400 mt-0.5">Active funds</p>
+            </div>
           </div>
         </div>
         <div className="bg-white p-8 rounded-2xl shadow-sm border border-slate-200 lg:col-span-2">
+          <h3 className="text-lg font-bold mb-6">Portfolio Growth vs Benchmark (₹)</h3>
+          <div className="h-80">
+            {!dashboardPerf ? (
+              <div className="flex items-center justify-center h-full bg-slate-50 rounded-xl border border-dashed border-slate-200 p-8 text-center">
+                <p className="text-slate-400 font-medium">
+                  Portfolio growth chart requires a Nifty 50 TRI benchmark to be configured in the Benchmarks tab.
+                </p>
+              </div>
+            ) : dashboardPerf.timeSeries.length === 0 ? (
+              <div className="flex items-center justify-center h-full bg-slate-50 rounded-xl border border-dashed border-slate-200">
+                <p className="text-slate-400 font-medium">Not enough data for growth chart.</p>
+              </div>
+            ) : (
+              <div className={cn("h-full", blur)}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={dashboardPerf.timeSeries}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                  <XAxis 
+                    dataKey="date" 
+                    axisLine={false} 
+                    tickLine={false} 
+                    tick={{ fontSize: 10, fill: '#64748b' }}
+                    tickFormatter={(v) => new Date(v).toLocaleDateString('en-IN', { month: 'short', year: '2-digit' })}
+                  />
+                  <YAxis 
+                    axisLine={false} 
+                    tickLine={false} 
+                    tick={{ fontSize: 12, fill: '#64748b' }}
+                    domain={['auto', 'auto']}
+                    tickFormatter={(v) => formatIndianNumber(v)}
+                  />
+                  <Tooltip 
+                    formatter={(value: number) => formatCurrency(value)}
+                    labelFormatter={(label) => new Date(label).toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })}
+                  />
+                  <Legend />
+                  <Line 
+                    type="monotone" 
+                    dataKey="portfolioValue" 
+                    name="Your Portfolio" 
+                    stroke="#01696f" 
+                    strokeWidth={3} 
+                    dot={false} 
+                  />
+                  <Line 
+                    type="monotone" 
+                    dataKey="investedValue" 
+                    name="Amount Invested" 
+                    stroke="#0891b2" 
+                    strokeWidth={2} 
+                    strokeDasharray="5 5" 
+                    dot={false} 
+                  />
+                  <Line 
+                    type="monotone" 
+                    dataKey="benchmarkValue" 
+                    name={dashboardPerf.benchmarkName} 
+                    stroke="#94a3b8" 
+                    strokeWidth={2} 
+                    strokeDasharray="4 4" 
+                    dot={false} 
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+        </div>
+      </div>
+      <div className="bg-white p-8 rounded-2xl shadow-sm border border-slate-200 lg:col-span-2">
           <h3 className="text-lg font-bold mb-6">Investment Trend</h3>
           {investmentTrend.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-48 bg-slate-50 rounded-xl border border-dashed border-slate-200">
               <p className="text-slate-400 font-medium">No transaction data available</p>
             </div>
           ) : (
-            <div className="h-80">
+            <div className={cn("h-80", blur)}>
               <ResponsiveContainer width="100%" height="100%">
                 <ComposedChart data={investmentTrend}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
