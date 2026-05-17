@@ -7,7 +7,8 @@ import {
   TagTheme, 
   FolioTagDetail,
   RelativePerformanceResult,
-  InvestmentTrendPoint 
+  InvestmentTrendPoint,
+  DashboardStats
 } from './types.ts';
 
 async function handleResponse<T>(response: Response): Promise<T> {
@@ -289,4 +290,10 @@ export async function assignAllMfTag(): Promise<{ assigned: number; skipped: num
 export async function getInvestmentTrend(): Promise<{ data: InvestmentTrendPoint[] }> {
   const res = await fetch('/api/investment-trend');
   return handleResponse<{ data: InvestmentTrendPoint[] }>(res);
+}
+
+export async function getDashboardStats(): Promise<DashboardStats> {
+  const res = await fetch('/api/dashboard-stats');
+  if (!res.ok) throw new Error('Failed to fetch dashboard stats');
+  return res.json();
 }

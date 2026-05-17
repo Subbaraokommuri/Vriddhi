@@ -133,3 +133,20 @@ export interface InvestmentTrendPoint {
   rollingAvgGrowth: number | null;
   isPartialYear: boolean;
 }
+
+export interface DashboardStats {
+  totalFolios: number;
+  activeFolios: number;
+  activeFunds: number;
+  directCount: number;
+  regularCount: number;
+  bestReturnFund: {
+    name: string;
+    gainPercent: number;
+  } | null;
+  highestLossFund: {
+    name: string;
+    absoluteLoss: number;
+  } | null;
+  avgHoldingAgeYears: number;
+}
