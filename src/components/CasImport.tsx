@@ -7,10 +7,13 @@ import {
   AlertTriangle, 
   ArrowLeft, 
   Loader2,
-  FileText
+  FileText,
+  Database,
+  RefreshCw
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
+import { refreshAmfiCodes, backfillNavHistory } from '../lib/api';
 
 type State = 'IDLE' | 'LOADING' | 'PREVIEW' | 'ERROR' | 'SUCCESS';
 
@@ -33,6 +36,10 @@ export function CasImport({ onImportSuccess }: CasImportProps) {
     import_id: string;
   } | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [refreshingCodes, setRefreshingCodes] = useState(false);
+  const [backfilling, setBackfilling] = useState(false);
+  const [maintenanceError, setMaintenanceError] = useState<string | null>(null);
+  const [maintenanceSuccess, setMaintenanceSuccess] = useState<string | null>(null);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -131,6 +138,38 @@ export function CasImport({ onImportSuccess }: CasImportProps) {
     } catch (err: any) {
       setError(err.message);
       setState('ERROR');
+    }
+  };
+
+  const handleRefreshCodes = async () => {
+    setMaintenanceError(null);
+    setMaintenanceSuccess(null);
+    setRefreshingCodes(true);
+    try {
+      const result = await refreshAmfiCodes();
+      setMaintenanceSuccess(`AMFI Refresh Complete: ${result.updated} updated, ${result.notFound} not found, ${result.failedCount} failed.`);
+      if (onImportSuccess) onImportSuccess();
+    } catch (error: any) {
+      console.error('Failed to refresh AMFI codes:', error);
+      setMaintenanceError(error.message || String(error));
+    } finally {
+      setRefreshingCodes(false);
+    }
+  };
+
+  const handleBackfill = async () => {
+    setMaintenanceError(null);
+    setMaintenanceSuccess(null);
+    setBackfilling(true);
+    try {
+      const result = await backfillNavHistory();
+      setMaintenanceSuccess(`Backfill complete: ${result.full_backfill} new, ${result.incremental} updated, ${result.up_to_date} current.`);
+      if (onImportSuccess) onImportSuccess();
+    } catch (error: any) {
+      console.error('Failed to backfill NAV history:', error);
+      setMaintenanceError(error.message || String(error));
+    } finally {
+      setBackfilling(false);
     }
   };
 
@@ -397,6 +436,50 @@ export function CasImport({ onImportSuccess }: CasImportProps) {
           </motion.div>
         )}
       </AnimatePresence>
+
+      <div className="mt-6 border border-slate-200 rounded-2xl p-5 space-y-3">
+        <div className="space-y-1">
+          <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Data Maintenance</p>
+          <p className="text-xs text-slate-400">Run these after importing a new CAS file</p>
+        </div>
+        
+        <div className="flex gap-3">
+          <button 
+            onClick={handleBackfill}
+            disabled={backfilling}
+            className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-100 hover:bg-slate-200 rounded-xl text-sm font-bold transition-all disabled:opacity-50"
+          >
+            <Database className={cn("w-4 h-4", backfilling && "animate-pulse")} />
+            Backfill NAV History
+          </button>
+          <button 
+            onClick={handleRefreshCodes}
+            disabled={refreshingCodes}
+            className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-100 hover:bg-slate-200 rounded-xl text-sm font-bold transition-all disabled:opacity-50"
+          >
+            <RefreshCw className={cn("w-4 h-4", refreshingCodes && "animate-pulse")} />
+            Refresh AMFI Codes
+          </button>
+        </div>
+
+        {backfilling && (
+          <p className="text-xs text-slate-400 italic animate-pulse">
+            Fetching history — this may take 2-3 minutes
+          </p>
+        )}
+
+        {maintenanceSuccess && (
+          <div className="p-3 bg-emerald-50 border border-emerald-100 rounded-xl text-xs font-medium text-emerald-700">
+            {maintenanceSuccess}
+          </div>
+        )}
+
+        {maintenanceError && (
+          <div className="p-3 bg-rose-50 border border-rose-100 rounded-xl text-xs font-medium text-rose-700">
+            {maintenanceError}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

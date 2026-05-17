@@ -1,11 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { formatCurrency } from '../lib/utils';
-import { Summary, Folio } from '../lib/types';
-import { fetchSummary, fetchFolios } from '../lib/api';
+import { Folio } from '../lib/types';
 
 interface HeaderProps {
   activeTab: string;
-  summary: Summary | null;
   folios: Folio[];
   activeOnlyFunds: boolean;
   setActiveOnlyFunds: (val: boolean) => void;
@@ -15,7 +12,6 @@ interface HeaderProps {
 
 export function Header({ 
   activeTab, 
-  summary, 
   folios, 
   activeOnlyFunds, 
   setActiveOnlyFunds, 
@@ -55,12 +51,6 @@ export function Header({
             </label>
           </div>
         )}
-        <div className="text-right">
-          <p className="text-xs text-slate-500 font-medium uppercase tracking-wider">Net Worth</p>
-          <p className="text-lg font-bold text-[#01696f] tabular-nums">
-            {summary ? formatCurrency(summary.currentValue) : '₹0'}
-          </p>
-        </div>
       </div>
     </header>
   );

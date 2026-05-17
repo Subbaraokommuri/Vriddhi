@@ -2,7 +2,6 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { 
   PieChart, 
   Briefcase, 
-  Plus, 
   TrendingUp,
   AlertCircle
 } from 'lucide-react';
@@ -46,22 +45,6 @@ export function Dashboard({ investmentTrend }: DashboardProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Dynamic colors from theme
-  const [chartColors, setChartColors] = useState({
-    primary: '#01696f',
-    gold: '#fbbf24',
-    orange: '#f97316'
-  });
-
-  useEffect(() => {
-    const style = getComputedStyle(document.documentElement);
-    setChartColors({
-      primary: style.getPropertyValue('--color-primary').trim() || '#01696f',
-      gold: style.getPropertyValue('--color-gold').trim() || '#fbbf24',
-      orange: style.getPropertyValue('--color-orange').trim() || '#f97316'
-    });
-  }, []);
-
   useEffect(() => {
     const loadData = async () => {
       setLoading(true);
@@ -95,6 +78,26 @@ export function Dashboard({ investmentTrend }: DashboardProps) {
     loadData();
   }, []);
 
+  const allocationData = useMemo(() => {
+    // TODO Step 11: replace cleanName with formatFundName()
+    const cleanName = (raw: string) => raw.replace(/^[A-Z0-9]+-/, '');
+
+    const activeFolios = folios
+      .filter(f => f.currentValue > 0)
+      .sort((a, b) => b.currentValue - a.currentValue);
+
+    if (activeFolios.length <= 5) {
+      return activeFolios.map(f => ({ name: cleanName(f.fund_name), value: f.currentValue }));
+    }
+
+    const top5 = activeFolios.slice(0, 5).map(f => ({ name: cleanName(f.fund_name), value: f.currentValue }));
+    const othersValue = activeFolios.slice(5).reduce((sum, f) => sum + f.currentValue, 0);
+    
+    return [...top5, { name: 'Others', value: othersValue }];
+  }, [folios]);
+
+  const PIE_COLORS = ['#01696f', '#0891b2', '#7c3aed', '#d97706', '#dc2626', '#94a3b8'];
+
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center h-64 gap-4">
@@ -116,7 +119,22 @@ export function Dashboard({ investmentTrend }: DashboardProps) {
   const kpiCards = [
     { label: 'Current Value', value: summary?.currentValue, sub: 'Net Worth', icon: PieChart, color: 'text-[#01696f]' },
     { label: 'Total Invested', value: summary?.totalInvested, sub: 'Cost Basis', icon: Briefcase, color: 'text-blue-600' },
-    { label: 'Yearly Invested', value: summary?.yearlyInvested, sub: `In ${new Date().getFullYear()}`, icon: Plus, color: 'text-amber-600' },
+    {
+      label: 'Unrealised Gain',
+      value: summary?.gain,
+      sub: 'Absolute Return ₹',
+      icon: TrendingUp,
+      color: (summary?.gain ?? 0) >= 0 ? 'text-emerald-600' : 'text-rose-600',
+      isRaw: false
+    },
+    { 
+      label: 'Unrealised Gain %', 
+      value: summary?.totalInvested ? formatPercent(summary.gain / summary.totalInvested) : 'N/A', 
+      sub: 'Unrealised Return', 
+      icon: TrendingUp, 
+      color: (summary?.gain ?? 0) >= 0 ? 'text-emerald-600' : 'text-rose-600',
+      isRaw: true 
+    },
     { label: 'Overall XIRR', value: summary?.xirr ? formatPercent(summary.xirr) : 'N/A', sub: 'Annualised', icon: TrendingUp, color: 'text-indigo-600', isRaw: true },
     { 
       label: 'vs Benchmark', 
@@ -130,12 +148,6 @@ export function Dashboard({ investmentTrend }: DashboardProps) {
     },
   ];
 
-  const categoryDistribution = Object.entries(folios.reduce((acc, f) => {
-    const cat = f.category || 'Uncategorized';
-    acc[cat] = (acc[cat] || 0) + f.currentValue;
-    return acc;
-  }, {} as Record<string, number>)).map(([name, value]) => ({ name, value }));
-
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -144,7 +156,7 @@ export function Dashboard({ investmentTrend }: DashboardProps) {
       className="space-y-8"
     >
       {/* KPI Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {kpiCards.map((card, i) => (
           <div key={i} className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
             <div className="flex items-center justify-between mb-4">
@@ -165,42 +177,46 @@ export function Dashboard({ investmentTrend }: DashboardProps) {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         <div className="bg-white p-8 rounded-2xl shadow-sm border border-slate-200">
           <h3 className="text-lg font-bold mb-6">Portfolio Allocation</h3>
-          <div className="h-80">
-            <ResponsiveContainer width="100%" height="100%">
-              <RePieChart>
-                <Pie
-                  data={folios.filter(f => f.currentValue > 0)}
-                  dataKey="currentValue"
-                  nameKey="fund_name"
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={60}
-                  outerRadius={100}
-                  paddingAngle={5}
-                >
-                  {folios.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={`hsl(${index * 45}, 70%, 45%)`} />
-                  ))}
-                </Pie>
-                <Tooltip formatter={(value: number) => formatCurrency(value)} />
-              </RePieChart>
-            </ResponsiveContainer>
+          <div className="h-96">
+            <div className="flex items-center gap-6 h-full">
+              <div className="flex-shrink-0" style={{ width: '55%', height: '100%' }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <RePieChart>
+                    <Pie
+                      data={allocationData}
+                      dataKey="value"
+                      nameKey="name"
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={70}
+                      outerRadius={120}
+                      paddingAngle={3}
+                    >
+                      {allocationData.map((_entry, index) => (
+                        <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip formatter={(value: number) => formatCurrency(value)} />
+                  </RePieChart>
+                </ResponsiveContainer>
+              </div>
+              <div className="flex flex-col gap-3 flex-1 min-w-0">
+                {allocationData.map((entry, index) => (
+                  <div key={index} className="flex items-center gap-2 min-w-0">
+                    <div
+                      className="w-3 h-3 rounded-full flex-shrink-0"
+                      style={{ backgroundColor: PIE_COLORS[index % PIE_COLORS.length] }}
+                    />
+                    <span className="text-xs text-slate-600 truncate" title={entry.name}>
+                      {entry.name.length > 28 ? `${entry.name.substring(0, 28)}…` : entry.name}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
-        <div className="bg-white p-8 rounded-2xl shadow-sm border border-slate-200">
-          <h3 className="text-lg font-bold mb-6">Category Distribution</h3>
-          <div className="h-80">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={categoryDistribution}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b' }} />
-                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b' }} tickFormatter={(v) => formatIndianNumber(v)} />
-                <Tooltip formatter={(value: number) => formatCurrency(value)} />
-                <Bar dataKey="value" fill="#01696f" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
+        <div></div> {/* Spacer for Category removal */}
         <div className="bg-white p-8 rounded-2xl shadow-sm border border-slate-200 lg:col-span-2">
           <h3 className="text-lg font-bold mb-6">Growth Comparison (Indexed to 100)</h3>
           <div className="h-80">
@@ -253,7 +269,6 @@ export function Dashboard({ investmentTrend }: DashboardProps) {
                     }}
                   />
                   <YAxis 
-                    yAxisId="left"
                     axisLine={false} 
                     tickLine={false} 
                     tick={{ fontSize: 12, fill: '#64748b' }}
@@ -265,75 +280,25 @@ export function Dashboard({ investmentTrend }: DashboardProps) {
                       return `₹${v / 100000}L`;
                     }}
                   />
-                  <YAxis 
-                    yAxisId="right"
-                    orientation="right"
-                    axisLine={false} 
-                    tickLine={false} 
-                    tick={{ fontSize: 12, fill: '#64748b' }}
-                    domain={[-100, 300]}
-                    ticks={[-100, -50, 0, 50, 100, 150, 200, 250, 300]}
-                    tickFormatter={(v) => `${Math.round(v)}%`}
-                  />
                   <Tooltip 
                     content={({ active, payload }) => {
                       if (active && payload && payload.length) {
                         const data = payload[0].payload as InvestmentTrendPoint;
                         return (
-                          <div className="bg-white p-4 border border-slate-200 rounded-xl shadow-xl">
-                            <p className="font-bold text-slate-900 mb-2">
-                              {data.year}{data.isPartialYear ? ' (partial)' : ''}
+                          <div className="bg-white p-4 border border-slate-200 rounded-xl shadow-xl text-sm">
+                            <p className="font-bold text-slate-900 mb-1">
+                              {data.year}{data.isPartialYear ? ' (partial year)' : ''}
                             </p>
-                            <div className="space-y-1">
-                              <div className="text-sm flex justify-between gap-4">
-                                <span className="text-slate-500">Net Invested:</span>
-                                <span className="font-medium">{formatCurrency(data.netInvested)}</span>
-                              </div>
-                              <div className="text-sm flex justify-between gap-4">
-                                <span className="text-slate-500">YoY Growth:</span>
-                                <span className={cn("font-medium", data.yoyGrowth !== null && data.yoyGrowth > 0 ? "text-emerald-600" : data.yoyGrowth !== null && data.yoyGrowth < 0 ? "text-rose-600" : "text-slate-900")}>
-                                  {data.yoyGrowth !== null ? `${data.yoyGrowth > 0 ? '+' : ''}${data.yoyGrowth.toFixed(0)}%${(data.yoyGrowth < -100 || data.yoyGrowth > 300) ? ' (off-chart)' : ''}` : '—'}
-                                </span>
-                              </div>
-                              <div className="text-sm flex justify-between gap-4">
-                                <span className="text-slate-500">Rolling Avg (3y):</span>
-                                <span className={cn("font-medium", data.rollingAvgGrowth !== null && data.rollingAvgGrowth > 0 ? "text-emerald-600" : data.rollingAvgGrowth !== null && data.rollingAvgGrowth < 0 ? "text-rose-600" : "text-slate-900")}>
-                                  {data.rollingAvgGrowth !== null ? `${data.rollingAvgGrowth > 0 ? '+' : ''}${data.rollingAvgGrowth.toFixed(0)}%${(data.rollingAvgGrowth < -100 || data.rollingAvgGrowth > 300) ? ' (off-chart)' : ''}` : '—'}
-                                </span>
-                              </div>
-                            </div>
+                            <p className="text-slate-600">
+                              Net Invested: {formatCurrency(data.netInvested)}
+                            </p>
                           </div>
                         );
                       }
                       return null;
                     }}
                   />
-                  <Legend verticalAlign="top" height={36} formatter={(value) => {
-                    if (value === 'netInvested') return 'Net Invested';
-                    if (value === 'yoyGrowth') return 'YoY Growth %';
-                    if (value === 'rollingAvgGrowth') return '3-yr Rolling Avg %';
-                    return value;
-                  }} />
-                  <ReferenceLine y={0} yAxisId="right" stroke="#e2e8f0" />
-                  <Bar yAxisId="left" dataKey="netInvested" fill={chartColors.primary} radius={[4, 4, 0, 0]} />
-                  <Line
-                    yAxisId="right"
-                    type="monotone"
-                    dataKey="yoyGrowth"
-                    stroke={chartColors.gold}
-                    strokeDasharray="5 5"
-                    dot={true}
-                    connectNulls={false}
-                  />
-                  <Line
-                    yAxisId="right"
-                    type="monotone"
-                    dataKey="rollingAvgGrowth"
-                    stroke={chartColors.orange}
-                    strokeWidth={2}
-                    dot={false}
-                    connectNulls={false}
-                  />
+                  <Bar dataKey="netInvested" fill="#01696f" radius={[4, 4, 0, 0]} />
                 </ComposedChart>
               </ResponsiveContainer>
             </div>
