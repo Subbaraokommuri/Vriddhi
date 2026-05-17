@@ -25,7 +25,7 @@ import {
   ComposedChart,
   ReferenceLine
 } from 'recharts';
-import { cn, formatCurrency, formatIndianNumber, formatPercent } from '../lib/utils';
+import { cn, formatCurrency, formatIndianNumber, formatPercent, formatFundName } from '../lib/utils';
 import { Summary, Folio, InvestmentTrendPoint, RelativePerformanceResult, DashboardStats } from '../lib/types';
 import { 
   // API imports removed - now prop driven
@@ -45,18 +45,15 @@ export function Dashboard({ summary, folios, dashboardPerf, investmentTrend, das
   const blur = privacyMode ? 'blur-sm select-none' : '';
 
   const allocationData = useMemo(() => {
-    // TODO Step 11: replace cleanName with formatFundName()
-    const cleanName = (raw: string) => raw.replace(/^[A-Z0-9]+-/, '');
-
     const activeFolios = folios
       .filter(f => f.currentValue > 0)
       .sort((a, b) => b.currentValue - a.currentValue);
 
     if (activeFolios.length <= 5) {
-      return activeFolios.map(f => ({ name: cleanName(f.fund_name), value: f.currentValue }));
+      return activeFolios.map(f => ({ name: formatFundName(f.fund_name), value: f.currentValue }));
     }
 
-    const top5 = activeFolios.slice(0, 5).map(f => ({ name: cleanName(f.fund_name), value: f.currentValue }));
+    const top5 = activeFolios.slice(0, 5).map(f => ({ name: formatFundName(f.fund_name), value: f.currentValue }));
     const othersValue = activeFolios.slice(5).reduce((sum, f) => sum + f.currentValue, 0);
     
     return [...top5, { name: 'Others', value: othersValue }];

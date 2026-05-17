@@ -13,20 +13,20 @@ import {
   TrendingUp, 
   FileText,
   Tag,
-  BarChart2
+  BarChart2,
+  LayoutList
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Sidebar } from './components/Sidebar.tsx';
 import { Header } from './components/Header.tsx';
 import { Dashboard } from './components/Dashboard.tsx';
-import { XirrReport } from './components/XirrReport.tsx';
-import { FundsList } from './components/FundsList.tsx';
 import { TransactionsList } from './components/TransactionsList.tsx';
 import { BenchmarksManager } from './components/BenchmarksManager.tsx';
 import { LogsView } from './components/LogsView.tsx';
 import { CasImport } from './components/CasImport.tsx';
 import { TagManager } from './components/TagManager.tsx';
 import { RelativePerformance } from './components/RelativePerformance.tsx';
+import { FundsXirr } from './components/FundsXirr.tsx';
 import { Summary, Folio, Transaction, TagTheme, UserBenchmark, InvestmentTrendPoint, RelativePerformanceResult, DashboardStats } from './lib/types.ts';
 import { 
   fetchSummary, 
@@ -49,7 +49,7 @@ import {
   getDashboardStats
 } from './lib/api.ts';
 
-type Tab = 'dashboard' | 'xirr' | 'funds' | 'transactions' | 'benchmarks' | 'logs' | 'import' | 'tags' | 'performance';
+type Tab = 'dashboard' | 'fundsxirr' | 'transactions' | 'benchmarks' | 'logs' | 'import' | 'tags' | 'performance';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<Tab>('dashboard');
@@ -63,8 +63,6 @@ export default function App() {
   const [dashboardPerf, setDashboardPerf] = useState<RelativePerformanceResult | null>(null);
   const [dashboardStats, setDashboardStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
-  const [activeOnlyFunds, setActiveOnlyFunds] = useState(false);
-  const [activeOnlyXirr, setActiveOnlyXirr] = useState(false);
 
   // Performance Selection State (Lifted for persistence)
   const [perfThemeId, setPerfThemeId] = useState<string>('');
@@ -129,8 +127,7 @@ export default function App() {
 
   const navItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { id: 'xirr', label: 'XIRR Report', icon: TrendingUp },
-    { id: 'funds', label: 'Funds', icon: Database },
+    { id: 'fundsxirr', label: 'Funds', icon: LayoutList },
     { id: 'transactions', label: 'Transactions', icon: History },
     { id: 'benchmarks', label: 'Benchmarks', icon: PieChart },
     { id: 'tags', label: 'Tag Manager', icon: Tag },
@@ -151,10 +148,6 @@ export default function App() {
         <Header 
           activeTab={activeTab} 
           folios={folios}
-          activeOnlyFunds={activeOnlyFunds}
-          setActiveOnlyFunds={setActiveOnlyFunds}
-          activeOnlyXirr={activeOnlyXirr}
-          setActiveOnlyXirr={setActiveOnlyXirr}
         />
 
         <div className="p-8 max-w-7xl mx-auto">
@@ -175,18 +168,10 @@ export default function App() {
                   dashboardStats={dashboardStats}
                 />
               )}
-              {activeTab === 'xirr' && (
-                <XirrReport 
-                  folios={folios}
-                  activeOnlyXirr={activeOnlyXirr}
-                />
-              )}
-              {activeTab === 'funds' && (
-                <FundsList 
-                  themes={tagThemes} 
-                  folios={folios} 
-                  activeOnly={activeOnlyFunds} 
-                  setActiveOnly={setActiveOnlyFunds}
+              {activeTab === 'fundsxirr' && (
+                <FundsXirr
+                  themes={tagThemes}
+                  onNavsUpdated={fetchData}
                 />
               )}
               {activeTab === 'transactions' && <TransactionsList transactions={transactions} />}
