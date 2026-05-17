@@ -144,6 +144,29 @@ export interface TransactionFilters {
   amountMax?: number;
 }
 
+export interface FolioXirr {
+  folioId: string;
+  folioNumber: string;
+  fundId: string;
+  fundName: string;
+  fundHouse: string;
+  isin: string | null;
+  category: string | null;
+  plan: string | null;
+  fundOption: string | null;
+  units: number;
+  nav: number | null;
+  navDate: string | null;
+  currentValue: number;
+  investedAmount: number;
+  gainAmount: number;
+  gainPercent: number | null;
+  xirr: number | null;
+  xirrWarning: boolean;
+  tags: string[];
+  isActive: boolean;
+}
+
 export interface DashboardStats {
   totalFolios: number;
   activeFolios: number;

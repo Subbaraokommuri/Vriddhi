@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Filter, AlertCircle, ChevronDown, ChevronUp, X } from 'lucide-react';
-import { cn, formatCurrency } from '../lib/utils';
+import { cn, formatCurrency, formatFundName } from '../lib/utils';
 import { Transaction, TransactionFilters } from '../lib/types';
 import { getTransactions, getTransactionFundsList } from '../lib/api';
 
@@ -12,8 +12,6 @@ export function TransactionsList() {
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [filters, setFilters] = useState<TransactionFilters>({});
   
-  const cleanName = (raw: string) => raw.replace(/^[A-Z0-9]+-/, '');
-
   const loadData = async (currentFilters?: TransactionFilters) => {
     setLoading(true);
     setError(null);
@@ -130,7 +128,7 @@ export function TransactionsList() {
                 >
                   <option value="">All Funds</option>
                   {fundsList.map(fund => (
-                    <option key={fund.id} value={fund.id}>{cleanName(fund.name)}</option>
+                    <option key={fund.id} value={fund.id}>{formatFundName(fund.name)}</option>
                   ))}
                 </select>
               </div>
@@ -214,9 +212,8 @@ export function TransactionsList() {
                       {new Date(t.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
                     </td>
                     <td className="px-6 py-4">
-                      {/* TODO Step 11: replace cleanName with formatFundName() */}
                       <p className="font-semibold text-sm truncate max-w-xs" title={t.fund_name}>
-                        {cleanName(t.fund_name)}
+                        {formatFundName(t.fund_name)}
                       </p>
                       <p className="text-xs text-slate-500">Folio: {t.folio_number}</p>
                     </td>

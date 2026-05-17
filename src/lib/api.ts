@@ -9,7 +9,8 @@ import {
   RelativePerformanceResult,
   InvestmentTrendPoint,
   DashboardStats,
-  TransactionFilters
+  TransactionFilters,
+  FolioXirr,
 } from './types.ts';
 
 async function handleResponse<T>(response: Response): Promise<T> {
@@ -314,4 +315,30 @@ export async function getDashboardStats(): Promise<DashboardStats> {
   const res = await fetch('/api/dashboard-stats');
   if (!res.ok) throw new Error('Failed to fetch dashboard stats');
   return res.json();
+}
+
+export interface FolioXirrFilters {
+  activeOnly?: boolean;
+  fundHouse?: string;
+  category?: string;
+  plan?: string;
+  fundOption?: string;
+  tag?: string;
+  search?: string;
+}
+
+export async function getFoliosXirr(filters?: FolioXirrFilters): Promise<FolioXirr[]> {
+  const params = new URLSearchParams();
+  if (filters?.activeOnly) params.set('activeOnly', '1');
+  if (filters?.fundHouse) params.set('fundHouse', filters.fundHouse);
+  if (filters?.category) params.set('category', filters.category);
+  if (filters?.plan) params.set('plan', filters.plan);
+  if (filters?.fundOption) params.set('fundOption', filters.fundOption);
+  if (filters?.tag) params.set('tag', filters.tag);
+  if (filters?.search) params.set('search', filters.search);
+  const query = params.toString();
+  const res = await fetch(`/api/folios-xirr${query ? '?' + query : ''}`);
+  if (!res.ok) throw new Error('Failed to fetch folios XIRR data');
+  const data = await res.json();
+  return data.folios;
 }
