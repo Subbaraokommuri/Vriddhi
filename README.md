@@ -316,7 +316,7 @@ Once Steps 1–4 are complete, your Dashboard will show:
 - Portfolio growth chart vs your chosen benchmark
 - Year-on-year investment trend with rolling average
 
-The **Funds & Folios** tab shows per-fund XIRR, gain, and NAV details for all 34 active folios.
+The **Funds & Folios** tab shows per-fund XIRR, gain, and NAV details for all active folios.
 The **Performance** tab shows portfolio XIRR vs benchmark XIRR and alpha, broken down by tag group.
 
 ---
