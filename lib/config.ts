@@ -29,12 +29,30 @@ export const CONFIG = {
     MF_DATA: 'https://api.mfapi.in/mf/',
   },
   
-  // Indian Tax Rules (FY 2024-25 onwards)
   TAX: {
-    LTCG_THRESHOLD: 125000,
-    LTCG_RATE: 0.125, // 12.5%
-    STCG_RATE: 0.20,  // 20%
-    FY_START_MONTH: 3, // April (0-indexed)
+    // LTCG became taxable from this date (Finance Act 2018)
+    EQUITY_LTCG_TAXABLE_FROM:   '2018-04-01',
+
+    // Budget 2024 rate change — applies to both LTCG and STCG
+    EQUITY_RATE_CHANGE_DATE:    '2024-07-23',
+
+    // LTCG rates (Section 112A)
+    EQUITY_LTCG_RATE_OLD:       0.10,    // sells before Jul 23 2024
+    EQUITY_LTCG_RATE_NEW:       0.125,   // sells on/after Jul 23 2024
+
+    // LTCG exemptions — two separate Schedule 112A pots, never combined
+    EQUITY_LTCG_EXEMPTION_OLD:  100000,  // ₹1L for pre-Jul-23-2024 sells
+    EQUITY_LTCG_EXEMPTION_NEW:  125000,  // ₹1.25L for Jul-23-2024+ sells
+
+    // STCG rates (Section 111A)
+    EQUITY_STCG_RATE_OLD:       0.15,    // sells before Jul 23 2024
+    EQUITY_STCG_RATE_NEW:       0.20,    // sells on/after Jul 23 2024
+
+    // Grandfathering: CoA = MAX(buyNav, MIN(FMV_Jan31_2018, saleNav))
+    GRANDFATHERING_DATE:        '2018-01-31',
+
+    // Holding threshold: strictly more than 12 calendar months = LTCG
+    LTCG_HOLDING_DAYS:          365,
   },
   
   // ETF proxies track TRI (dividends reinvested in NAV). Marginal ~0.1% expense ratio drag is acceptable.

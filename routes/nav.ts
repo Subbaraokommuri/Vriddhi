@@ -219,6 +219,42 @@ router.post('/nav/backfill', async (req, res) => {
         
         transaction(data.data);
 
+        // Metadata update block
+        let assetClass = '';
+        let schemeSubCat = '';
+        if (data.meta?.scheme_category) {
+          const rawCat = data.meta.scheme_category.trim();
+          const parts = rawCat.split(' - ');
+          if (parts.length > 0) {
+            assetClass = parts[0].replace(/ Scheme\s*$/i, '').trim();
+          }
+          if (parts.length > 1) {
+            schemeSubCat = parts.slice(1).join(' - ').trim();
+          }
+        }
+
+        db.prepare(`
+          UPDATE funds SET
+            fund_house     = COALESCE(NULLIF(fund_house, ''),     ?),
+            scheme_type    = COALESCE(NULLIF(scheme_type, ''),    ?),
+            scheme_sub_cat = COALESCE(NULLIF(scheme_sub_cat, ''), ?),
+            asset_class    = COALESCE(NULLIF(asset_class, ''),    ?),
+            isin_idcw      = COALESCE(NULLIF(isin_idcw, ''),      ?)
+          WHERE id = ?
+        `).run(
+          data.meta?.fund_house        ?? '',
+          data.meta?.scheme_type       ?? '',
+          schemeSubCat,
+          assetClass,
+          data.meta?.isin_div_reinvestment ?? '',
+          fund.id
+        );
+
+        log('nav', 'INFO', 'BACKFILL',
+          `Metadata ${fund.name}: house=${data.meta?.fund_house ?? ''} ` +
+          `asset_class=${assetClass} category=${schemeSubCat}`
+        );
+
         if (fund.nav_history_fetched === 0) {
           // CASE 1: Never backfilled
           db.prepare('UPDATE funds SET nav_history_fetched = 1 WHERE id = ?').run(fund.id);

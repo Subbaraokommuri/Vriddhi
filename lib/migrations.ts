@@ -315,6 +315,24 @@ export function runMigrations(db: Database.Database) {
     db.exec("ALTER TABLE funds ADD COLUMN registrar TEXT DEFAULT ''");
   }
 
+  const fundsColsNew = db.prepare("PRAGMA table_info(funds)").all() as any[];
+
+  if (!fundsColsNew.find(c => c.name === 'fund_house')) {
+    db.exec("ALTER TABLE funds ADD COLUMN fund_house TEXT DEFAULT ''");
+  }
+  if (!fundsColsNew.find(c => c.name === 'scheme_type')) {
+    db.exec("ALTER TABLE funds ADD COLUMN scheme_type TEXT DEFAULT ''");
+  }
+  if (!fundsColsNew.find(c => c.name === 'scheme_sub_cat')) {
+    db.exec("ALTER TABLE funds ADD COLUMN scheme_sub_cat TEXT DEFAULT ''");
+  }
+  if (!fundsColsNew.find(c => c.name === 'asset_class')) {
+    db.exec("ALTER TABLE funds ADD COLUMN asset_class TEXT DEFAULT ''");
+  }
+  if (!fundsColsNew.find(c => c.name === 'isin_idcw')) {
+    db.exec("ALTER TABLE funds ADD COLUMN isin_idcw TEXT DEFAULT ''");
+  }
+
   const foliosColsMigrate = db.prepare("PRAGMA table_info(folios)").all() as any[];
   if (!foliosColsMigrate.find(c => c.name === 'kyc_ok')) {
     db.exec("ALTER TABLE folios ADD COLUMN kyc_ok INTEGER DEFAULT 0");
@@ -396,4 +414,7 @@ export function runMigrations(db: Database.Database) {
     INSERT OR IGNORE INTO theme_tags (theme_id, tag)
     VALUES ('seed-portfolio-theme', 'All MF')
   `).run();
+
+  db.prepare("DELETE FROM user_benchmarks WHERE benchmark_type = 'yahoo'").run();
+  log('app', 'INFO', 'DB', 'Removed legacy yahoo benchmark rows');
 }

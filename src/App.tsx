@@ -14,7 +14,8 @@ import {
   FileText,
   Tag,
   BarChart2,
-  LayoutList
+  LayoutList,
+  Receipt
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Sidebar } from './components/Sidebar.tsx';
@@ -27,6 +28,7 @@ import { CasImport } from './components/CasImport.tsx';
 import { TagManager } from './components/TagManager.tsx';
 import { RelativePerformance } from './components/RelativePerformance.tsx';
 import { FundsXirr } from './components/FundsXirr.tsx';
+import { TaxReport } from './components/TaxReport.tsx';
 import { Summary, Folio, Transaction, TagTheme, UserBenchmark, InvestmentTrendPoint, RelativePerformanceResult, DashboardStats } from './lib/types.ts';
 import { 
   fetchSummary, 
@@ -49,7 +51,7 @@ import {
   getDashboardStats
 } from './lib/api.ts';
 
-type Tab = 'dashboard' | 'fundsxirr' | 'transactions' | 'benchmarks' | 'logs' | 'import' | 'tags' | 'performance';
+type Tab = 'dashboard' | 'fundsxirr' | 'transactions' | 'benchmarks' | 'logs' | 'import' | 'tags' | 'performance' | 'tax';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<Tab>('dashboard');
@@ -132,6 +134,7 @@ export default function App() {
     { id: 'benchmarks', label: 'Benchmarks', icon: PieChart },
     { id: 'tags', label: 'Tag Manager', icon: Tag },
     { id: 'performance', label: 'Performance', icon: BarChart2 },
+    { id: 'tax', label: 'Tax', icon: Receipt },
     { id: 'logs', label: 'Logs', icon: FileText },
     { id: 'import', label: 'Import CAS PDF', icon: Upload },
   ];
@@ -150,7 +153,7 @@ export default function App() {
           folios={folios}
         />
 
-        <div className="p-8 max-w-7xl mx-auto">
+        <div className={`p-8 mx-auto ${activeTab === 'fundsxirr' ? 'max-w-screen-2xl' : 'max-w-7xl'}`}>
           <AnimatePresence mode="wait">
             <motion.div
               key={activeTab}
@@ -223,6 +226,7 @@ export default function App() {
                   }}
                 />
               )}
+              {activeTab === 'tax' && <TaxReport />}
             </motion.div>
           </AnimatePresence>
 

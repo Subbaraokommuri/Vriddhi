@@ -63,8 +63,9 @@ export function FundsXirr({ themes, onNavsUpdated }: FundsXirrProps) {
       if (filters.activeOnly && !f.isActive) return false;
       if (filters.plan && f.plan !== filters.plan) return false;
       if (filters.fundOption && f.fundOption !== filters.fundOption) return false;
-      if (filters.category && !f.category?.toLowerCase().includes(filters.category.toLowerCase())) return false;
-      if (filters.fundHouse && !f.fundName.toLowerCase().includes(filters.fundHouse.toLowerCase())) return false;
+      if (filters.category && f.assetClass !== filters.category) return false;
+      if (filters.subCategory && f.schemeSubCat !== filters.subCategory) return false;
+      if (filters.fundHouse && f.fundHouse !== filters.fundHouse) return false;
       if (filters.search) {
         const s = filters.search.toLowerCase();
         if (!f.fundName.toLowerCase().includes(s) && !f.folioNumber.toLowerCase().includes(s)) return false;
@@ -72,6 +73,7 @@ export function FundsXirr({ themes, onNavsUpdated }: FundsXirrProps) {
       if (filters.tag) {
         if (!f.tags.includes(filters.tag)) return false;
       }
+      if (filters.pan && f.pan !== filters.pan) return false;
       return true;
     });
   }, [allFolios, filters]);
@@ -92,7 +94,18 @@ export function FundsXirr({ themes, onNavsUpdated }: FundsXirrProps) {
   }, [filteredFolios, sortCol, sortDir]);
 
   const fundHouses = useMemo(() => [...new Set(allFolios.map(f => f.fundHouse).filter(Boolean))].sort(), [allFolios]);
-  const categories = useMemo(() => [...new Set(allFolios.map(f => f.category).filter(Boolean))].sort(), [allFolios]);
+  const categories = useMemo(() => 
+    [...new Set(allFolios.map(f => f.assetClass).filter(Boolean))].sort(), 
+  [allFolios]);
+  const pans = useMemo(() => 
+    [...new Set(allFolios.map(f => f.pan).filter(Boolean))].sort(), 
+  [allFolios]);
+  const subCategories = useMemo(() => {
+    const source = filters.category
+      ? allFolios.filter(f => f.assetClass === filters.category)
+      : allFolios;
+    return [...new Set(source.map(f => f.schemeSubCat).filter(Boolean))].sort();
+  }, [allFolios, filters.category]);
 
   const handleSort = (key: SortKey) => {
     if (sortCol === key) {
@@ -118,7 +131,7 @@ export function FundsXirr({ themes, onNavsUpdated }: FundsXirrProps) {
         <div className="flex items-baseline gap-3">
           <h2 className="text-xl font-bold text-slate-800">Funds & Folios</h2>
           <span className="text-sm text-slate-400">
-            {filteredFolios.filter(f => f.isActive).length} active / {allFolios.length} total
+            Funds: {new Set(filteredFolios.map(f => f.fundId)).size} · Folios: {filteredFolios.length}
           </span>
         </div>
 
@@ -185,6 +198,8 @@ export function FundsXirr({ themes, onNavsUpdated }: FundsXirrProps) {
         themes={themes}
         fundHouses={fundHouses}
         categories={categories}
+        pans={pans}
+        subCategories={subCategories}
       />
 
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
@@ -201,13 +216,12 @@ export function FundsXirr({ themes, onNavsUpdated }: FundsXirrProps) {
                 <HeaderCell label="XIRR" sortKey="xirr" currentSort={sortCol} dir={sortDir} onSort={handleSort} align="right" />
                 <HeaderCell label="NAV" sortKey="nav" currentSort={sortCol} dir={sortDir} onSort={handleSort} align="right" />
                 <HeaderCell label="LAST UPDATED" sortKey="navDate" currentSort={sortCol} dir={sortDir} onSort={handleSort} align="right" />
-                <th className="px-6 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-wider">TAGS</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {sortedFolios.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="px-6 py-12 text-center">
+                  <td colSpan={9} className="px-6 py-12 text-center">
                     <p className="text-slate-400 font-medium">No funds match your filters.</p>
                     <button 
                       onClick={() => setFilters({ activeOnly: true })}

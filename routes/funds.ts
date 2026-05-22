@@ -371,11 +371,12 @@ router.post('/tags/assign-all-mf', (req, res) => {
 
 router.get('/folios-xirr', (req, res) => {
   try {
-    const { activeOnly, fundHouse, category, plan, fundOption, tag, search } = req.query;
+    const { activeOnly, fundHouse, category, plan, fundOption, tag, search, pan } = req.query;
 
     let query = `
       SELECT
         f.id as folioId,
+        f.pan,
         f.folio_number as folioNumber,
         f.fund_id as fundId,
         fu.name as fundName,
@@ -383,6 +384,9 @@ router.get('/folios-xirr', (req, res) => {
         fu.category,
         fu.plan,
         fu.fund_option as fundOption,
+        fu.fund_house,
+        fu.scheme_sub_cat,
+        fu.asset_class,
         f.stated_balance as units,
         f.stated_cost as investedAmount,
         n.nav,
@@ -405,7 +409,7 @@ router.get('/folios-xirr', (req, res) => {
       conditions.push('f.stated_balance > 0');
     }
     if (category) {
-      conditions.push('fu.category = ?');
+      conditions.push('fu.asset_class = ?');
       params.push(category);
     }
     if (plan) {
@@ -422,8 +426,12 @@ router.get('/folios-xirr', (req, res) => {
       params.push(tag);
     }
     if (fundHouse) {
-      conditions.push('fu.name LIKE ?');
-      params.push(`${fundHouse}%`);
+      conditions.push('fu.fund_house = ?');
+      params.push(fundHouse);
+    }
+    if (pan) {
+      conditions.push('f.pan = ?');
+      params.push(pan);
     }
     if (search) {
       conditions.push('(fu.name LIKE ? OR f.folio_number LIKE ?)');
@@ -500,7 +508,9 @@ router.get('/folios-xirr', (req, res) => {
 
       return {
         ...folio,
-        fundHouse: folio.fundName.split(' ')[0],
+        fundHouse: folio.fund_house || '',
+        schemeSubCat: folio.scheme_sub_cat || '',
+        assetClass: folio.asset_class || '',
         currentValue,
         gainAmount,
         gainPercent,

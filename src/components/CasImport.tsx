@@ -8,8 +8,7 @@ import {
   ArrowLeft, 
   Loader2,
   FileText,
-  Database,
-  RefreshCw
+  Database
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
@@ -36,8 +35,8 @@ export function CasImport({ onImportSuccess }: CasImportProps) {
     import_id: string;
   } | null>(null);
   const [isDragging, setIsDragging] = useState(false);
-  const [refreshingCodes, setRefreshingCodes] = useState(false);
-  const [backfilling, setBackfilling] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [syncStep, setSyncStep] = useState('');
   const [maintenanceError, setMaintenanceError] = useState<string | null>(null);
   const [maintenanceSuccess, setMaintenanceSuccess] = useState<string | null>(null);
   
@@ -141,35 +140,27 @@ export function CasImport({ onImportSuccess }: CasImportProps) {
     }
   };
 
-  const handleRefreshCodes = async () => {
+  const handleSyncFundData = async () => {
     setMaintenanceError(null);
     setMaintenanceSuccess(null);
-    setRefreshingCodes(true);
+    setSyncing(true);
+    setSyncStep("Step 1/2: Refreshing AMFI codes…");
     try {
-      const result = await refreshAmfiCodes();
-      setMaintenanceSuccess(`AMFI Refresh Complete: ${result.updated} updated, ${result.notFound} not found, ${result.failedCount} failed.`);
+      const amfiResult = await refreshAmfiCodes();
+      
+      setSyncStep("Step 2/2: Fetching NAV history (2–3 min)…");
+      const navResult = await backfillNavHistory();
+      
+      setMaintenanceSuccess(
+        `Sync complete — AMFI: ${amfiResult.updated} updated; NAV: ${navResult.full_backfill} new, ${navResult.incremental} updated, ${navResult.up_to_date} current.`
+      );
       if (onImportSuccess) onImportSuccess();
     } catch (error: any) {
-      console.error('Failed to refresh AMFI codes:', error);
+      console.error('Failed to sync fund data:', error);
       setMaintenanceError(error.message || String(error));
     } finally {
-      setRefreshingCodes(false);
-    }
-  };
-
-  const handleBackfill = async () => {
-    setMaintenanceError(null);
-    setMaintenanceSuccess(null);
-    setBackfilling(true);
-    try {
-      const result = await backfillNavHistory();
-      setMaintenanceSuccess(`Backfill complete: ${result.full_backfill} new, ${result.incremental} updated, ${result.up_to_date} current.`);
-      if (onImportSuccess) onImportSuccess();
-    } catch (error: any) {
-      console.error('Failed to backfill NAV history:', error);
-      setMaintenanceError(error.message || String(error));
-    } finally {
-      setBackfilling(false);
+      setSyncing(false);
+      setSyncStep('');
     }
   };
 
@@ -443,28 +434,27 @@ export function CasImport({ onImportSuccess }: CasImportProps) {
           <p className="text-xs text-slate-400">Run these after importing a new CAS file</p>
         </div>
         
-        <div className="flex gap-3">
-          <button 
-            onClick={handleBackfill}
-            disabled={backfilling}
-            className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-100 hover:bg-slate-200 rounded-xl text-sm font-bold transition-all disabled:opacity-50"
-          >
-            <Database className={cn("w-4 h-4", backfilling && "animate-pulse")} />
-            Backfill NAV History
-          </button>
-          <button 
-            onClick={handleRefreshCodes}
-            disabled={refreshingCodes}
-            className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-100 hover:bg-slate-200 rounded-xl text-sm font-bold transition-all disabled:opacity-50"
-          >
-            <RefreshCw className={cn("w-4 h-4", refreshingCodes && "animate-pulse")} />
-            Refresh AMFI Codes
-          </button>
-        </div>
+        <button 
+          onClick={handleSyncFundData}
+          disabled={syncing}
+          className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-100 hover:bg-slate-200 rounded-xl text-sm font-bold transition-all disabled:opacity-50 text-slate-700"
+        >
+          {syncing ? (
+            <>
+              <Loader2 className="w-4 h-4 animate-spin text-[#01696f]" />
+              <span>{syncStep}</span>
+            </>
+          ) : (
+            <>
+              <Database className="w-4 h-4 text-slate-500" />
+              <span>Sync Fund Data</span>
+            </>
+          )}
+        </button>
 
-        {backfilling && (
+        {syncing && (
           <p className="text-xs text-slate-400 italic animate-pulse">
-            Fetching history — this may take 2-3 minutes
+            {syncStep}
           </p>
         )}
 

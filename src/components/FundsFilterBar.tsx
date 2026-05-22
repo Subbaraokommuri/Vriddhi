@@ -9,9 +9,11 @@ interface FundsFilterBarProps {
   themes: any[];
   fundHouses: string[];
   categories: string[];
+  pans: string[];
+  subCategories: string[];
 }
 
-export function FundsFilterBar({ filters, onChange, fundHouses, categories }: FundsFilterBarProps) {
+export function FundsFilterBar({ filters, onChange, fundHouses, categories, pans, subCategories }: FundsFilterBarProps) {
   const updateFilter = (key: keyof FolioXirrFilters, value: any) => {
     onChange({ ...filters, [key]: value });
   };
@@ -37,6 +39,23 @@ export function FundsFilterBar({ filters, onChange, fundHouses, categories }: Fu
         </div>
       </div>
 
+      {/* PAN */}
+      <div className="space-y-1">
+        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+          PAN
+        </label>
+        <select
+          value={filters.pan || ''}
+          onChange={(e) => updateFilter('pan', e.target.value || undefined)}
+          className="block w-full pl-3 pr-10 py-1.5 text-sm border-slate-200 bg-slate-50 rounded-lg focus:outline-none focus:ring-[#01696f] focus:border-[#01696f]"
+        >
+          <option value="">All Investors</option>
+          {pans.map(p => (
+            <option key={p} value={p}>{p}</option>
+          ))}
+        </select>
+      </div>
+
       {/* Fund House */}
       <div className="space-y-1">
         <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Fund House</label>
@@ -57,15 +76,32 @@ export function FundsFilterBar({ filters, onChange, fundHouses, categories }: Fu
         <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Category</label>
         <select
           value={filters.category || ''}
-          onChange={(e) => updateFilter('category', e.target.value)}
+          onChange={(e) => {
+            onChange({ ...filters, category: e.target.value || undefined, subCategory: undefined });
+          }}
           className="block w-full pl-3 pr-10 py-1.5 text-sm border-slate-200 bg-slate-50 rounded-lg focus:outline-none focus:ring-[#01696f] focus:border-[#01696f]"
         >
           <option value="">All Categories</option>
-          {['Equity', 'Debt', 'Hybrid', 'Solution Oriented', 'Other'].map(cat => (
+          {categories.map(cat => (
             <option key={cat} value={cat}>{cat}</option>
           ))}
-          {categories.filter(c => !['Equity', 'Debt', 'Hybrid', 'Solution Oriented', 'Other'].includes(c)).map(cat => (
-            <option key={cat} value={cat}>{cat}</option>
+        </select>
+      </div>
+
+      {/* Sub-category */}
+      <div className="space-y-1">
+        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+          Sub-category
+        </label>
+        <select
+          value={filters.subCategory || ''}
+          onChange={(e) => updateFilter('subCategory', e.target.value || undefined)}
+          disabled={subCategories.length === 0}
+          className="block w-full pl-3 pr-10 py-1.5 text-sm border-slate-200 bg-slate-50 rounded-lg focus:outline-none focus:ring-[#01696f] focus:border-[#01696f] disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          <option value="">All Sub-categories</option>
+          {subCategories.map(sc => (
+            <option key={sc} value={sc}>{sc}</option>
           ))}
         </select>
       </div>

@@ -18,13 +18,6 @@ export function Header({
         {displayTabName}
       </h1>
       <div className="flex items-center gap-8">
-        {activeTab === 'fundsxirr' && (
-          <div className="flex items-center gap-4">
-            <span className="text-xs font-medium text-slate-400">
-              {folios.filter(f => f.currentUnits > 0).length} active folios monitored
-            </span>
-          </div>
-        )}
       </div>
     </header>
   );

@@ -11,6 +11,11 @@ import {
   DashboardStats,
   TransactionFilters,
   FolioXirr,
+  PanCapitalGainsSummary,
+  UnrealizedGainsSummary,
+  HarvestingReport,
+  SimulationResult,
+  TaxPan
 } from './types.ts';
 
 async function handleResponse<T>(response: Response): Promise<T> {
@@ -321,10 +326,12 @@ export interface FolioXirrFilters {
   activeOnly?: boolean;
   fundHouse?: string;
   category?: string;
+  subCategory?: string;
   plan?: string;
   fundOption?: string;
   tag?: string;
   search?: string;
+  pan?: string;
 }
 
 export async function getFoliosXirr(filters?: FolioXirrFilters): Promise<FolioXirr[]> {
@@ -342,3 +349,79 @@ export async function getFoliosXirr(filters?: FolioXirrFilters): Promise<FolioXi
   const data = await res.json();
   return data.folios;
 }
+
+export async function getTaxPans(): Promise<TaxPan[]> {
+  const res = await fetch('/api/tax/pans');
+  if (!res.ok) throw new Error('Failed to fetch PANs');
+  const data = await res.json();
+  return data.pans;
+}
+
+export async function getCapitalGains(
+  pan: string,
+  fy?: string
+): Promise<PanCapitalGainsSummary> {
+  const params = new URLSearchParams({ pan });
+  if (fy) params.set('fy', fy);
+  const res = await fetch(`/api/tax/capital-gains?${params}`);
+  if (!res.ok) throw new Error('Failed to fetch capital gains');
+  return res.json();
+}
+
+export function downloadCapitalGainsCsv(
+  pan: string,
+  fy: string,
+  format: 'cleartax' | 'quicko'
+): void {
+  const params = new URLSearchParams({ pan, fy, format });
+  window.location.href = `/api/tax/capital-gains/export?${params}`;
+}
+
+export async function getUnrealizedGains(
+  pan: string
+): Promise<UnrealizedGainsSummary> {
+  const params = new URLSearchParams({ pan });
+  const res = await fetch(`/api/tax/unrealized?${params}`);
+  if (!res.ok) throw new Error('Failed to fetch unrealized gains');
+  return res.json();
+}
+
+export async function getHarvestingReport(
+  pan: string,
+  fy?: string
+): Promise<HarvestingReport> {
+  const params = new URLSearchParams({ pan });
+  if (fy) params.set('fy', fy);
+  const res = await fetch(`/api/tax/harvesting?${params}`);
+  if (!res.ok) throw new Error('Failed to fetch harvesting report');
+  return res.json();
+}
+
+export async function simulateRedemption(
+  folioId: string,
+  units?: number,
+  amount?: number
+): Promise<SimulationResult> {
+  const params = new URLSearchParams({ folioId });
+  if (units !== undefined) params.set('units', units.toString());
+  if (amount !== undefined) params.set('amount', amount.toString());
+  const res = await fetch(`/api/tax/simulate?${params}`);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: 'Unknown error' }));
+    throw new Error(err.error || 'Failed to simulate redemption');
+  }
+  return res.json();
+}
+
+export function exportTransactionsCsv(filters: TransactionFilters = {}): void {
+  const params = new URLSearchParams();
+  if (filters.dateFrom) params.set('dateFrom', filters.dateFrom);
+  if (filters.dateTo) params.set('dateTo', filters.dateTo);
+  if (filters.type) params.set('type', filters.type);
+  if (filters.fundId) params.set('fundId', filters.fundId);
+  if (filters.folio) params.set('folio', filters.folio);
+  if (filters.amountMin != null) params.set('amountMin', String(filters.amountMin));
+  if (filters.amountMax != null) params.set('amountMax', String(filters.amountMax));
+  window.location.href = `/api/transactions/export-csv?${params.toString()}`;
+}
+

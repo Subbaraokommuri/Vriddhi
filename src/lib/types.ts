@@ -147,9 +147,12 @@ export interface TransactionFilters {
 export interface FolioXirr {
   folioId: string;
   folioNumber: string;
+  pan: string;
   fundId: string;
   fundName: string;
   fundHouse: string;
+  schemeSubCat: string;
+  assetClass: string;
   isin: string | null;
   category: string | null;
   plan: string | null;
@@ -182,4 +185,98 @@ export interface DashboardStats {
     absoluteLoss: number;
   } | null;
   avgHoldingAgeYears: number;
+}
+
+export interface MatchedLot {
+  buyDate: string;
+  sellDate: string;
+  units: number;
+  costPerUnit: number;
+  saleNav: number;
+  buyNav: number;
+  fmvJan2018: number | null;
+  gain: number;
+  holdingDays: number;
+  gainType: 'STCG' | 'LTCG' | 'DEBT_SLAB';
+  acquiredFlag: 'BE' | 'AE';
+  transferredFlag: 'BE' | 'AE';
+  taxRate: number | null;
+  estimatedTax: number | null;
+  grandfatheringApplied: boolean;
+  fmvMissing: boolean;
+}
+
+export interface FolioCapitalGains {
+  folioId: string;
+  folioNumber: string;
+  fundName: string;
+  isin: string;
+  matchedLots: MatchedLot[];
+  totalSTCG: number;
+  totalLTCG: number;
+  totalDebtGain: number;
+  estimatedSTCGTax: number;
+  estimatedLTCGTax: number;
+  hasGrandfatheringFlags: boolean;
+  warnings: string[];
+}
+
+export interface PanCapitalGainsSummary {
+  fy: string;
+  pan: string;
+  investorName: string;
+  totalSTCG: number;
+  totalLTCG: number;
+  ltcgExemptionUsed: number;
+  ltcgTaxable: number;
+  totalDebtGain: number;
+  estimatedSTCGTax: number;
+  estimatedLTCGTax: number;
+  folios: FolioCapitalGains[];
+  hasGrandfatheringFlags: boolean;
+}
+
+export interface UnrealizedGainsSummary extends PanCapitalGainsSummary {
+  asOfDate: string;
+}
+
+export interface HarvestingOpportunity {
+  folioId: string;
+  folioNumber: string;
+  fundName: string;
+  unrealisedLTCG?: number;
+  unrealisedSTCGLoss?: number;
+  estimatedTaxSaving?: number;
+  suggestedAction: string;
+}
+
+export interface HarvestingReport {
+  fy: string;
+  pan: string;
+  remainingLtcgExemption: number;
+  realisedLTCG: number;
+  gainHarvesting: HarvestingOpportunity[];
+  lossHarvesting: HarvestingOpportunity[];
+}
+
+export interface SimulationResult {
+  folioId: string;
+  folioNumber: string;
+  fundName: string;
+  isin: string;
+  simulatedUnits: number;
+  simulatedAmount: number;
+  latestNav: number;
+  matchedLots: MatchedLot[];
+  totalSTCG: number;
+  totalLTCG: number;
+  totalDebtGain: number;
+  estimatedSTCGTax: number;
+  estimatedLTCGTax: number;
+  warnings: string[];
+}
+
+export interface TaxPan {
+  pan: string;
+  name: string;
 }

@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Filter, AlertCircle, ChevronDown, ChevronUp, X } from 'lucide-react';
+import { Filter, AlertCircle, ChevronDown, ChevronUp, X, Download } from 'lucide-react';
 import { cn, formatCurrency, formatFundName } from '../lib/utils';
 import { Transaction, TransactionFilters } from '../lib/types';
-import { getTransactions, getTransactionFundsList } from '../lib/api';
+import { getTransactions, getTransactionFundsList, exportTransactionsCsv } from '../lib/api';
 
 export function TransactionsList() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -65,6 +65,13 @@ export function TransactionsList() {
         <div className="p-6 border-b border-slate-200 flex items-center justify-between">
           <h3 className="text-lg font-bold">Transaction History</h3>
           <div className="flex gap-2">
+            <button
+              onClick={() => exportTransactionsCsv(filters)}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors"
+            >
+              <Download className="w-4 h-4" />
+              Download CSV
+            </button>
             <button 
               onClick={() => setFiltersOpen(!filtersOpen)}
               className={cn(

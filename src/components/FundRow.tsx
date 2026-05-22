@@ -20,7 +20,7 @@ export const FundRow: React.FC<FundRowProps> = ({ folio, themes, onTagsChanged }
       !folio.isActive && "opacity-50"
     )}>
       <td className="px-6 py-4">
-        <div className="flex flex-col">
+        <div className="flex flex-col gap-1">
           <p 
             className="font-semibold text-sm text-slate-800 truncate max-w-[280px]" 
             title={folio.fundName}
@@ -28,6 +28,11 @@ export const FundRow: React.FC<FundRowProps> = ({ folio, themes, onTagsChanged }
             {formatFundName(folio.fundName)}
           </p>
           <p className="text-xs text-slate-400 font-medium">Folio: {folio.folioNumber}</p>
+          <FolioTagChips 
+            folioId={folio.folioId} 
+            themes={themes} 
+            onUpdate={onTagsChanged}
+          />
         </div>
       </td>
       <td className="px-6 py-4 text-right tabular-nums text-sm font-medium text-slate-600">
@@ -58,13 +63,6 @@ export const FundRow: React.FC<FundRowProps> = ({ folio, themes, onTagsChanged }
       </td>
       <td className="px-6 py-4 text-right tabular-nums text-[10px] font-bold text-slate-400 uppercase tracking-tight">
         {folio.navDate ? formatDate(folio.navDate) : '—'}
-      </td>
-      <td className="px-6 py-4">
-        <FolioTagChips 
-          folioId={folio.folioId} 
-          themes={themes} 
-          onUpdate={onTagsChanged}
-        />
       </td>
     </tr>
   );
