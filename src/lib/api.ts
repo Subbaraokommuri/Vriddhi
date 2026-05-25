@@ -11,11 +11,15 @@ import {
   DashboardStats,
   TransactionFilters,
   FolioXirr,
+  FundGroupXirr,
   PanCapitalGainsSummary,
   UnrealizedGainsSummary,
   HarvestingReport,
   SimulationResult,
-  TaxPan
+  TaxPan,
+  BenchmarkXirrResponse,
+  AdvanceTaxEstimate,
+  OverallXirrResult
 } from './types.ts';
 
 async function handleResponse<T>(response: Response): Promise<T> {
@@ -278,6 +282,11 @@ export async function getUnassignedTags(): Promise<string[]> {
   return handleResponse<string[]>(res);
 }
 
+export async function getThemeTags(themeId: string): Promise<string[]> {
+  const res = await fetch(`/api/tags/themes/${encodeURIComponent(themeId)}/tags`);
+  return handleResponse<string[]>(res);
+}
+
 export async function deleteUnassignedTag(tag: string): Promise<void> {
   const res = await fetch(`/api/tags/unassigned/${encodeURIComponent(tag)}`, { method: 'DELETE' });
   return handleResponse<void>(res);
@@ -330,6 +339,7 @@ export interface FolioXirrFilters {
   plan?: string;
   fundOption?: string;
   tag?: string;
+  themeId?: string;
   search?: string;
   pan?: string;
 }
@@ -348,6 +358,44 @@ export async function getFoliosXirr(filters?: FolioXirrFilters): Promise<FolioXi
   if (!res.ok) throw new Error('Failed to fetch folios XIRR data');
   const data = await res.json();
   return data.folios;
+}
+
+export async function getFundsXirrGrouped(): Promise<FundGroupXirr[]> {
+  const res = await fetch('/api/funds-xirr-grouped');
+  if (!res.ok) throw new Error(`Failed to fetch grouped funds: ${res.statusText}`);
+  return res.json();
+}
+
+export function downloadFundsGroupedCsv(filters: {
+  search?: string;
+  fundHouse?: string;
+  category?: string;
+  plan?: string;
+  fundOption?: string;
+  activeOnly?: boolean;
+} = {}): void {
+  const params = new URLSearchParams();
+  if (filters.search)     params.set('search',     filters.search);
+  if (filters.fundHouse)  params.set('fundHouse',  filters.fundHouse);
+  if (filters.category)   params.set('category',   filters.category);
+  if (filters.plan)       params.set('plan',        filters.plan);
+  if (filters.fundOption) params.set('fundOption',  filters.fundOption);
+  if (filters.activeOnly !== undefined)
+    params.set('activeOnly', String(filters.activeOnly));
+  window.location.href = `/api/export-funds-grouped-csv?${params.toString()}`;
+}
+
+export async function getFoliosBenchmarkXirr(
+  folioIds: string[],
+  benchmarkSymbol: string
+): Promise<BenchmarkXirrResponse> {
+  const res = await fetch('/api/folios-benchmark-xirr', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ folioIds, benchmarkSymbol }),
+  });
+  if (!res.ok) throw new Error(`Benchmark XIRR failed: ${res.statusText}`);
+  return res.json();
 }
 
 export async function getTaxPans(): Promise<TaxPan[]> {
@@ -412,6 +460,33 @@ export async function simulateRedemption(
   }
   return res.json();
 }
+
+export async function getAdvanceTaxEstimate(
+  pan: string,
+  fy?: string,
+  paidSoFar?: number
+): Promise<AdvanceTaxEstimate> {
+  const params = new URLSearchParams({ pan });
+  if (fy) {
+    params.set('fy', fy);
+  }
+  if (paidSoFar !== undefined) {
+    params.set('paidSoFar', String(paidSoFar));
+  }
+  const res = await fetch(`/api/tax/advance-tax?${params.toString()}`);
+  if (!res.ok) throw new Error(`Advance tax estimate failed: ${res.statusText}`);
+  return res.json();
+}
+
+export async function getOverallXirr(folioIds: string[]): Promise<OverallXirrResult> {
+  const res = await fetch('/api/funds/overall-xirr', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ folioIds })
+  });
+  return handleResponse<OverallXirrResult>(res);
+}
+
 
 export function exportTransactionsCsv(filters: TransactionFilters = {}): void {
   const params = new URLSearchParams();

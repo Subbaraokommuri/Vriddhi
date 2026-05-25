@@ -175,6 +175,7 @@ export default function App() {
                 <FundsXirr
                   themes={tagThemes}
                   onNavsUpdated={fetchData}
+                  benchmarks={userBenchmarks}
                 />
               )}
               {activeTab === 'transactions' && <TransactionsList transactions={transactions} />}

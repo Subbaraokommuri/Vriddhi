@@ -127,6 +127,8 @@ router.get('/dashboard-stats', (req, res) => {
     const bestReturn = db.prepare(`
       SELECT
         fu.name,
+        fu.clean_name,
+        fu.simple_name,
         f.stated_cost,
         (f.stated_balance * n.nav) as currentValue
       FROM folios f
@@ -148,6 +150,8 @@ router.get('/dashboard-stats', (req, res) => {
       const gainPercent = ((bestReturn.currentValue - bestReturn.stated_cost) / bestReturn.stated_cost) * 100;
       bestReturnFund = {
         name: truncate(bestReturn.name),
+        clean_name: bestReturn.clean_name || '',
+        simple_name: bestReturn.simple_name || '',
         gainPercent: Math.round(gainPercent * 100) / 100
       };
     }
@@ -156,6 +160,8 @@ router.get('/dashboard-stats', (req, res) => {
     const highestLoss = db.prepare(`
       SELECT
         fu.name,
+        fu.clean_name,
+        fu.simple_name,
         f.stated_cost,
         (f.stated_balance * n.nav) as currentValue
       FROM folios f
@@ -176,6 +182,8 @@ router.get('/dashboard-stats', (req, res) => {
     if (highestLoss) {
       highestLossFund = {
         name: truncate(highestLoss.name),
+        clean_name: highestLoss.clean_name || '',
+        simple_name: highestLoss.simple_name || '',
         absoluteLoss: Math.round(highestLoss.stated_cost - highestLoss.currentValue)
       };
     }

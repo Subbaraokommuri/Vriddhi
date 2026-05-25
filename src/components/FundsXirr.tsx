@@ -1,36 +1,66 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { getFoliosXirr, updateNavs, FolioXirrFilters } from '../lib/api';
-import { FolioXirr } from '../lib/types';
+import { getFundsXirrGrouped, updateNavs, FolioXirrFilters, downloadFundsGroupedCsv, getFoliosBenchmarkXirr, getThemeTags, getOverallXirr } from '../lib/api';
+import { FundGroupXirr, FolioXirr, FolioBenchmarkXirrResult, GroupBenchmarkXirrResult, OverallXirrResult, OverallBenchmarkXirrResult } from '../lib/types';
 import { FundsFilterBar } from './FundsFilterBar';
-import { FundRow } from './FundRow';
-import { RefreshCw, Download, ChevronUp, ChevronDown, AlertCircle, X } from 'lucide-react';
-import { cn } from '../lib/utils';
+import { FundGroupRow } from './FundGroupRow';
+import { RefreshCw, Download, ChevronUp, ChevronDown, ChevronRight, AlertCircle, X, SlidersHorizontal, Target, AlertTriangle } from 'lucide-react';
+import { cn, formatCurrency, formatPercent } from '../lib/utils';
 
 interface FundsXirrProps {
-  themes: any[];
+  themes: { id: string; name: string }[];
   onNavsUpdated: () => void;
+  benchmarks: Array<{ id: string; name: string; symbol: string; is_active: boolean }>;
 }
 
-type SortKey = 'fundName' | 'units' | 'investedAmount' | 'currentValue' | 'gainAmount' | 'gainPercent' | 'xirr' | 'nav' | 'navDate';
+type SortKey = 'fundName' | 'units' | 'investedAmount' | 'currentValue' | 'gainAmount' | 'gainPercent' | 'xirr' | 'nav' | 'navDate' | 'benchmarkXirr' | 'alpha';
 
-export function FundsXirr({ themes, onNavsUpdated }: FundsXirrProps) {
-  const [allFolios, setAllFolios] = useState<FolioXirr[]>([]);
+export function FundsXirr({ themes, onNavsUpdated, benchmarks }: FundsXirrProps) {
+  const [groups, setGroups] = useState<FundGroupXirr[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [filters, setFilters] = useState<FolioXirrFilters>({ activeOnly: true });
+  const [filters, setFilters] = useState<FolioXirrFilters>({ activeOnly: true, themeId: '', tag: '' });
+  const [availableTags, setAvailableTags] = useState<string[]>([]);
   const [sortCol, setSortCol] = useState<SortKey>('fundName');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const [updating, setUpdating] = useState(false);
   const [updateErrors, setUpdateErrors] = useState<{ name: string; error: string }[]>([]);
+  const [expandedFundIds, setExpandedFundIds] = useState<Set<string>>(new Set());
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [benchmarkOpen, setBenchmarkOpen] = useState(false);
+
+  // Benchmark State variables
+  const [selectedBenchmarkSymbol, setSelectedBenchmarkSymbol] = useState<string>('');
+  const [benchmarkXirrMap, setBenchmarkXirrMap] = useState<Map<string, FolioBenchmarkXirrResult>>(new Map());
+  const [groupBenchmarkXirrMap, setGroupBenchmarkXirrMap] = useState<Map<string, GroupBenchmarkXirrResult>>(new Map());
+  const [benchmarkLoading, setBenchmarkLoading] = useState<boolean>(false);
+  const [benchmarkError, setBenchmarkError] = useState<string | null>(null);
+  const [overallBenchmarkResult, setOverallBenchmarkResult] = useState<OverallBenchmarkXirrResult | null>(null);
+
+  // Overall XIRR State variables
+  const [overallXirr, setOverallXirr] = useState<OverallXirrResult | null>(null);
+  const [overallXirrLoading, setOverallXirrLoading] = useState(false);
+
+  useEffect(() => {
+    if (filters.themeId) {
+      getThemeTags(filters.themeId)
+        .then(tags => setAvailableTags(tags))
+        .catch(err => {
+          console.error("Failed to load theme tags", err);
+          setAvailableTags([]);
+        });
+    } else {
+      setAvailableTags([]);
+    }
+  }, [filters.themeId]);
 
   const loadData = async () => {
     setLoading(true);
     setError(null);
     try {
-      const data = await getFoliosXirr();
-      setAllFolios(data);
+      const data = await getFundsXirrGrouped();
+      setGroups(data);
     } catch (err: any) {
-      setError(err.message || 'Failed to load folios data');
+      setError(err.message || 'Failed to load funds data');
     } finally {
       setLoading(false);
     }
@@ -48,8 +78,8 @@ export function FundsXirr({ themes, onNavsUpdated }: FundsXirrProps) {
       if (result.errors && result.errors.length > 0) {
         setUpdateErrors(result.errors.map(e => ({ name: e.name, error: e.error })));
       }
-      const fresh = await getFoliosXirr();
-      setAllFolios(fresh);
+      const fresh = await getFundsXirrGrouped();
+      setGroups(fresh);
       onNavsUpdated();
     } catch (err: any) {
       setUpdateErrors([{ name: 'System', error: err.message || String(err) }]);
@@ -58,65 +88,293 @@ export function FundsXirr({ themes, onNavsUpdated }: FundsXirrProps) {
     }
   };
 
-  const filteredFolios = useMemo(() => {
-    return allFolios.filter(f => {
-      if (filters.activeOnly && !f.isActive) return false;
-      if (filters.plan && f.plan !== filters.plan) return false;
-      if (filters.fundOption && f.fundOption !== filters.fundOption) return false;
-      if (filters.category && f.assetClass !== filters.category) return false;
-      if (filters.subCategory && f.schemeSubCat !== filters.subCategory) return false;
-      if (filters.fundHouse && f.fundHouse !== filters.fundHouse) return false;
-      if (filters.search) {
-        const s = filters.search.toLowerCase();
-        if (!f.fundName.toLowerCase().includes(s) && !f.folioNumber.toLowerCase().includes(s)) return false;
+  const toggleFund = (fundId: string) => {
+    setExpandedFundIds(prev => {
+      const next = new Set(prev);
+      if (next.has(fundId)) {
+        next.delete(fundId);
+      } else {
+        next.add(fundId);
       }
-      if (filters.tag) {
-        if (!f.tags.includes(filters.tag)) return false;
-      }
-      if (filters.pan && f.pan !== filters.pan) return false;
-      return true;
+      return next;
     });
-  }, [allFolios, filters]);
+  };
 
-  const sortedFolios = useMemo(() => {
-    const sorted = [...filteredFolios].sort((a, b) => {
-      const aVal = a[sortCol];
-      const bVal = b[sortCol];
+  const filteredGroups = useMemo(() => {
+    const result: Array<{ group: FundGroupXirr; visibleFolios: FolioXirr[] }> = [];
 
-      if (aVal === null) return 1;
-      if (bVal === null) return -1;
+    for (const group of groups) {
+      // a. Start: let candidateFolios = [...group.folios]
+      let candidateFolios = [...group.folios];
+
+      // b. activeOnly filter: if activeOnly === true, filter to f.isActive === true
+      if (filters.activeOnly) {
+        candidateFolios = candidateFolios.filter(f => f.isActive);
+      }
+
+      // c. tag filter: if a tag is selected, filter to f.tags.includes(selectedTag).
+      if (filters.tag) {
+        candidateFolios = candidateFolios.filter(f => f.tags && f.tags.includes(filters.tag!));
+      }
+
+      // Handle pan filter
+      if (filters.pan) {
+        candidateFolios = candidateFolios.filter(f => f.pan === filters.pan);
+      }
+
+      // d. If candidateFolios.length === 0 after (b) and (c): exclude group, continue.
+      if (candidateFolios.length === 0) {
+        continue;
+      }
+
+      // e. Group-level filters (apply to the group as a whole — exclude entire group if not matched):
+      // - search (non-empty)
+      if (filters.search) {
+        const searchLower = filters.search.toLowerCase();
+        const matchesName = (group.clean_name || group.fundName).toLowerCase().includes(searchLower);
+        const matchesFolio = candidateFolios.some(f => f.folioNumber.toLowerCase().includes(searchLower));
+        if (!matchesName && !matchesFolio) {
+          continue;
+        }
+      }
+
+      // - fundHouse (non-empty)
+      if (filters.fundHouse && group.fundHouse !== filters.fundHouse) {
+        continue;
+      }
+
+      // - category (maps to assetClass)
+      if (filters.category && group.assetClass !== filters.category) {
+        continue;
+      }
+
+      // - subCategory (maps to schemeSubCat)
+      if (filters.subCategory && group.schemeSubCat !== filters.subCategory) {
+        continue;
+      }
+
+      // - plan ('Direct' or 'Regular')
+      if (filters.plan && group.plan !== filters.plan) {
+        continue;
+      }
+
+      // - fundOption ('Growth' or 'IDCW')
+      if (filters.fundOption && group.fundOption !== filters.fundOption) {
+        continue;
+      }
+
+      // f. If group passes all filters: push { group, visibleFolios: candidateFolios }
+      result.push({ group, visibleFolios: candidateFolios });
+    }
+
+    return result;
+  }, [groups, filters]);
+
+  useEffect(() => {
+    let active = true;
+    const folioIds = filteredGroups.flatMap(g => (g.visibleFolios || g.folios || []).map(f => f.folioId));
+    if (folioIds.length === 0) {
+      setOverallXirr(null);
+      return;
+    }
+
+    const fetchOverallXirr = async () => {
+      setOverallXirrLoading(true);
+      try {
+        const result = await getOverallXirr(folioIds);
+        if (active) {
+          setOverallXirr(result);
+        }
+      } catch (err) {
+        if (active) {
+          setOverallXirr(null);
+        }
+      } finally {
+        if (active) {
+          setOverallXirrLoading(false);
+        }
+      }
+    };
+
+    fetchOverallXirr();
+
+    return () => {
+      active = false;
+    };
+  }, [filteredGroups]);
+
+  const handleBenchmarkChange = async (symbol: string) => {
+    setSelectedBenchmarkSymbol(symbol);
+    setBenchmarkXirrMap(new Map());
+    setGroupBenchmarkXirrMap(new Map());
+    setBenchmarkError(null);
+    if (!symbol) {
+      setOverallBenchmarkResult(null);
+      return;
+    }
+
+    // Collect folioIds from currently filtered groups only
+    const folioIds = filteredGroups.flatMap(item =>
+      item.visibleFolios.map(f => f.folioId)
+    );
+    if (folioIds.length === 0) {
+      setOverallBenchmarkResult(null);
+      return;
+    }
+
+    setBenchmarkLoading(true);
+    try {
+      const result = await getFoliosBenchmarkXirr(folioIds, symbol);
+      setBenchmarkXirrMap(
+        new Map(result.folioResults.map(r => [r.folioId, r]))
+      );
+      setGroupBenchmarkXirrMap(
+        new Map(result.groupResults.map(r => [r.fundId, r]))
+      );
+      setOverallBenchmarkResult(result.overallResult ?? null);
+    } catch (err) {
+      setBenchmarkError('Benchmark XIRR calculation failed. Try again.');
+      setOverallBenchmarkResult(null);
+    } finally {
+      setBenchmarkLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (selectedBenchmarkSymbol) {
+      handleBenchmarkChange(selectedBenchmarkSymbol);
+    }
+  }, [filteredGroups]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const sortedGroups = useMemo(() => {
+    const sorted = [...filteredGroups].sort((a, b) => {
+      let aVal: any;
+      let bVal: any;
+
+      switch (sortCol) {
+        case 'fundName':
+          aVal = a.group.simple_name || a.group.clean_name || a.group.fundName;
+          bVal = b.group.simple_name || b.group.clean_name || b.group.fundName;
+          break;
+        case 'units':
+          aVal = a.group.totalUnits;
+          bVal = b.group.totalUnits;
+          break;
+        case 'investedAmount':
+          aVal = a.group.totalInvested;
+          bVal = b.group.totalInvested;
+          break;
+        case 'currentValue':
+          aVal = a.group.totalCurrentValue;
+          bVal = b.group.totalCurrentValue;
+          break;
+        case 'gainAmount':
+          aVal = a.group.gainAmount;
+          bVal = b.group.gainAmount;
+          break;
+        case 'gainPercent':
+          aVal = a.group.gainPercent;
+          bVal = b.group.gainPercent;
+          break;
+        case 'xirr':
+          aVal = a.group.groupXirr;
+          bVal = b.group.groupXirr;
+          break;
+        case 'nav':
+          aVal = a.group.folios[0]?.nav ?? null;
+          bVal = b.group.folios[0]?.nav ?? null;
+          break;
+        case 'navDate':
+          aVal = a.group.folios[0]?.navDate ?? null;
+          bVal = b.group.folios[0]?.navDate ?? null;
+          break;
+        case 'benchmarkXirr': {
+          const aRes = groupBenchmarkXirrMap.get(a.group.fundId);
+          const bRes = groupBenchmarkXirrMap.get(b.group.fundId);
+          aVal = aRes && aRes.benchmarkXirr !== null && aRes.benchmarkXirr !== undefined ? aRes.benchmarkXirr : null;
+          bVal = bRes && bRes.benchmarkXirr !== null && bRes.benchmarkXirr !== undefined ? bRes.benchmarkXirr : null;
+          break;
+        }
+        case 'alpha': {
+          const aRes = groupBenchmarkXirrMap.get(a.group.fundId);
+          const bRes = groupBenchmarkXirrMap.get(b.group.fundId);
+          aVal = aRes && aRes.alpha !== null && aRes.alpha !== undefined ? aRes.alpha : null;
+          bVal = bRes && bRes.alpha !== null && bRes.alpha !== undefined ? bRes.alpha : null;
+          break;
+        }
+        default:
+          aVal = a.group.totalCurrentValue;
+          bVal = b.group.totalCurrentValue;
+      }
+
+      if (aVal === null || aVal === undefined) return 1;
+      if (bVal === null || bVal === undefined) return -1;
 
       if (aVal < bVal) return sortDir === 'asc' ? -1 : 1;
       if (aVal > bVal) return sortDir === 'asc' ? 1 : -1;
       return 0;
     });
     return sorted;
-  }, [filteredFolios, sortCol, sortDir]);
+  }, [filteredGroups, sortCol, sortDir, groupBenchmarkXirrMap]);
 
-  const fundHouses = useMemo(() => [...new Set(allFolios.map(f => f.fundHouse).filter(Boolean))].sort(), [allFolios]);
+  const fundHouses = useMemo(() => 
+    [...new Set(groups.map(g => g.fundHouse).filter(Boolean))].sort(), 
+  [groups]);
+
   const categories = useMemo(() => 
-    [...new Set(allFolios.map(f => f.assetClass).filter(Boolean))].sort(), 
-  [allFolios]);
-  const pans = useMemo(() => 
-    [...new Set(allFolios.map(f => f.pan).filter(Boolean))].sort(), 
-  [allFolios]);
+    [...new Set(groups.map(g => g.assetClass).filter(Boolean))].sort(), 
+  [groups]);
+
+  const pans = useMemo(() => {
+    const allPans = groups.flatMap(g => g.folios.map(f => f.pan));
+    return [...new Set(allPans.filter(Boolean))].sort();
+  }, [groups]);
+
   const subCategories = useMemo(() => {
     const source = filters.category
-      ? allFolios.filter(f => f.assetClass === filters.category)
-      : allFolios;
-    return [...new Set(source.map(f => f.schemeSubCat).filter(Boolean))].sort();
-  }, [allFolios, filters.category]);
+      ? groups.filter(g => g.assetClass === filters.category)
+      : groups;
+    return [...new Set(source.map(g => g.schemeSubCat).filter(Boolean))].sort();
+  }, [groups, filters.category]);
 
   const handleSort = (key: SortKey) => {
+    if ((key === 'benchmarkXirr' || key === 'alpha') && !selectedBenchmarkSymbol) {
+      return;
+    }
     if (sortCol === key) {
       setSortDir(sortDir === 'asc' ? 'desc' : 'asc');
     } else {
       setSortCol(key);
-      setSortDir('asc');
+      setSortDir((key === 'benchmarkXirr' || key === 'alpha') ? 'desc' : 'asc');
     }
   };
 
-  if (loading && allFolios.length === 0) {
+  const totals = useMemo(() => {
+    let totalInvested = 0;
+    let totalCurrentValue = 0;
+    let totalGainAmount = 0;
+
+    for (const item of filteredGroups) {
+      totalInvested += item.group.totalInvested || 0;
+      totalCurrentValue += item.group.totalCurrentValue || 0;
+      totalGainAmount += item.group.gainAmount || 0;
+    }
+
+    const totalGainPercent = totalInvested > 0 ? (totalGainAmount / totalInvested) : null;
+
+    return {
+      totalInvested,
+      totalCurrentValue,
+      totalGainAmount,
+      totalGainPercent
+    };
+  }, [filteredGroups]);
+
+  const totalVisibleFolios = filteredGroups.reduce(
+    (sum, item) => sum + item.visibleFolios.length, 0
+  );
+
+  if (loading && groups.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center h-64 gap-4">
         <div className="w-8 h-8 border-4 border-[#01696f] border-t-transparent rounded-full animate-spin" />
@@ -130,20 +388,32 @@ export function FundsXirr({ themes, onNavsUpdated }: FundsXirrProps) {
       <div className="flex items-center justify-between">
         <div className="flex items-baseline gap-3">
           <h2 className="text-xl font-bold text-slate-800">Funds & Folios</h2>
-          <span className="text-sm text-slate-400">
-            Funds: {new Set(filteredFolios.map(f => f.fundId)).size} · Folios: {filteredFolios.length}
+          <span className="text-sm text-slate-400 font-normal">
+            {filteredGroups.length} funds ({totalVisibleFolios} folios)
           </span>
+          {benchmarkLoading && (
+            <span className="flex items-center gap-1.5 text-xs text-slate-500 font-medium">
+              <span className="w-3 h-3 border-2 border-[#01696f] border-t-transparent rounded-full animate-spin" />
+              Recalculating benchmark XIRR...
+            </span>
+          )}
         </div>
 
         <div className="flex items-center gap-2">
-          <a 
-            href="/api/export-holdings-csv" 
-            download
+          <button
+            onClick={() => downloadFundsGroupedCsv({
+              search: filters.search,
+              fundHouse: filters.fundHouse,
+              category: filters.category,
+              plan: filters.plan,
+              fundOption: filters.fundOption,
+              activeOnly: filters.activeOnly,
+            })}
             className="flex items-center gap-2 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-sm font-semibold transition-colors"
           >
             <Download className="w-4 h-4" />
             Export CSV
-          </a>
+          </button>
           <button
             onClick={handleUpdateNavs}
             disabled={updating}
@@ -192,15 +462,77 @@ export function FundsXirr({ themes, onNavsUpdated }: FundsXirrProps) {
         </div>
       )}
 
-      <FundsFilterBar 
-        filters={filters} 
-        onChange={setFilters} 
-        themes={themes}
-        fundHouses={fundHouses}
-        categories={categories}
-        pans={pans}
-        subCategories={subCategories}
-      />
+      {/* PANEL 1 — "Filters" */}
+      <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden select-none">
+        <button
+          onClick={() => setFiltersOpen(!filtersOpen)}
+          className="w-full px-5 py-4 flex items-center justify-between text-left hover:bg-slate-50 transition-colors focus:outline-none"
+        >
+          <div className="flex items-center gap-2">
+            {filtersOpen ? <ChevronDown className="w-4 h-4 text-slate-500" /> : <ChevronRight className="w-4 h-4 text-slate-500" />}
+            <SlidersHorizontal className="w-4 h-4 text-slate-500" />
+            <span className="font-medium text-sm text-slate-700 uppercase tracking-wide">Search & Filter</span>
+          </div>
+        </button>
+        {filtersOpen && (
+          <div className="p-5 border-t border-slate-100 bg-white">
+            <FundsFilterBar 
+              filters={filters} 
+              onChange={setFilters} 
+              themes={themes}
+              fundHouses={fundHouses}
+              categories={categories}
+              pans={pans}
+              subCategories={subCategories}
+              availableTags={availableTags}
+            />
+          </div>
+        )}
+      </div>
+
+      {/* PANEL 2 — "Benchmark" */}
+      <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden select-none">
+        <button
+          onClick={() => setBenchmarkOpen(!benchmarkOpen)}
+          className="w-full px-5 py-4 flex items-center justify-between text-left hover:bg-slate-50 transition-colors focus:outline-none"
+        >
+          <div className="flex items-center gap-2">
+            {benchmarkOpen ? <ChevronDown className="w-4 h-4 text-slate-500" /> : <ChevronRight className="w-4 h-4 text-slate-500" />}
+            <Target className="w-4 h-4 text-slate-500" />
+            <span className="font-medium text-sm text-slate-700 uppercase tracking-wide">Benchmark</span>
+          </div>
+        </button>
+        {benchmarkOpen && (
+          <div className="p-5 border-t border-slate-100 bg-white flex items-center gap-3">
+            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Select Benchmark:</span>
+            <select
+              value={selectedBenchmarkSymbol}
+              onChange={(e) => handleBenchmarkChange(e.target.value)}
+              className="min-w-[220px] max-w-sm pl-3 pr-10 py-1.5 text-sm border border-slate-200 bg-slate-50 rounded-lg focus:outline-none focus:ring-[#01696f] focus:border-[#01696f]"
+            >
+              <option value="">None</option>
+              {benchmarks.filter(b => b.is_active).map(b => (
+                <option key={b.id} value={b.symbol}>
+                  {b.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+      </div>
+
+      {benchmarkError && (
+        <div className="bg-rose-50 border border-rose-200 p-4 rounded-xl flex items-center gap-3">
+          <AlertCircle className="w-5 h-5 text-rose-600 shrink-0" />
+          <p className="text-sm font-semibold text-rose-800">{benchmarkError}</p>
+          <button 
+            onClick={() => handleBenchmarkChange(selectedBenchmarkSymbol)} 
+            className="ml-auto px-3 py-1 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-lg text-xs"
+          >
+            Retry
+          </button>
+        </div>
+      )}
 
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
@@ -208,20 +540,25 @@ export function FundsXirr({ themes, onNavsUpdated }: FundsXirrProps) {
             <thead className="bg-slate-50 border-b border-slate-200">
               <tr>
                 <HeaderCell label="FUND NAME & FOLIO" sortKey="fundName" currentSort={sortCol} dir={sortDir} onSort={handleSort} />
+                <HeaderCell label="NAV" sortKey="nav" currentSort={sortCol} dir={sortDir} onSort={handleSort} align="right" />
                 <HeaderCell label="UNITS" sortKey="units" currentSort={sortCol} dir={sortDir} onSort={handleSort} align="right" />
                 <HeaderCell label="INVESTED" sortKey="investedAmount" currentSort={sortCol} dir={sortDir} onSort={handleSort} align="right" />
                 <HeaderCell label="CURRENT VALUE" sortKey="currentValue" currentSort={sortCol} dir={sortDir} onSort={handleSort} align="right" />
                 <HeaderCell label="GAIN ₹" sortKey="gainAmount" currentSort={sortCol} dir={sortDir} onSort={handleSort} align="right" />
                 <HeaderCell label="GAIN %" sortKey="gainPercent" currentSort={sortCol} dir={sortDir} onSort={handleSort} align="right" />
                 <HeaderCell label="XIRR" sortKey="xirr" currentSort={sortCol} dir={sortDir} onSort={handleSort} align="right" />
-                <HeaderCell label="NAV" sortKey="nav" currentSort={sortCol} dir={sortDir} onSort={handleSort} align="right" />
-                <HeaderCell label="LAST UPDATED" sortKey="navDate" currentSort={sortCol} dir={sortDir} onSort={handleSort} align="right" />
+                {selectedBenchmarkSymbol && (
+                  <>
+                    <HeaderCell label="BENCHMARK XIRR" sortKey="benchmarkXirr" currentSort={sortCol} dir={sortDir} onSort={handleSort} align="right" />
+                    <HeaderCell label="ALPHA" sortKey="alpha" currentSort={sortCol} dir={sortDir} onSort={handleSort} align="right" />
+                  </>
+                )}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {sortedFolios.length === 0 ? (
+              {sortedGroups.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="px-6 py-12 text-center">
+                  <td colSpan={selectedBenchmarkSymbol ? 10 : 8} className="px-6 py-12 text-center">
                     <p className="text-slate-400 font-medium">No funds match your filters.</p>
                     <button 
                       onClick={() => setFilters({ activeOnly: true })}
@@ -232,14 +569,102 @@ export function FundsXirr({ themes, onNavsUpdated }: FundsXirrProps) {
                   </td>
                 </tr>
               ) : (
-                sortedFolios.map((folio: FolioXirr) => (
-                  <FundRow 
-                    key={folio.folioId} 
-                    folio={folio} 
-                    themes={themes} 
-                    onTagsChanged={() => { loadData(); }} 
-                  />
-                ))
+                <>
+                  {sortedGroups.map((item) => (
+                    <FundGroupRow 
+                      key={item.group.fundId} 
+                      group={item.group} 
+                      visibleFolios={item.visibleFolios}
+                      isExpanded={expandedFundIds.has(item.group.fundId)}
+                      onToggle={() => toggleFund(item.group.fundId)}
+                      themes={themes}
+                      onTagsChanged={loadData}
+                      benchmarkResult={groupBenchmarkXirrMap.get(item.group.fundId)}
+                      foliosBenchmarkMap={benchmarkXirrMap}
+                      benchmarkLoading={benchmarkLoading}
+                      isBenchmarkActive={!!selectedBenchmarkSymbol}
+                    />
+                  ))}
+                  {/* Summary Footer Row */}
+                  <tr className="bg-slate-50 dark:bg-slate-800/50 border-t-2 border-slate-300 dark:border-slate-600 font-semibold text-slate-900 dark:text-slate-100">
+                    <td className="px-6 py-4 text-sm font-semibold">
+                      Portfolio Total
+                    </td>
+                    <td className="px-6 py-4 text-right text-sm text-slate-400 font-normal">
+                      —
+                    </td>
+                    <td className="px-6 py-4 text-right text-sm text-slate-400 font-normal">
+                      —
+                    </td>
+                    <td className="px-6 py-4 text-right tabular-nums text-sm font-semibold text-slate-600 dark:text-slate-300">
+                      {formatCurrency(totals.totalInvested)}
+                    </td>
+                    <td className="px-6 py-4 text-right tabular-nums text-sm font-semibold text-slate-900 dark:text-slate-100">
+                      {formatCurrency(totals.totalCurrentValue)}
+                    </td>
+                    <td className={cn("px-6 py-4 text-right tabular-nums text-sm font-bold", totals.totalGainAmount >= 0 ? "text-emerald-600" : "text-rose-600")}>
+                      {formatCurrency(totals.totalGainAmount)}
+                    </td>
+                    <td className={cn("px-6 py-4 text-right tabular-nums text-sm font-bold", totals.totalGainPercent !== null && totals.totalGainPercent >= 0 ? "text-emerald-600" : "text-rose-600")}>
+                      {totals.totalGainPercent === null ? "—" : formatPercent(totals.totalGainPercent)}
+                    </td>
+                    <td className={cn("px-6 py-4 text-right tabular-nums text-sm font-bold")}>
+                      {overallXirrLoading ? (
+                        <span className="text-slate-400 animate-pulse">…</span>
+                      ) : overallXirr && overallXirr.xirr !== null ? (
+                        <div className="flex items-center justify-end gap-1">
+                          <span className={overallXirr.xirr >= 0 ? "text-emerald-600" : "text-rose-600"}>
+                            {formatPercent(overallXirr.xirr)}
+                          </span>
+                          {overallXirr.xirrWarning && (
+                            <AlertTriangle className="w-3.5 h-3.5 text-amber-500 shrink-0" title="Overall XIRR may be unreliable" />
+                          )}
+                        </div>
+                      ) : (
+                        <span className="text-slate-400 font-normal">—</span>
+                      )}
+                    </td>
+                    {selectedBenchmarkSymbol && (
+                      <>
+                        <td className="px-6 py-4 text-right tabular-nums text-sm font-semibold">
+                          {benchmarkLoading ? (
+                            <span className="text-slate-400 animate-pulse">…</span>
+                          ) : overallBenchmarkResult && overallBenchmarkResult.benchmarkXirr !== null ? (
+                            <div className="flex items-center justify-end gap-1">
+                              <span className={cn(overallBenchmarkResult.benchmarkXirr >= 0 ? "text-emerald-600" : "text-rose-600")}>
+                                {formatPercent(overallBenchmarkResult.benchmarkXirr)}
+                              </span>
+                              {overallBenchmarkResult.benchmarkXirrWarning && (
+                                <AlertTriangle className="w-3.5 h-3.5 text-amber-500 shrink-0" title="Overall benchmark XIRR may be unreliable" />
+                              )}
+                            </div>
+                          ) : (
+                            <span className="text-slate-400 font-normal">—</span>
+                          )}
+                        </td>
+                        <td className="px-6 py-4 text-right tabular-nums text-sm font-semibold">
+                          {benchmarkLoading ? (
+                            <span className="text-slate-400 animate-pulse">…</span>
+                          ) : overallBenchmarkResult && overallBenchmarkResult.alpha !== null ? (
+                            <span className={cn(
+                              "font-bold",
+                              overallBenchmarkResult.alpha > 0 
+                                ? "text-emerald-600" 
+                                : overallBenchmarkResult.alpha < 0 
+                                  ? "text-rose-600" 
+                                  : "text-slate-500"
+                            )}>
+                              {overallBenchmarkResult.alpha > 0 ? "+" : ""}
+                              {formatPercent(overallBenchmarkResult.alpha)}
+                            </span>
+                          ) : (
+                            <span className="text-slate-400 font-normal">—</span>
+                          )}
+                        </td>
+                      </>
+                    )}
+                  </tr>
+                </>
               )}
             </tbody>
           </table>

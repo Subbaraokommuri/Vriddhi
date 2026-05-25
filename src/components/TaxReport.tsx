@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Receipt, 
   Download, 
@@ -21,7 +21,8 @@ import {
   getUnrealizedGains,
   getHarvestingReport,
   simulateRedemption,
-  fetchFolios
+  fetchFolios,
+  getAdvanceTaxEstimate
 } from '../lib/api.ts';
 import { 
   PanCapitalGainsSummary, 
@@ -31,10 +32,12 @@ import {
   MatchedLot,
   HarvestingReport,
   SimulationResult,
-  Folio
+  Folio,
+  AdvanceTaxEstimate,
+  AdvanceTaxInstallment
 } from '../lib/types.ts';
 
-type TaxTab = 'capital-gains' | 'unrealized' | 'harvesting' | 'simulator';
+type TaxTab = 'capital-gains' | 'unrealized' | 'harvesting' | 'simulator' | 'advance';
 
 export function TaxReport() {
   const [activeTab, setActiveTab] = useState<TaxTab>('capital-gains');
@@ -43,6 +46,38 @@ export function TaxReport() {
   const [selectedFy, setSelectedFy] = useState<string>('');
   const [pansLoading, setPansLoading] = useState(true);
   const [pansError, setPansError] = useState<string | null>(null);
+
+  // Advance Tax State
+  const currentInProgressFy = useMemo(() => {
+    const today = new Date();
+    const year  = today.getFullYear();
+    const month = today.getMonth() + 1; // 1-indexed
+    if (month >= 4) {
+      return `${year}-${String(year + 1).slice(-2)}`;
+    }
+    return `${year - 1}-${String(year).slice(-2)}`;
+  }, []);
+
+  const [advanceTaxFy, setAdvanceTaxFy] = useState<string>(currentInProgressFy);
+
+  const advanceTaxFyOptions = useMemo(() => {
+    const [startYearStr] = currentInProgressFy.split('-');
+    const startYear = parseInt(startYearStr);
+    const options = [
+      { value: currentInProgressFy, label: `${currentInProgressFy} (In Progress)` }
+    ];
+    for (let i = 1; i <= 5; i++) {
+      const yr = startYear - i;
+      const endShort = (yr + 1).toString().slice(-2);
+      options.push({ value: `${yr}-${endShort}`, label: `FY ${yr}-${endShort}` });
+    }
+    return options;
+  }, [currentInProgressFy]);
+
+  const [advanceTaxResult, setAdvanceTaxResult] = useState<AdvanceTaxEstimate | null>(null);
+  const [advanceTaxLoading, setAdvanceTaxLoading] = useState(false);
+  const [advanceTaxError, setAdvanceTaxError] = useState<string | null>(null);
+  const [paidSoFar, setPaidSoFar] = useState<string>('');
 
   // CG State
   const [cgData, setCgData] = useState<PanCapitalGainsSummary | null>(null);
@@ -119,12 +154,29 @@ export function TaxReport() {
     setCgError(null);
     setUnrealizedError(null);
     setHarvestingError(null);
+    setAdvanceTaxResult(null);
+    setAdvanceTaxError(null);
   };
 
   const handleFyChange = (fy: string) => {
     setSelectedFy(fy);
     setCgData(null);
     setCgError(null);
+  };
+
+  const calculateAdvanceTax = async () => {
+    if (!selectedPan) return;
+    setAdvanceTaxLoading(true);
+    setAdvanceTaxError(null);
+    try {
+      const paidSoFarValue = parseFloat(paidSoFar) || 0;
+      const data = await getAdvanceTaxEstimate(selectedPan, advanceTaxFy, paidSoFarValue);
+      setAdvanceTaxResult(data);
+    } catch (err: any) {
+      setAdvanceTaxError(err.message);
+    } finally {
+      setAdvanceTaxLoading(false);
+    }
   };
 
   const calculateCg = async () => {
@@ -233,7 +285,7 @@ export function TaxReport() {
             className="block w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5 text-sm font-medium focus:ring-2 focus:ring-primary/20 transition-all outline-none"
             value={selectedPan}
             onChange={(e) => handlePanChange(e.target.value)}
-            disabled={cgLoading || unrealizedLoading}
+            disabled={cgLoading || unrealizedLoading || advanceTaxLoading}
           >
             {pans.map(p => (
               <option key={p.pan} value={p.pan}>{p.name} ({p.pan})</option>
@@ -260,7 +312,7 @@ export function TaxReport() {
         <div className="flex-1" />
 
         <div className="flex p-1 bg-slate-100 rounded-xl">
-          {(['capital-gains', 'unrealized', 'harvesting', 'simulator'] as TaxTab[]).map(tab => (
+          {(['capital-gains', 'unrealized', 'harvesting', 'simulator', 'advance'] as TaxTab[]).map(tab => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -272,7 +324,8 @@ export function TaxReport() {
             >
               {tab === 'capital-gains' ? 'Capital Gains' : 
                tab === 'unrealized' ? 'Unrealized' :
-               tab === 'harvesting' ? 'Harvesting' : 'Simulator'}
+               tab === 'harvesting' ? 'Harvesting' :
+               tab === 'simulator' ? 'Simulator' : 'Advance Tax'}
             </button>
           ))}
         </div>
@@ -1033,6 +1086,225 @@ export function TaxReport() {
                   )}
                 </div>
               )}
+            </div>
+          )}
+
+          {activeTab === 'advance' && (
+            <div className="space-y-8" id="advance-tax-tab-content">
+              {/* SECTION 1 - Controls row */}
+              <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4" id="advance-tax-controls-card">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                      Financial Year
+                    </label>
+                    <select
+                      className="block w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5 text-sm font-medium focus:ring-2 focus:ring-primary/20 transition-all outline-none"
+                      value={advanceTaxFy}
+                      onChange={(e) => setAdvanceTaxFy(e.target.value)}
+                      disabled={advanceTaxLoading}
+                      id="advance-tax-fy-select"
+                    >
+                      {advanceTaxFyOptions.map(opt => (
+                        <option key={opt.value} value={opt.value}>{opt.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                      Already paid this FY (₹)
+                    </label>
+                    <div className="flex gap-4">
+                      <input
+                        className="block flex-1 bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-primary/20 outline-none"
+                        value={paidSoFar}
+                        onChange={e => setPaidSoFar(e.target.value)}
+                        placeholder="0"
+                        type="number" 
+                        min="0"
+                        id="advance-tax-paid-so-far"
+                      />
+                      <button
+                        id="advance-tax-calculate-btn"
+                        onClick={calculateAdvanceTax}
+                        disabled={advanceTaxLoading || !selectedPan}
+                        className="bg-primary text-white px-6 py-2.5 rounded-xl font-medium hover:bg-primary-hover transition-all shadow-lg shadow-primary/20 disabled:opacity-50 h-[42px] flex items-center justify-center gap-2"
+                      >
+                        {advanceTaxLoading && <Loader2 className="w-4 h-4 animate-spin" />}
+                        Calculate
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                {advanceTaxError && (
+                  <p className="text-sm font-medium text-rose-600 animate-pulse" id="advance-tax-error-msg">
+                    {advanceTaxError}
+                  </p>
+                )}
+              </div>
+
+              {/* LOADING STATE vs RESULTS */}
+              {advanceTaxLoading ? (
+                <div className="flex flex-col items-center justify-center py-24 text-slate-500" id="advance-tax-loading-spinner">
+                  <Loader2 className="w-8 h-8 animate-spin mb-4 text-primary" />
+                  <p>Calculating advance tax estimates and installment schedules...</p>
+                </div>
+              ) : (
+                advanceTaxResult && (
+                  <>
+                    {/* SECTION 2 - Summary Cards */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4" id="advance-tax-summary-cards">
+                      {/* Card A */}
+                      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm" id="adv-tax-card-est-annual">
+                        <p className="text-sm font-medium text-slate-500 mb-2">Estimated Annual Tax</p>
+                        <p className="text-2xl font-bold text-slate-900">
+                          {formatCurrency(advanceTaxResult.estimatedAnnualTax)}
+                        </p>
+                        <p className="text-xs text-slate-400 mt-1">
+                          Based on realised gains in FY {advanceTaxResult.currentFy} so far
+                        </p>
+                      </div>
+
+                      {/* Card B */}
+                      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm" id="adv-tax-card-paid">
+                        <p className="text-sm font-medium text-slate-500 mb-2">Already Paid</p>
+                        <p className="text-2xl font-bold text-slate-900">
+                          {formatCurrency(advanceTaxResult.paidSoFar)}
+                        </p>
+                      </div>
+
+                      {/* Card C */}
+                      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm" id="adv-tax-card-still-due">
+                        <p className="text-sm font-medium text-slate-500 mb-2">Still Due</p>
+                        <p className={`text-2xl font-bold ${
+                          advanceTaxResult.totalStillDue > 0 ? "text-rose-600" : "text-emerald-600"
+                        }`}>
+                          {formatCurrency(advanceTaxResult.totalStillDue)}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* SECTION 3 - Tax Breakdown */}
+                    <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm" id="advance-tax-breakdown">
+                      <h4 className="font-semibold text-slate-900 mb-4 h-5">Tax Breakdown</h4>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="space-y-3 bg-slate-50 p-4 rounded-xl" id="adv-tax-stcg-col">
+                          <div className="flex justify-between items-center text-sm">
+                            <span className="text-slate-500 font-medium">Net STCG</span>
+                            <span className="font-semibold text-slate-900">
+                              {formatCurrency(advanceTaxResult.realisedTax.netSTCG)}
+                            </span>
+                          </div>
+                          <div className="flex justify-between items-center text-sm border-t border-slate-200/60 pt-2">
+                            <span className="text-slate-500 font-medium">STCG Tax</span>
+                            <span className="font-bold text-slate-900">
+                              {formatCurrency(advanceTaxResult.realisedTax.estimatedSTCGTax)}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="space-y-3 bg-slate-50 p-4 rounded-xl" id="adv-tax-ltcg-col">
+                          <div className="flex justify-between items-center text-sm">
+                            <span className="text-slate-500 font-medium">Net LTCG</span>
+                            <span className="font-semibold text-slate-900">
+                              {formatCurrency(advanceTaxResult.realisedTax.netLTCG)}
+                            </span>
+                          </div>
+                          <div className="flex justify-between items-center text-sm border-t border-slate-200/60 pt-2">
+                            <span className="text-slate-500 font-medium">LTCG Tax</span>
+                            <span className="font-bold text-slate-900">
+                              {formatCurrency(advanceTaxResult.realisedTax.estimatedLTCGTax)}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* SECTION 4 - Installment Schedule Table */}
+                    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden" id="advance-tax-installments">
+                      <div className="px-6 py-4 border-b border-slate-200 bg-slate-50/50">
+                        <h4 className="font-semibold text-slate-900">Installment Schedule</h4>
+                      </div>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left border-collapse" id="advance-tax-installments-table">
+                          <thead>
+                            <tr className="bg-slate-50/20 border-b border-slate-200 font-semibold text-xs text-slate-500 uppercase">
+                              <th className="px-6 py-4">Installment</th>
+                              <th className="px-6 py-4">Due Date</th>
+                              <th className="px-6 py-4 text-right">Cumulative %</th>
+                              <th className="px-6 py-4 text-right">This Installment</th>
+                              <th className="px-6 py-4 text-right">Cumulative Due</th>
+                              <th className="px-6 py-4 text-center">Status</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {advanceTaxResult.installments.map((inst) => {
+                              let rowClass = "border-b border-slate-100 last:border-0 hover:bg-slate-50/50 transition-colors";
+                              if (inst.isPastDue) {
+                                rowClass += " opacity-60 bg-slate-50/30";
+                              } else if (inst.isCurrentInstallment) {
+                                rowClass += " ring-2 ring-primary ring-inset bg-primary/5 font-semibold";
+                              }
+
+                              let statusBg = "bg-slate-100 text-slate-600";
+                              let statusText = "Upcoming";
+                              if (inst.isPastDue) {
+                                statusBg = "bg-slate-200 text-slate-500";
+                                statusText = "Past due";
+                              } else if (inst.isCurrentInstallment) {
+                                statusBg = "bg-amber-100 text-amber-800";
+                                statusText = "Due next";
+                              }
+
+                              return (
+                                <tr key={inst.installmentNumber} className={rowClass} id={`adv-tax-row-inst-${inst.installmentNumber}`}>
+                                  <td className="px-6 py-4">
+                                    Installment {inst.installmentNumber}
+                                  </td>
+                                  <td className="px-6 py-4 font-mono font-medium text-slate-600">
+                                    {formatDate(inst.dueDate)}
+                                  </td>
+                                  <td className="px-6 py-4 text-right font-mono text-slate-600">
+                                    {inst.cumulativePercent}%
+                                  </td>
+                                  <td className="px-6 py-4 text-right font-bold text-slate-900 font-mono">
+                                    {formatCurrency(inst.dueAmount)}
+                                  </td>
+                                  <td className="px-6 py-4 text-right font-semibold text-slate-900 font-mono">
+                                    {formatCurrency(inst.cumulativeAmount)}
+                                  </td>
+                                  <td className="px-6 py-4 text-center">
+                                    <div className="flex items-center justify-center gap-1.5">
+                                      <span className={`px-2 py-1 rounded text-xs font-bold ${statusBg}`}>
+                                        {statusText}
+                                      </span>
+                                      {inst.isCurrentInstallment && (
+                                        <span className="px-2 py-1 rounded text-xs font-bold bg-primary text-white animate-pulse">
+                                          Pay now
+                                        </span>
+                                      )}
+                                    </div>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                      {advanceTaxFy !== currentInProgressFy && (
+                        <div className="px-6 py-3 bg-amber-50/60 border-t border-slate-200/60 text-xs text-amber-700 font-medium italic animate-fade-in" id="historical-fy-note">
+                          Historical FY — all installments are past due.
+                        </div>
+                      )}
+                    </div>
+                  </>
+                )
+              )}
+
+              {/* SECTION 5 - Disclaimer */}
+              <div className="flex items-center gap-2 text-slate-400 text-xs italic" id="advance-tax-disclaimer">
+                <Info className="w-4 h-4 mt-0.5 shrink-0" />
+                <p>Estimate based on realised gains only. Does not include gains from other asset classes. Consult a tax advisor for your final advance tax liability.</p>
+              </div>
             </div>
           )}
         </motion.div>

@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { Filter, AlertCircle, ChevronDown, ChevronUp, X, Download } from 'lucide-react';
-import { cn, formatCurrency, formatFundName } from '../lib/utils';
+import { cn, formatCurrency } from '../lib/utils';
 import { Transaction, TransactionFilters } from '../lib/types';
 import { getTransactions, getTransactionFundsList, exportTransactionsCsv } from '../lib/api';
 
 export function TransactionsList() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [fundsList, setFundsList] = useState<{ id: string; name: string }[]>([]);
+  const [fundsList, setFundsList] = useState<{ id: string; name: string; clean_name?: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -135,7 +135,9 @@ export function TransactionsList() {
                 >
                   <option value="">All Funds</option>
                   {fundsList.map(fund => (
-                    <option key={fund.id} value={fund.id}>{formatFundName(fund.name)}</option>
+                    <option key={fund.id} value={fund.id} title={fund.clean_name || fund.name}>
+                      {fund.simple_name || fund.clean_name || fund.name}
+                    </option>
                   ))}
                 </select>
               </div>
@@ -219,8 +221,8 @@ export function TransactionsList() {
                       {new Date(t.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
                     </td>
                     <td className="px-6 py-4">
-                      <p className="font-semibold text-sm truncate max-w-xs" title={t.fund_name}>
-                        {formatFundName(t.fund_name)}
+                      <p className="font-semibold text-sm truncate max-w-xs" title={t.clean_name || t.fund_name}>
+                        {t.simple_name || t.clean_name || t.fund_name}
                       </p>
                       <p className="text-xs text-slate-500">Folio: {t.folio_number}</p>
                     </td>

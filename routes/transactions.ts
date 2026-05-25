@@ -296,7 +296,7 @@ router.get('/transactions', (req, res) => {
     const { dateFrom, dateTo, type, fundId, folio, amountMin, amountMax } = req.query;
     
     let query = `
-      SELECT t.*, f.folio_number, fu.name as fund_name
+      SELECT t.*, f.folio_number, fu.name as fund_name, fu.clean_name, fu.simple_name
       FROM transactions t
       JOIN folios f ON t.folio_id = f.id
       JOIN funds fu ON f.fund_id = fu.id
@@ -347,7 +347,7 @@ router.get('/transactions', (req, res) => {
 router.get('/transactions/funds-list', (req, res) => {
   try {
     const fundsList = db.prepare(`
-      SELECT DISTINCT fu.id, fu.name 
+      SELECT DISTINCT fu.id, fu.name, fu.clean_name, fu.simple_name 
       FROM funds fu 
       JOIN folios f ON f.fund_id = fu.id 
       JOIN transactions t ON t.folio_id = f.id 

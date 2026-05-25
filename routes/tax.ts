@@ -69,6 +69,69 @@ function getDefaultFy(): string {
 }
 
 /**
+ * Helper: getCurrentFy()
+ * Returns the current active Financial Year as a YYYY-YY string.
+ */
+function getCurrentFy(): string {
+  const today = new Date();
+  const year  = today.getFullYear();
+  const month = today.getMonth() + 1; // 1-indexed
+  if (month >= 4) {
+    return `${year}-${String(year + 1).slice(-2)}`;
+  }
+  return `${year - 1}-${String(year).slice(-2)}`;
+}
+
+interface AdvanceTaxInstallment {
+  installmentNumber: number;   // 1–4
+  dueDate: string;             // YYYY-MM-DD
+  cumulativePercent: number;   // 15, 45, 75, 100
+  cumulativeAmount: number;    // cumulativePercent/100 * estimatedAnnualTax
+  dueAmount: number;           // this installment only (delta from previous)
+  isPastDue: boolean;          // dueDate < today
+  isCurrentInstallment: boolean; // true on the first upcoming (not-yet-past-due) installment
+}
+
+/**
+ * Helper: buildInstallments()
+ * Generates the 4 advance tax installment slots.
+ */
+function buildInstallments(
+  estimatedAnnualTax: number,
+  fyStartYear: number,
+  today: Date
+): AdvanceTaxInstallment[] {
+  const schedule = [
+    { n: 1, percent: 15,  dueDate: `${fyStartYear}-06-15` },
+    { n: 2, percent: 45,  dueDate: `${fyStartYear}-09-15` },
+    { n: 3, percent: 75,  dueDate: `${fyStartYear}-12-15` },
+    { n: 4, percent: 100, dueDate: `${fyStartYear + 1}-03-15` },
+  ];
+
+  let foundCurrent = false;
+  return schedule.map((slot, idx) => {
+    const cumulativeAmount = (slot.percent / 100) * estimatedAnnualTax;
+    const prevCumulative   = idx === 0
+      ? 0
+      : (schedule[idx - 1].percent / 100) * estimatedAnnualTax;
+    const dueAmount        = cumulativeAmount - prevCumulative;
+    const isPastDue        = slot.dueDate < today.toISOString().slice(0, 10);
+    const isCurrentInstallment = !isPastDue && !foundCurrent;
+    if (isCurrentInstallment) foundCurrent = true;
+    return {
+      installmentNumber: slot.n,
+      dueDate: slot.dueDate,
+      cumulativePercent: slot.percent,
+      cumulativeAmount: Math.round(cumulativeAmount * 100) / 100,
+      dueAmount: Math.round(dueAmount * 100) / 100,
+      isPastDue,
+      isCurrentInstallment,
+    };
+  });
+}
+
+
+/**
  * GET /api/tax/pans
  */
 router.get('/pans', (req, res) => {
@@ -489,6 +552,134 @@ router.get('/simulate', async (req, res) => {
     });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /api/tax/advance-tax
+ */
+router.get('/advance-tax', async (req, res) => {
+  const pan = req.query.pan as string;
+  if (!pan) {
+    return res.status(400).json({ error: 'PAN is required' });
+  }
+
+  const MODULE_ADV = 'TAX_ADVANCE';
+  try {
+    log('app', 'INFO', MODULE_ADV, `Advance tax estimate for PAN: ${pan}`);
+
+    // STEP 1 — Determine the current FY:
+    const fyQuery = req.query.fy as string | undefined;
+    const currentFy = fyQuery && fyQuery.trim() !== '' ? fyQuery : getCurrentFy();
+    const { fyStart, fyEnd } = getFyBounds(currentFy);
+    const fyStartYear = parseInt(currentFy.split('-')[0]);
+
+    // Fetch investor name
+    const investor = db.prepare('SELECT name FROM investors WHERE pan = ?').get(pan) as { name: string } | undefined;
+    if (!investor) {
+      return res.status(404).json({ error: `Investor with PAN ${pan} not found` });
+    }
+
+    // STEP 2 — Fetch all folios for this PAN:
+    const folios = db.prepare(`
+      SELECT f.id, f.folio_number, f.fund_id, fu.name as fund_name, fu.isin, fu.category, fu.asset_class 
+      FROM folios f 
+      JOIN funds fu ON f.fund_id = fu.id 
+      WHERE f.pan = ?
+    `).all(pan) as Array<{ id: string, folio_number: string, fund_id: string, fund_name: string, isin: string, category: string, asset_class: string }>;
+
+    if (folios.length === 0) {
+      const today = new Date();
+      const installments = buildInstallments(0, fyStartYear, today);
+      const paidSoFarVal = parseFloat(req.query.paidSoFar as string) || 0;
+      return res.json({
+        currentFy,
+        estimatedAnnualTax: 0,
+        realisedTax: {
+          netSTCG: 0,
+          netLTCG: 0,
+          estimatedSTCGTax: 0,
+          estimatedLTCGTax: 0,
+          totalTax: 0,
+        },
+        paidSoFar: paidSoFarVal,
+        totalStillDue: 0,
+        installments,
+      });
+    }
+
+    // STEP 3 — Bulk-fetch all transactions for those folioIds in one query:
+    const allTxns = db.prepare(`
+      SELECT t.date, t.transaction_type, t.units, t.amount, t.nav, t.folio_id 
+      FROM transactions t 
+      WHERE t.folio_id IN (SELECT id FROM folios WHERE pan = ?) 
+      ORDER BY t.date ASC
+    `).all(pan) as any[];
+
+    // Partition into Map<folioId, txn[]>
+    const txnMap = new Map<string, any[]>();
+    for (const txn of allTxns) {
+      if (!txnMap.has(txn.folio_id)) {
+        txnMap.set(txn.folio_id, []);
+      }
+      txnMap.get(txn.folio_id)!.push(txn);
+    }
+
+    // STEP 4 — Call computeCapitalGains() per folio, then aggregatePanGains(),
+    // passing fyStart and fyEnd exactly as GET /api/tax/capital-gains does.
+    const folioGains: FolioCapitalGains[] = [];
+    for (const f of folios) {
+      const txns = txnMap.get(f.id) || [];
+      const result = computeCapitalGains(
+        f.id,
+        f.folio_number,
+        f.fund_name,
+        f.isin,
+        f.category,
+        f.asset_class || '',
+        txns,
+        navOnDate,
+        fyStart,
+        fyEnd
+      );
+      
+      // Skip if no sells in FY
+      if (result.matchedLots.length > 0) {
+        folioGains.push(result);
+      }
+    }
+
+    const summary = aggregatePanGains(pan, investor.name, folioGains);
+
+    // STEP 5 — Extract estimated tax from the summary:
+    const estimatedAnnualTax = (summary.estimatedSTCGTax ?? 0) + (summary.estimatedLTCGTax ?? 0);
+
+    // STEP 6 — Parse paidSoFar:
+    const paidSoFar = parseFloat(req.query.paidSoFar as string) || 0;
+    const totalStillDue = Math.max(0, estimatedAnnualTax - paidSoFar);
+
+    // STEP 7 — Build installments:
+    const today = new Date();
+    const installments = buildInstallments(estimatedAnnualTax, fyStartYear, today);
+
+    // STEP 8 — Build and return response:
+    return res.json({
+      currentFy,
+      estimatedAnnualTax,
+      realisedTax: {
+        netSTCG:          summary.totalSTCG,
+        netLTCG:          summary.totalLTCG,
+        estimatedSTCGTax: summary.estimatedSTCGTax,
+        estimatedLTCGTax: summary.estimatedLTCGTax,
+        totalTax:         estimatedAnnualTax,
+      },
+      paidSoFar,
+      totalStillDue,
+      installments,
+    });
+  } catch (err: any) {
+    log('app', 'ERROR', MODULE_ADV, `Failed: ${err}`);
+    return res.status(500).json({ error: err.message });
   }
 });
 

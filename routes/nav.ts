@@ -5,6 +5,20 @@ import { CONFIG } from '../lib/config.ts';
 
 const router = express.Router();
 
+function deriveSimpleName(cleanName: string): string {
+  if (!cleanName) return '';
+  let s = cleanName.trim();
+  // Remove parenthetical qualifiers
+  s = s.replace(/\s*\(\s*(?:erstwhile|formerly\s+known\s+as|direct)\b[^)]*\)/gi, '');
+  // Strip from first dash + plan/option keyword
+  s = s.replace(/\s*-+\s*(?:direct|regular|eco|growth|idcw|cumulative|payout)\b.*$/gi, '');
+  // Strip space-separated plan/option without dash
+  s = s.replace(/\s+(?:direct|regular)\s+(?:plan|growth).*$/gi, '');
+  // Cleanup trailing dashes and whitespace
+  s = s.replace(/[-–\s]+$/, '').trim();
+  return s;
+}
+
 const MONTH_MAP: Record<string, string> = {
   Jan: '01', Feb: '02', Mar: '03', Apr: '04', May: '05', Jun: '06',
   Jul: '07', Aug: '08', Sep: '09', Oct: '10', Nov: '11', Dec: '12'
@@ -159,6 +173,7 @@ router.post('/fetch-nav', async (req, res) => {
 router.post('/nav/backfill', async (req, res) => {
   const funds = db.prepare(`
     SELECT f.id, f.name, f.isin, f.amfi_code, f.nav_history_fetched,
+           f.clean_name, f.simple_name,
            MAX(nh.nav_date) as last_nav_date
     FROM funds f
     LEFT JOIN nav_history nh ON nh.isin = f.isin
@@ -184,7 +199,7 @@ router.post('/nav/backfill', async (req, res) => {
         lastDate.setHours(0, 0, 0, 0);
         const gap = Math.floor((today.getTime() - lastDate.getTime()) / (1000 * 60 * 60 * 24));
         
-        if (gap <= 1) {
+        if (gap <= 1 && fund.clean_name && fund.simple_name) {
           log('nav', 'INFO', 'BACKFILL', `Up to date: ${fund.name} (last: ${fund.last_nav_date})`);
           up_to_date++;
           continue;
@@ -235,11 +250,15 @@ router.post('/nav/backfill', async (req, res) => {
 
         db.prepare(`
           UPDATE funds SET
-            fund_house     = COALESCE(NULLIF(fund_house, ''),     ?),
-            scheme_type    = COALESCE(NULLIF(scheme_type, ''),    ?),
-            scheme_sub_cat = COALESCE(NULLIF(scheme_sub_cat, ''), ?),
-            asset_class    = COALESCE(NULLIF(asset_class, ''),    ?),
-            isin_idcw      = COALESCE(NULLIF(isin_idcw, ''),      ?)
+            fund_house      = COALESCE(NULLIF(fund_house, ''),      ?),
+            scheme_type     = COALESCE(NULLIF(scheme_type, ''),     ?),
+            scheme_sub_cat  = COALESCE(NULLIF(scheme_sub_cat, ''),  ?),
+            asset_class     = COALESCE(NULLIF(asset_class, ''),     ?),
+            isin_idcw       = COALESCE(NULLIF(isin_idcw, ''),       ?),
+            clean_name      = COALESCE(NULLIF(clean_name, ''),      ?),
+            scheme_category = COALESCE(NULLIF(scheme_category, ''), ?),
+            isin            = COALESCE(NULLIF(isin, ''),            ?),
+            simple_name     = COALESCE(NULLIF(simple_name, ''),     ?)
           WHERE id = ?
         `).run(
           data.meta?.fund_house        ?? '',
@@ -247,6 +266,10 @@ router.post('/nav/backfill', async (req, res) => {
           schemeSubCat,
           assetClass,
           data.meta?.isin_div_reinvestment ?? '',
+          data.meta?.scheme_name       ?? '',
+          data.meta?.scheme_category   ?? '',
+          data.meta?.isin_growth       ?? '',
+          deriveSimpleName(data.meta?.scheme_name ?? ''),
           fund.id
         );
 

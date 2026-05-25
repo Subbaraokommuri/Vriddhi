@@ -12,6 +12,8 @@ export interface Folio {
   folio_number: string;
   fund_id: string;
   fund_name: string;
+  clean_name?: string;
+  simple_name?: string;
   category: string;
   currentUnits: number;
   investedAmount: number;
@@ -39,6 +41,8 @@ export interface Transaction {
   folio_id: string;
   folio_number: string;
   fund_name: string;
+  clean_name?: string;
+  simple_name?: string;
   date: string;
   transaction_type: 'buy' | 'sell' | 'dividend';
   amount: number;
@@ -148,8 +152,12 @@ export interface FolioXirr {
   folioId: string;
   folioNumber: string;
   pan: string;
+  investorName?: string;
+  amfiCode?: string;
   fundId: string;
   fundName: string;
+  clean_name: string;
+  simple_name: string;
   fundHouse: string;
   schemeSubCat: string;
   assetClass: string;
@@ -170,6 +178,61 @@ export interface FolioXirr {
   isActive: boolean;
 }
 
+export interface FundGroupXirr {
+  fundId: string;
+  fundName: string;
+  clean_name: string;
+  simple_name: string;
+  fundHouse: string;
+  isin: string;
+  category: string;
+  plan: string;
+  fundOption: string;
+  assetClass: string;
+  schemeSubCat: string;
+  totalUnits: number;
+  totalInvested: number;
+  totalCurrentValue: number;
+  gainAmount: number;
+  gainPercent: number;
+  groupXirr: number | null;
+  groupXirrWarning: boolean;
+  folioCount: number;
+  folios: FolioXirr[];
+}
+
+export interface FolioBenchmarkXirrResult {
+  folioId: string;
+  portfolioXirr: number | null;
+  portfolioXirrWarning: boolean;
+  benchmarkXirr: number | null;
+  benchmarkXirrWarning: boolean;
+  alpha: number | null;   // portfolioXirr - benchmarkXirr; null if either is null
+}
+
+export interface GroupBenchmarkXirrResult {
+  fundId: string;
+  portfolioXirr: number | null;
+  portfolioXirrWarning: boolean;
+  benchmarkXirr: number | null;
+  benchmarkXirrWarning: boolean;
+  alpha: number | null;
+}
+
+export interface OverallBenchmarkXirrResult {
+  portfolioXirr: number | null;
+  portfolioXirrWarning: boolean;
+  benchmarkXirr: number | null;
+  benchmarkXirrWarning: boolean;
+  alpha: number | null;
+}
+
+export interface BenchmarkXirrResponse {
+  folioResults: FolioBenchmarkXirrResult[];
+  groupResults: GroupBenchmarkXirrResult[];
+  overallResult: OverallBenchmarkXirrResult;
+}
+
 export interface DashboardStats {
   totalFolios: number;
   activeFolios: number;
@@ -178,10 +241,14 @@ export interface DashboardStats {
   regularCount: number;
   bestReturnFund: {
     name: string;
+    clean_name?: string;
+    simple_name?: string;
     gainPercent: number;
   } | null;
   highestLossFund: {
     name: string;
+    clean_name?: string;
+    simple_name?: string;
     absoluteLoss: number;
   } | null;
   avgHoldingAgeYears: number;
@@ -280,3 +347,37 @@ export interface TaxPan {
   pan: string;
   name: string;
 }
+
+export interface AdvanceTaxInstallment {
+  installmentNumber: number;   // 1–4
+  dueDate: string;             // YYYY-MM-DD
+  cumulativePercent: number;   // 15, 45, 75, 100
+  cumulativeAmount: number;    // cumulativePercent/100 * estimatedAnnualTax
+  dueAmount: number;           // this installment only (delta from previous)
+  isPastDue: boolean;          // dueDate < today
+  isCurrentInstallment: boolean; // true on the first upcoming (not-yet-past-due) installment
+}
+
+export interface AdvanceTaxEstimate {
+  currentFy: string;
+  estimatedAnnualTax: number;
+  realisedTax: {
+    netSTCG: number;
+    netLTCG: number;
+    estimatedSTCGTax: number;
+    estimatedLTCGTax: number;
+    totalTax: number;
+  };
+  paidSoFar: number;
+  totalStillDue: number;
+  installments: AdvanceTaxInstallment[];
+}
+
+export interface OverallXirrResult {
+  xirr: number | null;
+  xirrWarning: boolean;
+  totalCurrentValue: number;
+  folioCount: number;
+}
+
+

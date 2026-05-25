@@ -333,6 +333,19 @@ export function runMigrations(db: Database.Database) {
     db.exec("ALTER TABLE funds ADD COLUMN isin_idcw TEXT DEFAULT ''");
   }
 
+  const fundsColsV2 = db.prepare("PRAGMA table_info(funds)").all() as any[];
+  if (!fundsColsV2.find(c => c.name === 'clean_name')) {
+    db.exec("ALTER TABLE funds ADD COLUMN clean_name TEXT DEFAULT ''");
+  }
+  if (!fundsColsV2.find(c => c.name === 'scheme_category')) {
+    db.exec("ALTER TABLE funds ADD COLUMN scheme_category TEXT DEFAULT ''");
+  }
+
+  const fundsColsV3 = db.prepare("PRAGMA table_info(funds)").all() as any[];
+  if (!fundsColsV3.find(c => c.name === 'simple_name')) {
+    db.exec("ALTER TABLE funds ADD COLUMN simple_name TEXT DEFAULT ''");
+  }
+
   const foliosColsMigrate = db.prepare("PRAGMA table_info(folios)").all() as any[];
   if (!foliosColsMigrate.find(c => c.name === 'kyc_ok')) {
     db.exec("ALTER TABLE folios ADD COLUMN kyc_ok INTEGER DEFAULT 0");

@@ -25,7 +25,7 @@ import {
   ComposedChart,
   ReferenceLine
 } from 'recharts';
-import { cn, formatCurrency, formatIndianNumber, formatPercent, formatFundName } from '../lib/utils';
+import { cn, formatCurrency, formatIndianNumber, formatPercent } from '../lib/utils';
 import { Summary, Folio, InvestmentTrendPoint, RelativePerformanceResult, DashboardStats } from '../lib/types';
 import { 
   // API imports removed - now prop driven
@@ -50,13 +50,13 @@ export function Dashboard({ summary, folios, dashboardPerf, investmentTrend, das
       .sort((a, b) => b.currentValue - a.currentValue);
 
     if (activeFolios.length <= 5) {
-      return activeFolios.map(f => ({ name: formatFundName(f.fund_name), value: f.currentValue }));
+      return activeFolios.map(f => ({ name: f.simple_name || f.clean_name || f.fund_name, value: f.currentValue, hoverTitle: f.clean_name || f.fund_name }));
     }
 
-    const top5 = activeFolios.slice(0, 5).map(f => ({ name: formatFundName(f.fund_name), value: f.currentValue }));
+    const top5 = activeFolios.slice(0, 5).map(f => ({ name: f.simple_name || f.clean_name || f.fund_name, value: f.currentValue, hoverTitle: f.clean_name || f.fund_name }));
     const othersValue = activeFolios.slice(5).reduce((sum, f) => sum + f.currentValue, 0);
     
-    return [...top5, { name: 'Others', value: othersValue }];
+    return [...top5, { name: 'Others', value: othersValue, hoverTitle: 'Others' }];
   }, [folios]);
 
   const PIE_COLORS = ['#01696f', '#0891b2', '#7c3aed', '#d97706', '#dc2626', '#94a3b8'];
@@ -172,7 +172,7 @@ export function Dashboard({ summary, folios, dashboardPerf, investmentTrend, das
                         className="w-3 h-3 rounded-full flex-shrink-0"
                         style={{ backgroundColor: PIE_COLORS[index % PIE_COLORS.length] }}
                       />
-                      <span className="text-xs text-slate-600 truncate" title={entry.name}>
+                      <span className="text-xs text-slate-600 truncate" title={entry.hoverTitle}>
                         {entry.name.length > 28 ? `${entry.name.substring(0, 28)}…` : entry.name}
                       </span>
                     </div>
@@ -212,12 +212,17 @@ export function Dashboard({ summary, folios, dashboardPerf, investmentTrend, das
             {/* Card 3: BEST RETURN FUND */}
             <div className="bg-white rounded-2xl shadow-sm border border-slate-200 px-6 py-4">
               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Best Return Fund</p>
-              <p className={cn(
-                "text-sm font-bold",
-                dashboardStats?.bestReturnFund ? "text-emerald-600" : "text-slate-800",
-                blur
-              )}>
-                {dashboardStats?.bestReturnFund ? dashboardStats.bestReturnFund.name : '—'}
+              <p 
+                className={cn(
+                  "text-sm font-bold",
+                  dashboardStats?.bestReturnFund ? "text-emerald-600" : "text-slate-800",
+                  blur
+                )}
+                title={dashboardStats?.bestReturnFund ? (dashboardStats.bestReturnFund.clean_name || dashboardStats.bestReturnFund.name) : undefined}
+              >
+                {dashboardStats?.bestReturnFund 
+                  ? (dashboardStats.bestReturnFund.simple_name || dashboardStats.bestReturnFund.clean_name || dashboardStats.bestReturnFund.name) 
+                  : '—'}
               </p>
               <p className="text-xs text-slate-400 mt-0.5">
                 {dashboardStats?.bestReturnFund
@@ -229,14 +234,17 @@ export function Dashboard({ summary, folios, dashboardPerf, investmentTrend, das
             {/* Card 4: HIGHEST LOSS FUND */}
             <div className="bg-white rounded-2xl shadow-sm border border-slate-200 px-6 py-4">
               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Highest Loss Fund</p>
-              <p className={cn(
-                "text-sm font-bold",
-                dashboardStats?.highestLossFund ? "text-rose-600" : "text-slate-800",
-                dashboardStats?.highestLossFund ? "" : (dashboardStats ? "" : "italic text-slate-400"),
-                blur
-              )}>
+              <p 
+                className={cn(
+                  "text-sm font-bold",
+                  dashboardStats?.highestLossFund ? "text-rose-600" : "text-slate-800",
+                  dashboardStats?.highestLossFund ? "" : (dashboardStats ? "" : "italic text-slate-400"),
+                  blur
+                )}
+                title={dashboardStats?.highestLossFund ? (dashboardStats.highestLossFund.clean_name || dashboardStats.highestLossFund.name) : undefined}
+              >
                 {dashboardStats?.highestLossFund
-                  ? dashboardStats.highestLossFund.name
+                  ? (dashboardStats.highestLossFund.simple_name || dashboardStats.highestLossFund.clean_name || dashboardStats.highestLossFund.name)
                   : (dashboardStats ? 'All funds in profit 🎉' : '—')}
               </p>
               {dashboardStats?.highestLossFund && (
