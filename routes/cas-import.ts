@@ -38,7 +38,19 @@ router.post('/preview', upload.single('file'), async (req, res) => {
     // Generate HTML and checks
     const html = generateHtml(data);
     const { results } = runChecks(data);
-    const ok = results.every(r => r.failures.length === 0);
+    
+    const HARD_ERROR_CHECKS = [
+      'ISIN Format Validation',
+      'Unit Balance Match',
+      'Running Balance Continuity',
+      'No Negative Mid-Series Balance',
+      'No Missing Fields',
+      'No Zero NAV',
+      'Cost Value Cross-check',
+    ];
+    const ok = results
+      .filter(r => HARD_ERROR_CHECKS.includes(r.name))
+      .every(r => r.failures.length === 0);
 
     res.json({
       html,
@@ -96,6 +108,15 @@ router.post('/confirm', upload.single('file'), async (req, res) => {
           name=excluded.name, email=excluded.email,
           mobile=excluded.mobile, updated_at=excluded.updated_at
       `);
+
+      const existingTxnKeys = new Set<string>(
+        db.prepare(`
+          SELECT folio_id || '|' || date || '|' || transaction_type || '|' ||
+                 COALESCE(CAST(ROUND(amount * 100) AS INTEGER), 0) || '|' ||
+                 COALESCE(CAST(ROUND(units * 10000) AS INTEGER), 0) AS key
+          FROM transactions
+        `).all().map((r: any) => r.key)
+      );
 
       // Collect unique pan → investor_name pairs across all folios
       const uniquePans = new Map<string, string>();
@@ -192,6 +213,12 @@ router.post('/confirm', upload.single('file'), async (req, res) => {
           `);
 
           for (const txn of scheme.transactions) {
+            const crossKey = `${folio_id}|${txn.date}|${txn.type}|${Math.round((txn.amount || 0) * 100)}|${Math.round((txn.units || 0) * 10000)}`;
+            if (existingTxnKeys.has(crossKey)) {
+              skipped_transactions++;
+              continue;
+            }
+
             const result = insertTxn.run(
               uuidv4(),
               folio_id,

@@ -3,7 +3,9 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 
-// --- Types ---
+// ============================================================================
+// SECTION 1 — Types & interfaces
+// ============================================================================
 
 export interface CasTransaction {
   date: string;           // ISO: "2019-11-28"
@@ -43,6 +45,7 @@ export interface CasFolio {
 }
 
 export interface CasParseResult {
+  source: 'CAMS' | 'KFINTECH';
   parsed_date: string;
   cas_period: { from: string | null; to: string | null };
   investor: { name: string | null; email: string | null; mobile: string | null };
@@ -61,53 +64,21 @@ export interface CasParseResult {
   };
 }
 
-// --- Regex Definitions ---
+// ============================================================================
+// SECTION 2 — Shared helpers & regex definitions
+// ============================================================================
 
-const RE_DATE = /^\s*(\d{2}-[A-Z][a-z]{2}-\d{4})\s+(.*)/i;
-const RE_FOLIO = /Folio No:\s*([\d\s./eE+]+)\s+PAN:\s*(\S+)/i;
-const RE_KYC = /KYC:\s*(\w+)/i;
-const RE_ISIN_TAG = /ISIN:\s*(INF[A-Z0-9]*)/i;
-const RE_ISIN_BARE = /^(INF[A-Z0-9]+)/i;
-const RE_ISIN_VALID = /^INF[A-Z0-9]{9}$/;
-const RE_NUM = /\([\d,]+\.[\d]+\)|[\d,]+\.[\d]+/g;
-const RE_CLOSING = /Closing Unit Balance:\s*([\d,.]+).*?Total Cost Value:\s*([\d,.]+).*?Market Value on.*?INR\s*([\d,.]+)/i;
-const RE_REGISTRAR = /Registrar\s*:\s*(CAMS|KFINTECH)?/i;
-const RE_ADVISOR = /\(Advisor:\s*([^)]+)\)/i;
-const RE_PERIOD = /(\d{2}-[A-Z][a-z]{2}-\d{4})\s+To\s+(\d{2}-[A-Z][a-z]{2}-\d{4})/i;
-const RE_EMAIL = /Email\s+Id:\s*(\S+@\S+)/i;
-const RE_MOBILE = /Mobile:\s*\+?([\d.]+(?:[eE][+\-]?\d+)?)/;
+const RE_DATE        = /^\s*(\d{2}-[A-Z][a-z]{2}-\d{4})\s+(.*)/i;
+const RE_FOLIO       = /Folio No\s*:\s*([\d\s./eE+]+?)\s+PAN\s*:\s*(\S+)/i;
+const RE_KYC         = /KYC\s*:\s*(\w+)/i;
+const RE_ISIN_VALID  = /^INF[A-Z0-9]{9}$/;
+const RE_REGISTRAR   = /Registrar\s*:\s*(CAMS|KFINTECH)?/i;
+const RE_ADVISOR     = /\(Advisor:\s*([^)]+)\)/i;
+const RE_PERIOD      = /(\d{2}-[A-Z][a-z]{2}-\d{4})\s+To\s+(\d{2}-[A-Z][a-z]{2}-\d{4})/i;
+const RE_EMAIL       = /Email\s+Id:\s*(\S+@\S+)/i;
+const RE_MOBILE      = /Mobile\s*:\s*\+?([\d.]+(?:[eE][+\-]?\d+)?)/i;
 const RE_SUMMARY_ROW = /^\s{3,}(.+?)\s{3,}([\d,]+\.[\d]+)\s+([\d,]+\.[\d]+)\s*$/;
-
-const SKIP_PATTERNS = [
-  /\*\*\*/,
-  /STT Paid/i,
-  /Stamp Duty/i,
-  /TDS Deducted/i,
-  /CAMSCASWS/,
-  /Page\s+\d+\s+of\s+\d+/i,
-  /^Date\s+Transaction/i,
-  /Nominee\s+\d:/i,
-  /Opening Unit Balance/i,
-  /Closing Unit Balance/i,
-  /Consolidated Account Statement/,
-  /KYC:\s*OK/i,
-  /^WEF\s/i,
-  /ENTRY LOAD|EXIT LOAD/i,
-  /NAV on \d/i,
-  /Total Cost Value/i,
-  /Market Value on/i,
-  /^\s*\(INR\)/i,
-  /PORTFOLIO SUMMARY/i,
-  /Cost Value.*Market Value/i,
-  /^\s+Mutual Fund\s+/i,
-];
-
-// --- Helpers ---
-
-function shouldSkip(line: string): boolean {
-  const s = line.trim();
-  return !s || SKIP_PATTERNS.some(p => p.test(s));
-}
+const RE_ISIN_BARE   = /^(INF[A-Z0-9]+)/i;
 
 function parseNumber(s: string | null): number | null {
   if (!s) return null;
@@ -134,12 +105,6 @@ function toIso(s: string): string {
   return s.trim();
 }
 
-function extractNums(text: string): (number | null)[] {
-  const matches = text.match(RE_NUM);
-  if (!matches) return [];
-  return matches.map(m => parseNumber(m));
-}
-
 function fixFolio(raw: string): string {
   raw = raw.replace(/\s+/g, "");
   const parts = raw.split("/");
@@ -151,7 +116,13 @@ function fixFolio(raw: string): string {
     } catch { }
     return p;
   });
-  return fixed.join("/");
+  let result = fixed.join("/");
+  // CAMS appends "/0" for folios with no sub-account; KFin omits it.
+  // This must be in fixFolio() so BOTH parsers produce the same folio key.
+  if (result.endsWith("/0")) {
+    result = result.slice(0, -2);
+  }
+  return result;
 }
 
 function detectPlan(name: string): "Direct" | "Regular" | "Unknown" {
@@ -175,7 +146,58 @@ function classifyTxn(desc: string): "buy" | "sell" | null {
   return null;
 }
 
-function extractIsin(line: string, nextLine: string = ""): [string | null, string, string, boolean] {
+function detectSource(lines: string[]): 'CAMS' | 'KFINTECH' {
+  for (const line of lines.slice(0, 200)) {
+    if (/KFINCASWS/i.test(line)) return 'KFINTECH';
+    if (/CAMSCASWS/i.test(line)) return 'CAMS';
+  }
+  return 'CAMS'; // safe default
+}
+
+// ============================================================================
+// SECTION 3a — parseCamsText(rawLines) — CAMS SPECIFIC BLOCK
+// ============================================================================
+
+const RE_ISIN_TAG_CAMS  = /ISIN:\s*(INF[A-Z0-9]*)/i;
+const RE_NUM_CAMS       = /\([\d,]+\.[\d]+\)|[\d,]+\.[\d]+/g;
+const RE_CLOSING_CAMS   = /Closing Unit Balance:\s*([\d,.]+).*?Total Cost Value:\s*([\d,.]+).*?Market Value on.*?INR\s*([\d,.]+)/i;
+const SKIP_PATTERNS_CAMS = [
+  /\*\*\*/,
+  /STT Paid/i,
+  /Stamp Duty/i,
+  /TDS Deducted/i,
+  /CAMSCASWS/,
+  /Page\s+\d+\s+of\s+\d+/i,
+  /^Date\s+Transaction/i,
+  /Nominee\s+\d:/i,
+  /Opening Unit Balance/i,
+  /Closing Unit Balance/i,
+  /Consolidated Account Statement/,
+  /KYC:\s*OK/i,
+  /^WEF\s/i,
+  /ENTRY LOAD|EXIT LOAD/i,
+  /NAV on \d/i,
+  /Total Cost Value/i,
+  /Market Value on/i,
+  /^\s*\(INR\)/i,
+  /PORTFOLIO SUMMARY/i,
+  /Cost Value.*Market Value/i,
+  /^\s+Mutual Fund\s+/i,
+];
+
+function shouldSkipCams(line: string): boolean {
+  const s = line.trim();
+  return !s || SKIP_PATTERNS_CAMS.some(p => p.test(s));
+}
+
+function extractNumsCams(text: string): (number | null)[] {
+  RE_NUM_CAMS.lastIndex = 0;
+  const matches = text.match(RE_NUM_CAMS);
+  if (!matches) return [];
+  return matches.map(m => parseNumber(m));
+}
+
+function extractIsinCams(line: string, nextLine: string = ""): [string | null, string, string, boolean] {
   let registrar = "";
   const rm = line.match(RE_REGISTRAR);
   if (rm && rm[1]) registrar = rm[1].toUpperCase();
@@ -183,7 +205,7 @@ function extractIsin(line: string, nextLine: string = ""): [string | null, strin
   let fundName = line.split(/\s*-\s*ISIN:/i)[0];
   fundName = fundName.replace(RE_REGISTRAR, "").trim().replace(/-$/, "").trim();
 
-  const m = line.match(RE_ISIN_TAG);
+  const m = line.match(RE_ISIN_TAG_CAMS);
   if (m) {
     const isinRaw = m[1].trim();
     if (RE_ISIN_VALID.test(isinRaw)) return [isinRaw, fundName, registrar, false];
@@ -194,7 +216,7 @@ function extractIsin(line: string, nextLine: string = ""): [string | null, strin
 
   if (RE_REGISTRAR.test(line) && nextLine) {
     const ns = nextLine.trim();
-    const m2 = ns.match(RE_ISIN_TAG);
+    const m2 = ns.match(RE_ISIN_TAG_CAMS);
     if (m2) return [m2[1].slice(0, 12), fundName, registrar, true];
     const m3 = ns.match(RE_ISIN_BARE);
     if (m3) return [m3[1].slice(0, 12), fundName, registrar, true];
@@ -203,9 +225,7 @@ function extractIsin(line: string, nextLine: string = ""): [string | null, strin
   return [null, fundName, registrar, false];
 }
 
-// --- Main Parsing Logic ---
-
-export function parseCasText(lines: string[]): CasParseResult {
+function parseCamsText(lines: string[]): CasParseResult {
   const warnings: CasParseResult['warnings'] = [];
   const folios: CasFolio[] = [];
   const portfolioSummary: CasParseResult['portfolio_summary'] = [];
@@ -339,7 +359,7 @@ export function parseCasText(lines: string[]): CasParseResult {
     // Scheme header
     if (curFolio && RE_REGISTRAR.test(line) && !line.includes("Folio No")) {
       finishScheme();
-      const [isin, fundName, registrar, usedNxt] = extractIsin(line, nxt);
+      const [isin, fundName, registrar, usedNxt] = extractIsinCams(line, nxt);
       if (registrar) curFolio.registrar = registrar;
       const advM = line.match(RE_ADVISOR);
       const advisor = advM ? advM[1].trim() : "";
@@ -374,7 +394,7 @@ export function parseCasText(lines: string[]): CasParseResult {
     }
 
     // Closing balance line
-    const mc = line.match(RE_CLOSING);
+    const mc = line.match(RE_CLOSING_CAMS);
     if (mc && curScheme) {
       try { curScheme.stated_balance = parseFloat(mc[1].replace(/,/g, "")); } catch { }
       try { curScheme.stated_cost = parseFloat(mc[2].replace(/,/g, "")); } catch { }
@@ -383,7 +403,7 @@ export function parseCasText(lines: string[]): CasParseResult {
       continue;
     }
 
-    if (shouldSkip(line)) {
+    if (shouldSkipCams(line)) {
       i++;
       continue;
     }
@@ -393,21 +413,22 @@ export function parseCasText(lines: string[]): CasParseResult {
     if (md && curScheme) {
       const dateStr = md[1];
       let rest = md[2];
-      RE_NUM.lastIndex = 0;
-      if (!RE_NUM.test(rest) && !rest.trim().startsWith("***")) {
+      RE_NUM_CAMS.lastIndex = 0;
+      if (!RE_NUM_CAMS.test(rest) && !rest.trim().startsWith("***")) {
         const nl = nxt.trim();
         if (nl && !RE_DATE.test(nl)) {
           rest = rest + " " + nl;
           i++;
         }
       }
-      const nums = extractNums(rest);
+      const nums = extractNumsCams(rest);
       if (nums.length >= 4) {
         const amount = nums[nums.length - 4];
         const units = nums[nums.length - 3];
         const price = nums[nums.length - 2];
         const balance = nums[nums.length - 1];
-        const desc = rest.replace(RE_NUM, "").replace(/\s+/g, " ").trim().replace(/,$/, "");
+        RE_NUM_CAMS.lastIndex = 0;
+        const desc = rest.replace(RE_NUM_CAMS, "").replace(/\s+/g, " ").trim().replace(/,$/, "");
         let t = classifyTxn(desc);
         if (t === null) t = (units || 0) > 0 ? "buy" : "sell";
         curScheme.transactions.push({
@@ -430,6 +451,7 @@ export function parseCasText(lines: string[]): CasParseResult {
   const totalTransactions = allSchemes.reduce((acc, s) => acc + s.transactions.length, 0);
 
   return {
+    source: 'CAMS',
     parsed_date: new Date().toISOString().split('T')[0],
     cas_period: casPeriod,
     investor,
@@ -447,6 +469,380 @@ export function parseCasText(lines: string[]): CasParseResult {
       warnings_count: warnings.length
     }
   };
+}
+
+// ============================================================================
+// SECTION 3b — parseKFinText(rawLines) — KFINTECH SPECIFIC BLOCK [NEW]
+// ============================================================================
+
+const RE_ISIN_TAG_KFIN  = /ISIN\s*:\s*(INF[A-Z0-9]*)/i;
+const RE_NUM_KFIN       = /-[\d,]+\.[\d]+|\([\d,]+\.[\d]+\)|[\d,]+\.[\d]+/g;
+const RE_CLOSING_KFIN   = /Closing Unit Balance:\s*([\d,.]+).*?Total Cost Value\s*:(?:\s*INR)?\s*([\d,.]+).*?Market Value on.*?INR\s*([\d,.]+)/is;
+
+const SKIP_PATTERNS_KFIN = [
+  /\*\*\*/,
+  /STT Paid/i,
+  /Stamp Duty/i,
+  /TDS Deducted/i,
+  /KFINCASWS/,
+  /Page\s+\d+\s+of\s+\d+/i,
+  /^Date\s+Transaction/i,
+  /Nominee\s+\d\s*:/i,
+  /Opening Unit Balance/i,
+  /Closing Unit Balance/i,
+  /Consolidated Account Statement/,
+  /KYC\s*:\s*OK/i,
+  /^WEF\s/i,
+  /ENTRY LOAD|EXIT LOAD/i,
+  /Current Load Structure/i,
+  /NAV on \d/i,
+  /Total Cost Value/i,
+  /Market Value on/i,
+  /^\s*\(INR\)/i,
+  /PORTFOLIO SUMMARY/i,
+  /Cost Value.*Market Value/i,
+  /^\s+Mutual Fund\s+/i,
+  /Amount\s+Units\s*$/i,
+  /Price\s+Unit\s*$/i,
+  /\d{2}-[A-Z][a-z]{2}-\d{4}\s+To\s+\d{2}-[A-Z][a-z]{2}-\d{4}/i,
+];
+
+function shouldSkipKFin(line: string): boolean {
+  const s = line.trim();
+  if (!s) return true;
+  if (/^\d{2}-[A-Z][a-z]{2}-\d{4}\s*$/i.test(s)) return true;
+  return SKIP_PATTERNS_KFIN.some(p => p.test(s));
+}
+
+function extractNumsKFin(text: string): (number | null)[] {
+  RE_NUM_KFIN.lastIndex = 0;
+  const matches = text.match(RE_NUM_KFIN);
+  if (!matches) return [];
+  return matches.map(m => parseNumber(m));
+}
+
+function extractIsinKFin(line: string, nextLine: string = ''): [string | null, string, string, boolean] {
+  let registrar = '';
+  const rm = line.match(RE_REGISTRAR);
+  if (rm && rm[1]) registrar = rm[1].toUpperCase();
+
+  let isin: string | null = null;
+  let usedNxt = false;
+
+  // Step 1: try ISIN tag on this line
+  const m = line.match(RE_ISIN_TAG_KFIN);
+  if (m) {
+    const isinRaw = m[1].trim();
+    if (RE_ISIN_VALID.test(isinRaw)) {
+      isin = isinRaw;
+    } else {
+      const c = nextLine.trim().match(/^(INF[A-Z0-9]{9})/i);
+      if (c) {
+        isin = c[1];
+        usedNxt = true;
+      } else if (isinRaw) {
+        const c2 = nextLine.trim().match(/^([A-Z0-9]+)/i);
+        if (c2) {
+          isin = (isinRaw + c2[1]).slice(0, 12);
+          usedNxt = true;
+        } else {
+          isin = isinRaw;
+        }
+      }
+    }
+  }
+
+  // Step 2: fallback bare ISIN regex anywhere in line or nextLine
+  if (!isin || !RE_ISIN_VALID.test(isin)) {
+    const fb = line.match(/\b(INF[A-Z0-9]{9})\b/i);
+    if (fb) isin = fb[1];
+  }
+
+  // Step 3: extract fundName
+  let fundName = line
+    .replace(/\s*\(Advisor:[^)]*\)/gi, '')
+    .split(/\s*-\s*ISIN\s*:/i)[0]
+    .replace(RE_REGISTRAR, '')
+    .replace(/\s*\bINF[A-Z0-9]+\b.*/i, '')
+    .trim()
+    .replace(/-$/, '')
+    .trim();
+
+  return [isin, fundName, registrar, usedNxt];
+}
+
+function needsContinuation(line: string): boolean {
+  const m = line.match(RE_ISIN_TAG_KFIN);
+  if (!m) return true;
+  return !RE_ISIN_VALID.test(m[1].trim() || '');
+}
+
+function parseKFinText(lines: string[]): CasParseResult {
+  const warnings: CasParseResult['warnings'] = [];
+  const folios: CasFolio[] = [];
+  const portfolioSummary: CasParseResult['portfolio_summary'] = [];
+  const investor: CasParseResult['investor'] = { name: null, email: null, mobile: null };
+  const casPeriod: CasParseResult['cas_period'] = { from: null, to: null };
+
+  const raw = lines.map(l => l.replace(/\n$/, "").replace(/\r$/, ""));
+  const n = raw.length;
+
+  // Pass 1: investor header
+  let nameFound = false;
+  for (let i = 0; i < Math.min(30, n); i++) {
+    const line = raw[i];
+    const mPeriod = line.match(RE_PERIOD);
+    if (mPeriod && !casPeriod.from) {
+      casPeriod.from = mPeriod[1];
+      casPeriod.to = mPeriod[2];
+    }
+    const mEmail = line.match(RE_EMAIL);
+    if (mEmail && !investor.email) investor.email = mEmail[1].trim();
+    const mMobile = line.match(RE_MOBILE);
+    if (mMobile && !investor.mobile) {
+      try {
+        investor.mobile = "+" + parseFloat(mMobile[1]).toFixed(0);
+      } catch {
+        investor.mobile = "+" + mMobile[1];
+      }
+    }
+    if (investor.email && !nameFound) {
+      const left = line.slice(0, 72).trim();
+      if (left && /^[A-Za-z][A-Za-z0-9 .]+$/.test(left) && left.length > 4 && left.length < 50 && !RE_EMAIL.test(left)) {
+        investor.name = left;
+        nameFound = true;
+      }
+    }
+  }
+
+  // Pass 2: portfolio summary
+  let inSummary = false;
+  for (const line of raw) {
+    if (line.includes("PORTFOLIO SUMMARY")) {
+      inSummary = true;
+      continue;
+    }
+    if (inSummary) {
+      if (RE_FOLIO.test(line)) break;
+      if (line.trim().startsWith("Total")) {
+        inSummary = false;
+        continue;
+      }
+      const m = line.match(RE_SUMMARY_ROW);
+      if (m && !m[1].includes("Cost Value")) {
+        portfolioSummary.push({
+          amc: m[1].trim(),
+          cost: parseNumber(m[2]) || 0,
+          market_value: parseNumber(m[3]) || 0
+        });
+      }
+    }
+  }
+
+  // Pass 3: state machine
+  let curFolio: CasFolio | null = null;
+  let curScheme: CasScheme | null = null;
+
+  const finishScheme = () => {
+    if (!curScheme || !curFolio) return;
+    const t = curScheme.transactions;
+    if (t.length > 0) {
+      const cb = parseFloat((t[t.length - 1].balance || 0).toFixed(4));
+      const sb = parseFloat((curScheme.stated_balance || 0).toFixed(4));
+      curScheme.computed_balance = cb;
+      const diff = Math.abs(cb - sb);
+      curScheme.balance_mismatch = diff > 0.002;
+      if (diff > 0.002) {
+        warnings.push({
+          folio: curFolio.folio,
+          isin: curScheme.isin,
+          type: "balance_mismatch",
+          detail: `computed=${cb.toFixed(4)} stated=${sb.toFixed(4)} diff=${diff.toFixed(4)}`
+        });
+      }
+    }
+    const net = t.reduce((acc, x) => acc + (x.amount || 0), 0);
+    curScheme.net_cost = parseFloat(net.toFixed(2));
+    curFolio.schemes.push(curScheme);
+    curScheme = null;
+  };
+
+  const finishFolio = () => {
+    finishScheme();
+    if (curFolio) {
+      folios.push(curFolio);
+      curFolio = null;
+    }
+  };
+
+  let i = 0;
+  while (i < n) {
+    const line = raw[i];
+    const nxt = i + 1 < n ? raw[i + 1] : "";
+
+    // Folio header
+    const mf = line.match(RE_FOLIO);
+    if (mf) {
+      finishFolio();
+      const folioFull = fixFolio(mf[1]);
+      const pan = mf[2];
+      const kycM = line.match(RE_KYC);
+      const kycOk = !!(kycM && kycM[1].toUpperCase() === "OK");
+      let invName = "";
+      if (i + 1 < n) {
+        const nl = raw[i + 1].trim();
+        if (nl && /^[A-Za-z][A-Za-z0-9 .]+$/.test(nl) && nl.length < 60) {
+          invName = nl;
+        }
+      }
+      curFolio = {
+        folio: folioFull.split("/")[0],
+        folio_full: folioFull,
+        pan: pan,
+        kyc_ok: kycOk,
+        investor_name: invName,
+        registrar: "KFINTECH",
+        schemes: []
+      };
+      i++;
+      continue;
+    }
+
+    // Scheme header
+    if (curFolio && RE_REGISTRAR.test(line) && !line.includes('Folio No')) {
+      finishScheme();
+      let schemeLine = line;
+      let extraSkip = 0;
+
+      // KFIN WRAP FIX: merge with next line when no valid ISIN on current line
+      if (needsContinuation(line) && nxt) {
+        const nxtStripped = nxt.trim();
+        if (nxtStripped && !RE_FOLIO.test(nxt) && !RE_DATE.test(nxtStripped)) {
+          schemeLine = line + ' ' + nxtStripped;
+          extraSkip = 1;
+        }
+      }
+
+      const continuationLine = i + extraSkip + 1 < raw.length
+        ? raw[i + extraSkip + 1]
+        : '';
+
+      const [isin, fundName, registrar, usedNxt] = extractIsinKFin(schemeLine, continuationLine);
+      if (registrar) curFolio.registrar = registrar;
+
+      const advM = schemeLine.match(RE_ADVISOR);
+      const advisor = advM ? advM[1].trim() : '';
+
+      const isinValid = !!(isin && RE_ISIN_VALID.test(isin));
+      if (!isinValid && isin) {
+        warnings.push({ folio: curFolio.folio, isin, type: 'invalid_isin', detail: `line ${i + 1}` });
+      }
+      const plan = detectPlan(fundName);
+      curScheme = {
+        fund_name: fundName,
+        isin: isin || '',
+        isin_valid: isinValid,
+        plan,
+        option: detectOption(fundName),
+        advisor_code: advisor,
+        is_direct: plan === 'Direct' || advisor.toUpperCase() === 'DIRECT',
+        balance_mismatch: false,
+        computed_balance: null,
+        stated_balance: null,
+        stated_cost: null,
+        stated_market_value: null,
+        net_cost: 0,
+        transactions: [],
+      };
+      i += (usedNxt ? 2 : 1) + extraSkip;
+      continue;
+    }
+
+    // Closing balance line
+    const mc = line.match(RE_CLOSING_KFIN);
+    if (mc && curScheme) {
+      try { curScheme.stated_balance = parseFloat(mc[1].replace(/,/g, "")); } catch { }
+      try { curScheme.stated_cost = parseFloat(mc[2].replace(/,/g, "")); } catch { }
+      try { curScheme.stated_market_value = parseFloat(mc[3].replace(/,/g, "")); } catch { }
+      i++;
+      continue;
+    }
+
+    if (shouldSkipKFin(line)) {
+      i++;
+      continue;
+    }
+
+    // Transaction row
+    const md = line.trim().match(RE_DATE);
+    if (md && curScheme) {
+      const dateStr = md[1];
+      let rest = md[2];
+      RE_NUM_KFIN.lastIndex = 0;
+      if (!RE_NUM_KFIN.test(rest) && !rest.trim().startsWith("***")) {
+        const nl = nxt.trim();
+        if (nl && !RE_DATE.test(nl)) {
+          rest = rest + " " + nl;
+          i++;
+        }
+      }
+      const nums = extractNumsKFin(rest);
+      if (nums.length >= 4) {
+        const amount = nums[nums.length - 4];
+        const units = nums[nums.length - 3];
+        const price = nums[nums.length - 2];
+        const balance = nums[nums.length - 1];
+        RE_NUM_KFIN.lastIndex = 0;
+        const desc = rest.replace(RE_NUM_KFIN, "").replace(/\s+/g, " ").trim().replace(/,$/, "");
+        let t = classifyTxn(desc);
+        if (t === null) t = (units || 0) > 0 ? "buy" : "sell";
+        curScheme.transactions.push({
+          date: toIso(dateStr),
+          description: desc,
+          type: t,
+          amount,
+          units,
+          nav: price,
+          balance
+        });
+      }
+    }
+    i++;
+  }
+
+  finishFolio();
+
+  const allSchemes = folios.flatMap(f => f.schemes);
+  const totalTransactions = allSchemes.reduce((acc, s) => acc + s.transactions.length, 0);
+
+  return {
+    source: 'KFINTECH',
+    parsed_date: new Date().toISOString().split('T')[0],
+    cas_period: casPeriod,
+    investor,
+    portfolio_summary: portfolioSummary,
+    folios,
+    warnings,
+    stats: {
+      total_folios: folios.length,
+      total_schemes: allSchemes.length,
+      total_transactions: totalTransactions,
+      direct_schemes: allSchemes.filter(s => s.is_direct).length,
+      regular_schemes: allSchemes.filter(s => !s.is_direct).length,
+      active_schemes: allSchemes.filter(s => (s.stated_balance || 0) > 0).length,
+      redeemed_schemes: allSchemes.filter(s => (s.stated_balance || 0) === 0 && s.transactions.length > 0).length,
+      warnings_count: warnings.length
+    }
+  };
+}
+
+// ============================================================================
+// SECTION 4 — Public API
+// ============================================================================
+
+export function parseCasText(lines: string[]): CasParseResult {
+  const source = detectSource(lines);
+  return source === 'KFINTECH' ? parseKFinText(lines) : parseCamsText(lines);
 }
 
 export function parseCasPdf(pdfPath: string, password?: string): CasParseResult {
