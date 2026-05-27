@@ -12,7 +12,7 @@ export function Sidebar({ activeTab, setActiveTab, navItems }: SidebarProps) {
     <aside className="w-64 bg-white border-r border-slate-200 flex flex-col">
       <div className="p-6">
         <div className="flex flex-col gap-0.5 text-[#01696f]">
-          <img src="/vriddhi-logo.svg" alt="Vriddhi" className="w-44 h-auto object-contain" />
+          <img src="/Vriddi-Logo.png" alt="Vriddhi" className="w-44 h-auto object-contain" />
           <p className="text-[10px] font-medium text-slate-400 text-center leading-tight mt-1">
             Personal Finance App<br />
             Developed by Subbarao Kommuri
