@@ -8,6 +8,7 @@ import { db } from '../lib/db.ts';
 import { parseCasPdf } from '../lib/cas-parser.ts';
 import { generateHtml } from '../lib/cas-reconcile-html.ts';
 import { runChecks } from '../lib/cas-reconcile.ts';
+import { log } from '../lib/logger.ts';
 
 const router = express.Router();
 
@@ -40,22 +41,31 @@ router.post('/preview', upload.single('file'), async (req, res) => {
     const { results } = runChecks(data);
     
     const HARD_ERROR_CHECKS = [
-      'ISIN Format Validation',
       'Unit Balance Match',
       'Running Balance Continuity',
       'No Negative Mid-Series Balance',
       'No Missing Fields',
+    ];
+
+    const WARNING_CHECKS = [
+      'ISIN Format Validation',
       'No Zero NAV',
       'Cost Value Cross-check',
     ];
+
     const ok = results
       .filter(r => HARD_ERROR_CHECKS.includes(r.name))
       .every(r => r.failures.length === 0);
 
+    const warningCount = results
+      .filter(r => WARNING_CHECKS.includes(r.name))
+      .reduce((acc, r) => acc + r.failures.length, 0);
+
     res.json({
       html,
       stats: data.stats,
-      ok
+      ok,
+      warningCount
     });
 
   } catch (err: any) {
@@ -98,6 +108,32 @@ router.post('/confirm', upload.single('file'), async (req, res) => {
     let skipped_transactions = 0;
     let schemes_updated = 0;
     const import_id = uuidv4();
+
+    const WARNING_CHECKS_LOG = [
+      'ISIN Format Validation',
+      'No Zero NAV',
+      'Cost Value Cross-check',
+    ];
+    const { results: checkResults } = runChecks(data);
+    const warnDetails = [
+      { key: 'ISIN',    name: 'ISIN Format Validation' },
+      { key: 'ZeroNAV', name: 'No Zero NAV' },
+      { key: 'Cost',    name: 'Cost Value Cross-check' },
+    ].map(({ key, name }) => {
+      const c = checkResults.find(r => r.name === name);
+      return `${key}:${c?.failures.length ?? 0}`;
+    }).join(', ');
+    const totalWarnings = checkResults
+      .filter(r => WARNING_CHECKS_LOG.includes(r.name))
+      .reduce((acc, r) => acc + r.failures.length, 0);
+
+    log('import', 'INFO', 'CAS-IMPORT',
+      `START import: investor=${data.investor.name}, ` +
+      `period=${data.cas_period.from}→${data.cas_period.to}, ` +
+      `folios=${data.folios.length}, ` +
+      `schemes=${data.stats.total_schemes}, ` +
+      `transactions=${data.stats.total_transactions}, ` +
+      `warnings=${totalWarnings} (${warnDetails})`);
 
     db.transaction(() => {
       // STEP 0 — Upsert investor
@@ -260,6 +296,11 @@ router.post('/confirm', upload.single('file'), async (req, res) => {
       );
     })();
     
+    log('import', 'INFO', 'CAS-IMPORT',
+      `COMPLETE import: new=${new_transactions}, ` +
+      `skipped=${skipped_transactions}, ` +
+      `schemes=${schemes_updated}, import_id=${import_id}`);
+
     res.json({
       message: "Import complete",
       new_transactions,
@@ -271,6 +312,7 @@ router.post('/confirm', upload.single('file'), async (req, res) => {
 
   } catch (err: any) {
     const msg = err.message || String(err);
+    log('import', 'ERROR', 'CAS-IMPORT', `Import failed: ${msg}`);
     if (msg.toLowerCase().includes("incorrect password")) {
       return res.status(401).json({ error: "Wrong password. Please try again." });
     }

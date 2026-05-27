@@ -500,3 +500,16 @@ export function exportTransactionsCsv(filters: TransactionFilters = {}): void {
   window.location.href = `/api/transactions/export-csv?${params.toString()}`;
 }
 
+export async function downloadImportLog(date: string): Promise<void> {
+  const url = `/api/logs?type=import&date=${date}&download=true`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error('Import log not found for this date');
+  const blob = await res.blob();
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `import-${date}.log`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+

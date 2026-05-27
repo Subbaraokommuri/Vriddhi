@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
-import { refreshAmfiCodes, backfillNavHistory } from '../lib/api';
+import { refreshAmfiCodes, backfillNavHistory, downloadImportLog } from '../lib/api';
 
 type State = 'IDLE' | 'LOADING' | 'PREVIEW' | 'ERROR' | 'SUCCESS';
 
@@ -26,7 +26,7 @@ export function CasImport({ onImportSuccess }: CasImportProps) {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [previewData, setPreviewData] = useState<{ html: string; stats: any; ok: boolean } | null>(null);
+  const [previewData, setPreviewData] = useState<{ html: string; stats: any; ok: boolean; warningCount: number } | null>(null);
   const [importResult, setImportResult] = useState<{
     message: string;
     new_transactions: number;
@@ -39,6 +39,7 @@ export function CasImport({ onImportSuccess }: CasImportProps) {
   const [syncStep, setSyncStep] = useState('');
   const [maintenanceError, setMaintenanceError] = useState<string | null>(null);
   const [maintenanceSuccess, setMaintenanceSuccess] = useState<string | null>(null);
+  const [dlError, setDlError] = useState<string | null>(null);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -107,6 +108,7 @@ export function CasImport({ onImportSuccess }: CasImportProps) {
     setState('IDLE');
     setPreviewData(null);
     setError(null);
+    setDlError(null);
   };
 
   const handleConfirmImport = async () => {
@@ -285,24 +287,31 @@ export function CasImport({ onImportSuccess }: CasImportProps) {
             exit={{ opacity: 0, y: -10 }}
             className="space-y-6"
           >
-            <div className={cn(
-              "p-4 rounded-2xl border flex items-center gap-3 font-bold",
-              previewData.ok 
-                ? "bg-emerald-50 border-emerald-100 text-emerald-700" 
-                : "bg-amber-50 border-amber-100 text-amber-700"
-            )}>
-              {previewData.ok ? (
-                <>
-                  <CheckCircle className="w-6 h-6" />
-                  <span>All 8 checks pass — safe to import</span>
-                </>
-              ) : (
-                <>
-                  <AlertTriangle className="w-6 h-6" />
-                  <span>Some checks failed — review before importing</span>
-                </>
-              )}
-            </div>
+            {(() => {
+              const { ok, warningCount = 0 } = previewData;
+              if (ok && warningCount === 0) {
+                return (
+                  <div className="p-4 rounded-2xl border flex items-center gap-3 font-bold bg-emerald-50 border-emerald-100 text-emerald-700">
+                    <CheckCircle className="w-6 h-6 shrink-0" />
+                    <span>All checks pass — safe to import. Download the reconciliation report for your records.</span>
+                  </div>
+                );
+              } else if (ok && warningCount > 0) {
+                return (
+                  <div className="p-4 rounded-2xl border flex items-center gap-3 font-bold bg-amber-50 border-amber-100 text-amber-700">
+                    <AlertTriangle className="w-6 h-6 shrink-0" />
+                    <span>Ready to import — {warningCount} warning(s) found. Warnings are informational only and do not affect data accuracy. Review the highlighted checks in the report below and download the report for your records.</span>
+                  </div>
+                );
+              } else {
+                return (
+                  <div className="p-4 rounded-2xl border flex items-center gap-3 font-bold bg-amber-50 border-amber-100 text-amber-700">
+                    <AlertTriangle className="w-6 h-6 shrink-0" />
+                    <span>Import blocked — one or more critical checks failed. These checks protect against corrupt XIRR and capital gains calculations. This usually means the PDF was not parsed correctly. Review the failed checks in the report below and download the report for troubleshooting.</span>
+                  </div>
+                );
+              }
+            })()}
 
             <div className="grid grid-cols-5 gap-4">
               {[
@@ -325,6 +334,22 @@ export function CasImport({ onImportSuccess }: CasImportProps) {
                 className="w-full h-[600px] border-none"
                 title="CAS Reconciliation Report"
               />
+            </div>
+
+            <div className="flex justify-end">
+              <button
+                onClick={() => {
+                  const blob = new Blob([previewData.html], { type: 'text/html' });
+                  const a = document.createElement('a');
+                  a.href = URL.createObjectURL(blob);
+                  a.download = 'cas-reconciliation.html';
+                  a.click();
+                  URL.revokeObjectURL(a.href);
+                }}
+                className="text-sm text-slate-500 underline cursor-pointer"
+              >
+                Download Reconciliation Report
+              </button>
             </div>
 
             <div className="flex gap-4">
@@ -424,6 +449,25 @@ export function CasImport({ onImportSuccess }: CasImportProps) {
             >
               Import Another File
             </button>
+
+            <div className="flex flex-col items-center gap-1 mt-4">
+              <button
+                onClick={async () => {
+                  try {
+                    setDlError(null);
+                    await downloadImportLog(new Date().toISOString().split('T')[0]);
+                  } catch (err: any) {
+                    setDlError(err.message || String(err));
+                  }
+                }}
+                className="text-sm text-slate-500 underline cursor-pointer"
+              >
+                Download Import Log
+              </button>
+              {dlError && (
+                <p className="text-xs text-rose-500 mt-1">{dlError}</p>
+              )}
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
