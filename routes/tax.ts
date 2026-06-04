@@ -8,6 +8,7 @@ import {
 } from '../lib/capital-gains.ts';
 import { db, log } from '../lib/db.ts';
 import { CONFIG } from '../lib/config.ts';
+import ExcelJS from 'exceljs';
 
 const router = Router();
 const MODULE = 'TAX';
@@ -83,52 +84,103 @@ function getCurrentFy(): string {
   return `${year - 1}-${String(year).slice(-2)}`;
 }
 
-interface AdvanceTaxInstallment {
-  installmentNumber: number;   // 1–4
-  dueDate: string;             // YYYY-MM-DD
-  cumulativePercent: number;   // 15, 45, 75, 100
-  cumulativeAmount: number;    // cumulativePercent/100 * estimatedAnnualTax
-  dueAmount: number;           // this installment only (delta from previous)
-  isPastDue: boolean;          // dueDate < today
-  isCurrentInstallment: boolean; // true on the first upcoming (not-yet-past-due) installment
+function getFyType(fy: string): 'current' | 'previous' | 'historical' {
+  const currentFy = getCurrentFy();
+  if (fy === currentFy) {
+    return 'current';
+  }
+  const startYear = parseInt(currentFy.split('-')[0], 10);
+  const previousFy = `${startYear - 1}-${String(startYear).slice(-2)}`;
+  if (fy === previousFy) {
+    return 'previous';
+  }
+  return 'historical';
 }
 
-/**
- * Helper: buildInstallments()
- * Generates the 4 advance tax installment slots.
- */
-function buildInstallments(
-  estimatedAnnualTax: number,
-  fyStartYear: number,
+interface QuarterRedemption {
+  date: string;
+  fundName: string;
+  folioNumber: string;
+  units: number;     // absolute value, positive
+  amount: number;    // absolute value, positive
+}
+
+interface AdvanceTaxInstallment {
+  installmentNumber: number;       // 1–4
+  dueDate: string;                 // payment due date: Jun15/Sep15/Dec15/Mar15
+  cutoffDate: string;              // gains computed up to this date
+                                   // Q1-Q3: same as dueDate; Q4: fyEnd (Mar31)
+  cumulativePercent: number;       // 15 | 45 | 75 | 100
+  cumulativeTaxUpToCutoff: number; // total estimated tax on gains fyStart–cutoffDate
+  cumulativeObligation: number;    // cumulativePercent/100 × cumulativeTaxUpToCutoff
+  dueAmount: number;               // cumulativeObligation minus previous installment's
+                                   // cumulativeObligation (0 for installment 1 if
+                                   // cumulativeObligation is the full obligation)
+  quarterSTCG: number;             // STCG from sells in THIS quarter only
+  quarterLTCG: number;             // LTCG from sells in THIS quarter only
+  quarterTaxContribution: number;  // incremental tax this quarter contributed
+  quarterRedemptions: QuarterRedemption[];
+  isPastDue: boolean;
+  isCurrentInstallment: boolean;
+}
+
+function buildInstallmentsFromSummaries(
+  summaries: PanCapitalGainsSummary[],  // array of 4, index 0=Q1 ... 3=Q4
+  cutoffDates: string[],                // ['YYYY-06-15','YYYY-09-15','YYYY-12-15','YYYY-03-31']
+  dueDates: string[],                   // ['YYYY-06-15','YYYY-09-15','YYYY-12-15','YYYY+1-03-15']
+  quarterRedemptionsList: QuarterRedemption[][],  // array of 4, one per quarter
   today: Date
 ): AdvanceTaxInstallment[] {
-  const schedule = [
-    { n: 1, percent: 15,  dueDate: `${fyStartYear}-06-15` },
-    { n: 2, percent: 45,  dueDate: `${fyStartYear}-09-15` },
-    { n: 3, percent: 75,  dueDate: `${fyStartYear}-12-15` },
-    { n: 4, percent: 100, dueDate: `${fyStartYear + 1}-03-15` },
-  ];
-
+  const percents = [15, 45, 75, 100];
+  const installments: AdvanceTaxInstallment[] = [];
   let foundCurrent = false;
-  return schedule.map((slot, idx) => {
-    const cumulativeAmount = (slot.percent / 100) * estimatedAnnualTax;
-    const prevCumulative   = idx === 0
-      ? 0
-      : (schedule[idx - 1].percent / 100) * estimatedAnnualTax;
-    const dueAmount        = cumulativeAmount - prevCumulative;
-    const isPastDue        = slot.dueDate < today.toISOString().slice(0, 10);
+
+  const todayStr = today.toISOString().slice(0, 10);
+
+  for (let i = 0; i < 4; i++) {
+    const summary = summaries[i];
+    const prevSummary = i > 0 ? summaries[i - 1] : null;
+
+    const cumulativeTax = (summary.estimatedSTCGTax ?? 0) + (summary.estimatedLTCGTax ?? 0);
+    const cumulativeObligation = (percents[i] / 100) * cumulativeTax;
+    
+    const prevCumulativeTax = prevSummary 
+      ? (prevSummary.estimatedSTCGTax ?? 0) + (prevSummary.estimatedLTCGTax ?? 0)
+      : 0;
+    const prevCumulativeObligation = prevSummary
+      ? (percents[i - 1] / 100) * prevCumulativeTax
+      : 0;
+
+    const dueAmount = cumulativeObligation - prevCumulativeObligation;
+
+    const quarterSTCG = summary.totalSTCG - (prevSummary ? prevSummary.totalSTCG : 0);
+    const quarterLTCG = summary.totalLTCG - (prevSummary ? prevSummary.totalLTCG : 0);
+    const quarterTaxContribution = cumulativeTax - (prevSummary ? prevCumulativeTax : 0);
+
+    const isPastDue = dueDates[i] < todayStr;
     const isCurrentInstallment = !isPastDue && !foundCurrent;
-    if (isCurrentInstallment) foundCurrent = true;
-    return {
-      installmentNumber: slot.n,
-      dueDate: slot.dueDate,
-      cumulativePercent: slot.percent,
-      cumulativeAmount: Math.round(cumulativeAmount * 100) / 100,
+    if (isCurrentInstallment) {
+      foundCurrent = true;
+    }
+
+    installments.push({
+      installmentNumber: i + 1,
+      dueDate: dueDates[i],
+      cutoffDate: cutoffDates[i],
+      cumulativePercent: percents[i],
+      cumulativeTaxUpToCutoff: Math.round(cumulativeTax * 100) / 100,
+      cumulativeObligation: Math.round(cumulativeObligation * 100) / 100,
       dueAmount: Math.round(dueAmount * 100) / 100,
+      quarterSTCG: Math.round(quarterSTCG * 100) / 100,
+      quarterLTCG: Math.round(quarterLTCG * 100) / 100,
+      quarterTaxContribution: Math.round(quarterTaxContribution * 100) / 100,
+      quarterRedemptions: quarterRedemptionsList[i] || [],
       isPastDue,
       isCurrentInstallment,
-    };
-  });
+    });
+  }
+
+  return installments;
 }
 
 
@@ -845,6 +897,231 @@ router.get('/simulate', async (req, res) => {
   }
 });
 
+interface InstallmentExportRow {
+  installmentNumber: number;
+  dueDate: string;
+  cutoffDate: string;
+  cumulativePercent: number;
+  quarterSTCG: number;
+  quarterLTCG: number;
+  cumulativeTaxUpToCutoff: number;
+  cumulativeObligation: number;
+  dueAmount: number;
+  paid: number;           // user-entered
+  shortfall: number;      // max(0, cumulativeObligation - cumulativePaid)
+  interest234C: number;   // shortfall * 0.01 * (installmentNumber<=3 ? 3 : 1)
+}
+
+interface RedemptionExportRow {
+  quarter: string;        // 'Q1 (Apr–Jun 15)', 'Q2 (Jun 16–Sep 15)', etc.
+  date: string;
+  fundName: string;       // simple_name || clean_name || fund_name from funds table
+  isin: string;
+  folioNumber: string;
+  units: number;
+  nav: number;
+  amount: number;
+  transferredFlag: string; // BE or AE, derived from sell date vs EQUITY_RATE_CHANGE_DATE
+}
+
+/**
+ * Shared logic to compute advance tax data
+ */
+async function computeAdvanceTaxData(
+  pan: string,
+  fy: string
+): Promise<{
+  investor: { name: string };
+  installments: AdvanceTaxInstallment[];
+  fullYearTax: number;
+  fyType: 'current' | 'previous' | 'historical';
+} | null> {
+  const { fyStart, fyEnd } = getFyBounds(fy);
+  const fyType = getFyType(fy);
+  const fyStartYear = parseInt(fy.split('-')[0], 10);
+  const fyEndYear = fyStartYear + 1;
+
+  // STEP 4b — Define 4 cutoff/due date pairs:
+  const cutoffDates = [
+    `${fyStartYear}-06-15`,
+    `${fyStartYear}-09-15`,
+    `${fyStartYear}-12-15`,
+    fyEnd,                        // Mar 31 — full FY
+  ];
+  const dueDates = [
+    `${fyStartYear}-06-15`,
+    `${fyStartYear}-09-15`,
+    `${fyStartYear}-12-15`,
+    `${fyEndYear}-03-15`,         // Mar 15 — due date for Q4
+  ];
+
+  // STEP 4c — Fetch investor and folios:
+  const investor = db.prepare('SELECT name FROM investors WHERE pan = ?').get(pan) as { name: string } | undefined;
+  if (!investor) {
+    return null;
+  }
+
+  const folios = db.prepare(`
+    SELECT f.id, f.folio_number, f.fund_id,
+           fu.name as fund_name, fu.simple_name, fu.clean_name,
+           fu.isin, fu.category, fu.asset_class 
+    FROM folios f 
+    JOIN funds fu ON f.fund_id = fu.id 
+    WHERE f.pan = ?
+  `).all(pan) as Array<{ id: string, folio_number: string, fund_id: string, fund_name: string, simple_name: string, clean_name: string, isin: string, category: string, asset_class: string }>;
+
+  if (folios.length === 0) {
+    const today = new Date();
+    const emptySummary: any = {
+      totalSTCG: 0,
+      totalLTCG: 0,
+      estimatedSTCGTax: 0,
+      estimatedLTCGTax: 0,
+      folios: []
+    };
+    const emptySummaries = [emptySummary, emptySummary, emptySummary, emptySummary];
+    const emptyRedemptions: QuarterRedemption[][] = [[], [], [], []];
+    const installments = buildInstallmentsFromSummaries(
+      emptySummaries, cutoffDates, dueDates, emptyRedemptions, today
+    );
+    return {
+      investor,
+      installments,
+      fullYearTax: 0,
+      fyType
+    };
+  }
+
+  // STEP 4d — Bulk-fetch ALL transactions for this PAN in ONE query:
+  const allTxns = db.prepare(`
+    SELECT t.date, t.transaction_type, t.units, t.amount, t.nav,
+           t.folio_id, t.description,
+           t.transaction_subtype, t.merger_ratio, t.source_fund_id
+    FROM transactions t
+    WHERE t.folio_id IN (SELECT id FROM folios WHERE pan = ?)
+    ORDER BY t.date ASC
+  `).all(pan) as any[];
+
+  // STEP 4e — Partition transactions into txnMap (Map<folioId, txn[]>):
+  const txnMap = new Map<string, any[]>();
+  for (const txn of allTxns) {
+    if (!txnMap.has(txn.folio_id)) {
+      txnMap.set(txn.folio_id, []);
+    }
+    txnMap.get(txn.folio_id)!.push(txn);
+  }
+
+  // STEP 4f — Build merger source maps per folio:
+  const allTxnsByFundId = new Map<string, { isin: string; transactions: any[] }>();
+  for (const f of folios) {
+    const txns = txnMap.get(f.id) || [];
+    const existing = allTxnsByFundId.get(f.fund_id);
+    if (existing) {
+      existing.transactions.push(...txns);
+    } else {
+      allTxnsByFundId.set(f.fund_id, {
+        isin: f.isin,
+        transactions: [...txns]
+      });
+    }
+  }
+
+  const folioMergerSourceMaps = new Map<string, Map<string, { isin: string; transactions: any[] }> | undefined>();
+  for (const f of folios) {
+    const txns = txnMap.get(f.id) || [];
+    const hasMergerIn = txns.some(
+      t => (t.transaction_subtype ?? '') === 'merger_in'
+    );
+    let mergerSourceMap: Map<string, { isin: string; transactions: any[] }> | undefined = undefined;
+    if (hasMergerIn) {
+      const sourceIds = [...new Set(
+        txns
+          .filter(t => t.transaction_subtype === 'merger_in' && t.source_fund_id)
+          .map(t => t.source_fund_id as string)
+      )];
+      mergerSourceMap = new Map(
+        sourceIds
+          .filter(id => allTxnsByFundId.has(id))
+          .map(id => [id, allTxnsByFundId.get(id)!])
+      );
+    }
+    folioMergerSourceMaps.set(f.id, mergerSourceMap);
+  }
+
+  // STEP 4g — Run 4 cumulative computations:
+  const summaries: PanCapitalGainsSummary[] = [];
+  for (let c = 0; c < 4; c++) {
+    const folioGainsPerCutoff: FolioCapitalGains[] = [];
+    for (const f of folios) {
+      const txns = txnMap.get(f.id) || [];
+      const mergerSourceMapForFolio = folioMergerSourceMaps.get(f.id);
+      const result = computeCapitalGains(
+        f.id,
+        f.folio_number,
+        f.fund_name,
+        f.isin,
+        f.category,
+        f.asset_class || '',
+        txns,
+        navOnDate,
+        fyStart,
+        cutoffDates[c], // different per run
+        mergerSourceMapForFolio // built once in STEP 4f, reused
+      );
+      if (result.matchedLots.length > 0) {
+        folioGainsPerCutoff.push(result);
+      }
+    }
+    summaries.push(aggregatePanGains(pan, investor.name, folioGainsPerCutoff));
+  }
+
+  // STEP 4h — Build quarterRedemptions per quarter:
+  const folioLookup = new Map<string, { fundName: string, folioNumber: string }>();
+  for (const f of folios) {
+    folioLookup.set(f.id, { fundName: f.simple_name || f.clean_name || f.fund_name, folioNumber: f.folio_number });
+  }
+
+  const sells = allTxns.filter(t => t.transaction_type === 'sell');
+  const quarterRedemptionsList: QuarterRedemption[][] = [[], [], [], []];
+
+  for (const txn of sells) {
+    const date = txn.date;
+    const fInfo = folioLookup.get(txn.folio_id);
+    if (!fInfo) continue;
+
+    const qRedemption: QuarterRedemption = {
+      date,
+      fundName: fInfo.fundName,
+      folioNumber: fInfo.folioNumber,
+      units: Math.abs(txn.units),
+      amount: Math.abs(txn.amount)
+    };
+
+    if (date >= fyStart && date <= cutoffDates[0]) {
+      quarterRedemptionsList[0].push(qRedemption);
+    } else if (date > cutoffDates[0] && date <= cutoffDates[1]) {
+      quarterRedemptionsList[1].push(qRedemption);
+    } else if (date > cutoffDates[1] && date <= cutoffDates[2]) {
+      quarterRedemptionsList[2].push(qRedemption);
+    } else if (date > cutoffDates[2] && date <= cutoffDates[3]) {
+      quarterRedemptionsList[3].push(qRedemption);
+    }
+  }
+
+  // STEP 4i — Build installments:
+  const today = new Date();
+  const installments = buildInstallmentsFromSummaries(
+    summaries, cutoffDates, dueDates, quarterRedemptionsList, today
+  );
+
+  return {
+    investor,
+    installments,
+    fullYearTax: (summaries[3].estimatedSTCGTax ?? 0) + (summaries[3].estimatedLTCGTax ?? 0),
+    fyType
+  };
+}
+
 /**
  * GET /api/tax/advance-tax
  */
@@ -858,117 +1135,440 @@ router.get('/advance-tax', async (req, res) => {
   try {
     log('app', 'INFO', MODULE_ADV, `Advance tax estimate for PAN: ${pan}`);
 
-    // STEP 1 — Determine the current FY:
     const fyQuery = req.query.fy as string | undefined;
-    const currentFy = fyQuery && fyQuery.trim() !== '' ? fyQuery : getCurrentFy();
-    const { fyStart, fyEnd } = getFyBounds(currentFy);
-    const fyStartYear = parseInt(currentFy.split('-')[0]);
+    const fy = fyQuery && fyQuery.trim() !== '' ? fyQuery : getCurrentFy();
 
-    // Fetch investor name
-    const investor = db.prepare('SELECT name FROM investors WHERE pan = ?').get(pan) as { name: string } | undefined;
-    if (!investor) {
+    const data = await computeAdvanceTaxData(pan, fy);
+    if (!data) {
       return res.status(404).json({ error: `Investor with PAN ${pan} not found` });
     }
 
-    // STEP 2 — Fetch all folios for this PAN:
-    const folios = db.prepare(`
-      SELECT f.id, f.folio_number, f.fund_id, fu.name as fund_name, fu.isin, fu.category, fu.asset_class 
-      FROM folios f 
-      JOIN funds fu ON f.fund_id = fu.id 
-      WHERE f.pan = ?
-    `).all(pan) as Array<{ id: string, folio_number: string, fund_id: string, fund_name: string, isin: string, category: string, asset_class: string }>;
-
-    if (folios.length === 0) {
-      const today = new Date();
-      const installments = buildInstallments(0, fyStartYear, today);
-      const paidSoFarVal = parseFloat(req.query.paidSoFar as string) || 0;
-      return res.json({
-        currentFy,
-        estimatedAnnualTax: 0,
-        realisedTax: {
-          netSTCG: 0,
-          netLTCG: 0,
-          estimatedSTCGTax: 0,
-          estimatedLTCGTax: 0,
-          totalTax: 0,
-        },
-        paidSoFar: paidSoFarVal,
-        totalStillDue: 0,
-        installments,
-      });
-    }
-
-    // STEP 3 — Bulk-fetch all transactions for those folioIds in one query:
-    const allTxns = db.prepare(`
-      SELECT t.date, t.transaction_type, t.units, t.amount, t.nav, t.folio_id 
-      FROM transactions t 
-      WHERE t.folio_id IN (SELECT id FROM folios WHERE pan = ?) 
-      ORDER BY t.date ASC
-    `).all(pan) as any[];
-
-    // Partition into Map<folioId, txn[]>
-    const txnMap = new Map<string, any[]>();
-    for (const txn of allTxns) {
-      if (!txnMap.has(txn.folio_id)) {
-        txnMap.set(txn.folio_id, []);
-      }
-      txnMap.get(txn.folio_id)!.push(txn);
-    }
-
-    // STEP 4 — Call computeCapitalGains() per folio, then aggregatePanGains(),
-    // passing fyStart and fyEnd exactly as GET /api/tax/capital-gains does.
-    const folioGains: FolioCapitalGains[] = [];
-    for (const f of folios) {
-      const txns = txnMap.get(f.id) || [];
-      const result = computeCapitalGains(
-        f.id,
-        f.folio_number,
-        f.fund_name,
-        f.isin,
-        f.category,
-        f.asset_class || '',
-        txns,
-        navOnDate,
-        fyStart,
-        fyEnd
-      );
-      
-      // Skip if no sells in FY
-      if (result.matchedLots.length > 0) {
-        folioGains.push(result);
-      }
-    }
-
-    const summary = aggregatePanGains(pan, investor.name, folioGains);
-
-    // STEP 5 — Extract estimated tax from the summary:
-    const estimatedAnnualTax = (summary.estimatedSTCGTax ?? 0) + (summary.estimatedLTCGTax ?? 0);
-
-    // STEP 6 — Parse paidSoFar:
-    const paidSoFar = parseFloat(req.query.paidSoFar as string) || 0;
-    const totalStillDue = Math.max(0, estimatedAnnualTax - paidSoFar);
-
-    // STEP 7 — Build installments:
-    const today = new Date();
-    const installments = buildInstallments(estimatedAnnualTax, fyStartYear, today);
-
-    // STEP 8 — Build and return response:
     return res.json({
-      currentFy,
-      estimatedAnnualTax,
-      realisedTax: {
-        netSTCG:          summary.totalSTCG,
-        netLTCG:          summary.totalLTCG,
-        estimatedSTCGTax: summary.estimatedSTCGTax,
-        estimatedLTCGTax: summary.estimatedLTCGTax,
-        totalTax:         estimatedAnnualTax,
-      },
-      paidSoFar,
-      totalStillDue,
-      installments,
+      currentFy: fy,
+      fyType: data.fyType,
+      fullYearTax: data.fullYearTax,
+      installments: data.installments
     });
   } catch (err: any) {
     log('app', 'ERROR', MODULE_ADV, `Failed: ${err}`);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * GET /api/tax/advance-tax/export
+ * Generates and streams a two-sheet Excel (.xlsx) file using the exceljs library.
+ */
+router.get('/advance-tax/export', async (req, res) => {
+  const pan = req.query.pan as string;
+  const fy = req.query.fy as string;
+
+  if (!pan) {
+    return res.status(400).json({ error: 'PAN is required' });
+  }
+  if (!fy) {
+    return res.status(400).json({ error: 'FY is required' });
+  }
+
+  try {
+    const { fyStart, fyEnd } = getFyBounds(fy);
+    const fyType = getFyType(fy);
+    const fyStartYear = parseInt(fy.split('-')[0], 10);
+    const fyEndYear = fyStartYear + 1;
+
+    // Optional user inputs
+    let saDate = (req.query.saDate as string) || `${fyEndYear}-07-31`;
+    const showInterest = req.query.showInterest === 'true';
+
+    let paid1 = parseFloat(req.query.paid1 as string || '0') || 0;
+    let paid2 = parseFloat(req.query.paid2 as string || '0') || 0;
+    let paid3 = parseFloat(req.query.paid3 as string || '0') || 0;
+    let paid4 = parseFloat(req.query.paid4 as string || '0') || 0;
+
+    if (fyType === 'historical' && showInterest) {
+      paid1 = parseFloat(req.query.histPaid1 as string || '0') || 0;
+      paid2 = parseFloat(req.query.histPaid2 as string || '0') || 0;
+      paid3 = parseFloat(req.query.histPaid3 as string || '0') || 0;
+      paid4 = parseFloat(req.query.histPaid4 as string || '0') || 0;
+      if (req.query.histSaDate) {
+        saDate = req.query.histSaDate as string;
+      }
+    }
+
+    const paidAmounts = [paid1, paid2, paid3, paid4];
+
+    // Compute advance tax data
+    const data = await computeAdvanceTaxData(pan, fy);
+    if (!data) {
+      return res.status(404).json({ error: `Investor with PAN ${pan} not found` });
+    }
+
+    // Fetch fund details and ISIN lookup
+    const redemptionsList = db.prepare(`
+      SELECT t.date, t.nav, t.units, t.amount, t.folio_id,
+             f.folio_number,
+             fu.simple_name, fu.clean_name, fu.name as fund_name, fu.isin
+      FROM transactions t
+      JOIN folios f ON t.folio_id = f.id
+      JOIN funds fu ON f.fund_id = fu.id
+      WHERE t.transaction_type = 'sell'
+        AND t.date >= ? AND t.date <= ?
+        AND f.pan = ?
+      ORDER BY t.date ASC
+    `).all(fyStart, fyEnd, pan) as any[];
+
+    const redemptionMap = new Map<string, RedemptionExportRow>();
+    for (const r of redemptionsList) {
+      const key = `${r.folio_id}|${r.date}`;
+      const fundName = r.simple_name || r.clean_name || r.fund_name;
+      const transferredFlag = r.date >= CONFIG.TAX.EQUITY_RATE_CHANGE_DATE ? 'AE' : 'BE';
+      redemptionMap.set(key, {
+        quarter: '',
+        date: r.date,
+        fundName,
+        isin: r.isin || '',
+        folioNumber: r.folio_number,
+        units: Math.abs(r.units),
+        nav: r.nav,
+        amount: Math.abs(r.amount),
+        transferredFlag
+      });
+    }
+
+    const foliosInfo = db.prepare('SELECT id, folio_number FROM folios WHERE pan = ?').all(pan) as any[];
+    const folioNumToId = new Map<string, string>();
+    for (const f of foliosInfo) {
+      folioNumToId.set(f.folio_number, f.id);
+    }
+
+    // Build installment rows
+    const installmentRows: InstallmentExportRow[] = [];
+    let runningPaidSum = 0;
+    for (let i = 0; i < 4; i++) {
+      const inst = data.installments[i];
+      const paidVal = paidAmounts[i];
+      runningPaidSum += paidVal;
+
+      const shortfall = Math.max(0, inst.cumulativeObligation - runningPaidSum);
+      const interest234C = showInterest
+        ? shortfall * 0.01 * (inst.installmentNumber <= 3 ? 3 : 1)
+        : 0;
+
+      installmentRows.push({
+        installmentNumber: inst.installmentNumber,
+        dueDate: inst.dueDate,
+        cutoffDate: inst.cutoffDate,
+        cumulativePercent: inst.cumulativePercent,
+        quarterSTCG: inst.quarterSTCG,
+        quarterLTCG: inst.quarterLTCG,
+        cumulativeTaxUpToCutoff: inst.cumulativeTaxUpToCutoff,
+        cumulativeObligation: inst.cumulativeObligation,
+        dueAmount: inst.dueAmount,
+        paid: paidVal,
+        shortfall,
+        interest234C
+      });
+    }
+
+    // 234B interest calculation
+    let fullYearTax = data.fullYearTax;
+    let totalPaid = runningPaidSum;
+    let ninetyPct = fullYearTax * 0.9;
+    let applicable234B = totalPaid < ninetyPct;
+    let shortfall234B = 0;
+    let months234B = 0;
+    let interest234B = 0;
+
+    if (showInterest && applicable234B) {
+      shortfall234B = fullYearTax - totalPaid;
+      const april1 = new Date(`${fyEndYear}-04-01`);
+      const saDateObj = new Date(saDate);
+      months234B = Math.max(1, Math.ceil(
+        (saDateObj.getTime() - april1.getTime()) / (1000 * 60 * 60 * 24 * 30)
+      ));
+      interest234B = Math.round(shortfall234B * 0.01 * months234B * 100) / 100;
+    }
+
+    // Build Excel
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = 'Vriddhi';
+    workbook.created = new Date();
+
+    // SHEET 1: Advance Tax Schedule
+    const sheet1 = workbook.addWorksheet('Advance Tax Schedule');
+
+    sheet1.addRow(['Report', 'Vriddhi Advance Tax Report']);
+    sheet1.addRow(['PAN', pan]);
+    sheet1.addRow(['Investor Name', data.investor.name]);
+    sheet1.addRow(['Financial Year', fy]);
+    sheet1.addRow(['FY Type', data.fyType]);
+    sheet1.addRow(['Generated On', new Date().toISOString().slice(0, 10)]);
+    sheet1.addRow([]);
+    sheet1.addRow(['Tax Rates', 'STCG: BE 15% (pre-Jul 23 2024) / AE 20% (Jul 23 2024+)']);
+    sheet1.addRow(['LTCG Rates', 'BE 10% (pre-Jul 23 2024) / AE 12.5% (Jul 23 2024+)']);
+    sheet1.addRow(['LTCG Exemption', 'BE pot ₹1,00,000 / AE pot ₹1,25,000 (never combined)']);
+    sheet1.addRow(['Grandfathering', 'FMV as on Jan 31 2018 used as cost basis for pre-2018 lots']);
+    sheet1.addRow(['234C Basis', '3% of shortfall for Q1–Q3; 1% of shortfall for Q4']);
+    sheet1.addRow(['Data Note', 'Paid amounts and self-assessment date are user-entered. All other values are computed from transaction data.']);
+    sheet1.addRow([]);
+
+    for (let r = 1; r <= 13; r++) {
+      const rowObj = sheet1.getRow(r);
+      rowObj.getCell(1).font = { bold: true };
+    }
+
+    const headers = [
+      'Installment',
+      'Due Date',
+      'Cutoff Date',
+      'Cumulative %',
+      'Quarter STCG (₹)',
+      'Quarter LTCG (₹)',
+      'Cumulative Tax (₹)',
+      'Cumulative Obligation (₹)',
+      'This Installment Due (₹)'
+    ];
+
+    if (showInterest) {
+      headers.push(
+        'Paid (User-entered) (₹)',
+        'Shortfall (₹)',
+        '234C Interest (₹)'
+      );
+    }
+
+    const headerRow = sheet1.addRow(headers);
+    headerRow.font = { bold: true };
+    for (let colIndex = 1; colIndex <= headers.length; colIndex++) {
+      const cell = headerRow.getCell(colIndex);
+      cell.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFEFEFEF' }
+      };
+    }
+
+    const colWidths = [16, 14, 14, 14, 18, 18, 22, 24, 22, 22, 16, 18];
+    for (let i = 0; i < headers.length; i++) {
+      sheet1.getColumn(i + 1).width = colWidths[i] || 15;
+    }
+
+    for (let i = 0; i < 4; i++) {
+      const inst = data.installments[i];
+      const rowData = installmentRows[i];
+
+      const values = [
+        `Installment ${rowData.installmentNumber}`,
+        rowData.dueDate,
+        rowData.cutoffDate,
+        rowData.cumulativePercent,
+        rowData.quarterSTCG,
+        rowData.quarterLTCG,
+        rowData.cumulativeTaxUpToCutoff,
+        rowData.cumulativeObligation,
+        rowData.dueAmount
+      ];
+
+      if (showInterest) {
+        values.push(
+          rowData.paid,
+          rowData.shortfall,
+          rowData.interest234C
+        );
+      }
+
+      const newRow = sheet1.addRow(values);
+
+      const currencyCols = [5, 6, 7, 8, 9];
+      if (showInterest) {
+        currencyCols.push(10, 11, 12);
+      }
+      for (const col of currencyCols) {
+        newRow.getCell(col).numFmt = '#,##0.00';
+      }
+      newRow.getCell(4).numFmt = '0';
+
+      if (inst.isCurrentInstallment) {
+        newRow.font = { bold: true };
+      }
+    }
+
+    sheet1.addRow([]); // Row 20 or 21 depending on showInterest
+
+    if (showInterest) {
+      const q4Obligation = installmentRows[3].cumulativeObligation;
+      const sumPaid = installmentRows.reduce((sum, r) => sum + r.paid, 0);
+      const totalShortfall = Math.max(0, q4Obligation - sumPaid);
+      const sumInterest234C = installmentRows.reduce((sum, r) => sum + r.interest234C, 0);
+
+      const totalsValues = [
+        'TOTAL',
+        null, null, null, null, null, null,
+        q4Obligation,
+        null,
+        sumPaid,
+        totalShortfall,
+        sumInterest234C
+      ];
+
+      const totalsRow = sheet1.addRow(totalsValues);
+      totalsRow.font = { bold: true };
+
+      totalsRow.getCell(8).numFmt = '#,##0.00';
+      totalsRow.getCell(10).numFmt = '#,##0.00';
+      totalsRow.getCell(11).numFmt = '#,##0.00';
+      totalsRow.getCell(12).numFmt = '#,##0.00';
+
+      sheet1.addRow([]); // Blank row
+
+      const s234BTitleRow = sheet1.addRow(['── Section 234B: Default in Advance Tax ──']);
+      s234BTitleRow.font = { bold: true };
+      const rowNum = s234BTitleRow.number;
+      sheet1.mergeCells(`A${rowNum}:L${rowNum}`);
+
+      const r23 = sheet1.addRow(['Full Year Tax', fullYearTax]);
+      r23.getCell(1).font = { bold: true };
+      r23.getCell(2).numFmt = '#,##0.00';
+
+      const r24 = sheet1.addRow(['Total Advance Tax Paid', totalPaid]);
+      r24.getCell(1).font = { bold: true };
+      r24.getCell(2).numFmt = '#,##0.00';
+
+      const r25 = sheet1.addRow(['90% Threshold', ninetyPct]);
+      r25.getCell(1).font = { bold: true };
+      r25.getCell(2).numFmt = '#,##0.00';
+
+      const r26 = sheet1.addRow(['234B Applicable?', applicable234B ? 'Yes' : 'No']);
+      r26.getCell(1).font = { bold: true };
+
+      if (applicable234B) {
+        const r27 = sheet1.addRow(['Shortfall', shortfall234B]);
+        r27.getCell(1).font = { bold: true };
+        r27.getCell(2).numFmt = '#,##0.00';
+
+        const r28 = sheet1.addRow(['Self-Assessment Date', saDate]);
+        r28.getCell(1).font = { bold: true };
+
+        const r29 = sheet1.addRow(['Months (Apr 1 to SA Date)', months234B]);
+        r29.getCell(1).font = { bold: true };
+
+        const r30 = sheet1.addRow(['Estimated 234B Interest', interest234B]);
+        r30.getCell(1).font = { bold: true, color: { argb: 'FFFF0000' } };
+        r30.getCell(2).font = { bold: true, color: { argb: 'FFFF0000' } };
+        r30.getCell(2).numFmt = '#,##0.00';
+      }
+    }
+
+    // SHEET 2: Redemption Detail
+    const sheet2 = workbook.addWorksheet('Redemption Detail');
+
+    sheet2.addRow(['PAN', pan]);
+    sheet2.addRow(['FY', fy]);
+    sheet2.addRow([]);
+
+    const quartersInfo = [
+      { label: 'Q1: Apr 01 – Jun 15', list: data.installments[0].quarterRedemptions },
+      { label: 'Q2: Jun 16 – Sep 15', list: data.installments[1].quarterRedemptions },
+      { label: 'Q3: Sep 16 – Dec 15', list: data.installments[2].quarterRedemptions },
+      { label: 'Q4: Dec 16 – Mar 31', list: data.installments[3].quarterRedemptions }
+    ];
+
+    let anyQuarterRendered = false;
+
+    for (let q = 0; q < 4; q++) {
+      const qInfo = quartersInfo[q];
+      const qrList = qInfo.list;
+      if (qrList.length === 0) continue;
+
+      anyQuarterRendered = true;
+
+      // Quarter label row
+      const qLabelRow = sheet2.addRow([qInfo.label]);
+      qLabelRow.font = { bold: true };
+      const qLabelRowNum = qLabelRow.number;
+      sheet2.mergeCells(`A${qLabelRowNum}:H${qLabelRowNum}`);
+      for (let c = 1; c <= 8; c++) {
+        qLabelRow.getCell(c).fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: 'FFD6E4F0' }
+        };
+      }
+
+      // Column header row
+      const qHeader = [
+        'Date',
+        'Fund Name',
+        'ISIN',
+        'Folio Number',
+        'Units',
+        'NAV',
+        'Amount (₹)',
+        'Rate Bucket'
+      ];
+      const qHeaderRow = sheet2.addRow(qHeader);
+      qHeaderRow.font = { bold: true };
+      for (let c = 1; c <= 8; c++) {
+        qHeaderRow.getCell(c).fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: 'FFEFEFEF' }
+        };
+      }
+
+      // Write redemption rows
+      for (const qr of qrList) {
+        const folioId = folioNumToId.get(qr.folioNumber);
+        const key = `${folioId}|${qr.date}`;
+        const rRow = redemptionMap.get(key);
+
+        const actualFundName = rRow?.fundName || qr.fundName;
+        const actualIsin = rRow?.isin || '';
+        const actualNav = rRow?.nav || 0;
+        const actualFlag = rRow?.transferredFlag || (qr.date >= CONFIG.TAX.EQUITY_RATE_CHANGE_DATE ? 'AE' : 'BE');
+
+        const dataRow = sheet2.addRow([
+          qr.date,
+          actualFundName,
+          actualIsin,
+          qr.folioNumber,
+          qr.units,
+          actualNav,
+          qr.amount,
+          actualFlag
+        ]);
+
+        dataRow.getCell(5).numFmt = '#,##0.0000'; // Units
+        dataRow.getCell(6).numFmt = '#,##0.0000'; // NAV
+        dataRow.getCell(7).numFmt = '#,##0.00';   // Amount
+      }
+
+      sheet2.addRow([]);
+    }
+
+    if (!anyQuarterRendered) {
+      sheet2.addRow(['No redemptions in this financial year.']);
+    }
+
+    const s2ColWidths = [14, 40, 16, 20, 14, 14, 18, 14];
+    for (let i = 0; i < 8; i++) {
+      sheet2.getColumn(i + 1).width = s2ColWidths[i] || 15;
+    }
+
+    // Stream out Excel
+    res.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    );
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="vriddhi-advance-tax-${pan}-FY${fy}.xlsx"`
+    );
+    await workbook.xlsx.write(res);
+    res.end();
+
+  } catch (err: any) {
+    log('app', 'ERROR', 'TAX_ADVANCE_EXPORT', `Failed: ${err}`);
     return res.status(500).json({ error: err.message });
   }
 });

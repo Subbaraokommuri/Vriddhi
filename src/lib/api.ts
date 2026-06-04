@@ -468,15 +468,11 @@ export async function simulateRedemption(
 
 export async function getAdvanceTaxEstimate(
   pan: string,
-  fy?: string,
-  paidSoFar?: number
+  fy?: string
 ): Promise<AdvanceTaxEstimate> {
   const params = new URLSearchParams({ pan });
   if (fy) {
     params.set('fy', fy);
-  }
-  if (paidSoFar !== undefined) {
-    params.set('paidSoFar', String(paidSoFar));
   }
   const res = await fetch(`/api/tax/advance-tax?${params.toString()}`);
   if (!res.ok) throw new Error(`Advance tax estimate failed: ${res.statusText}`);
@@ -516,5 +512,54 @@ export async function downloadImportLog(date: string): Promise<void> {
   a.click();
   URL.revokeObjectURL(a.href);
 }
+
+export async function downloadAdvanceTaxExcel(
+  pan: string,
+  fy: string,
+  options: {
+    paid1?: number;
+    paid2?: number;
+    paid3?: number;
+    paid4?: number;
+    saDate?: string;
+    showInterest?: boolean;
+    histPaid1?: number;
+    histPaid2?: number;
+    histPaid3?: number;
+    histPaid4?: number;
+    histSaDate?: string;
+  } = {}
+): Promise<void> {
+  const params = new URLSearchParams({ pan, fy });
+  if (options.showInterest !== undefined) {
+    params.set('showInterest', options.showInterest ? 'true' : 'false');
+  }
+  if (options.paid1 !== undefined) params.set('paid1', String(options.paid1));
+  if (options.paid2 !== undefined) params.set('paid2', String(options.paid2));
+  if (options.paid3 !== undefined) params.set('paid3', String(options.paid3));
+  if (options.paid4 !== undefined) params.set('paid4', String(options.paid4));
+  if (options.saDate !== undefined) params.set('saDate', options.saDate);
+  if (options.histPaid1 !== undefined) params.set('histPaid1', String(options.histPaid1));
+  if (options.histPaid2 !== undefined) params.set('histPaid2', String(options.histPaid2));
+  if (options.histPaid3 !== undefined) params.set('histPaid3', String(options.histPaid3));
+  if (options.histPaid4 !== undefined) params.set('histPaid4', String(options.histPaid4));
+  if (options.histSaDate !== undefined) params.set('histSaDate', options.histSaDate);
+
+  const response = await fetch(`/api/tax/advance-tax/export?${params.toString()}`);
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({ error: 'Export failed' }));
+    throw new Error(err.error || 'Export failed');
+  }
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `vriddhi-advance-tax-${pan}-FY${fy}.xlsx`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
 
 

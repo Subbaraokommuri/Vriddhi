@@ -352,28 +352,34 @@ export interface TaxPan {
   name: string;
 }
 
+export interface QuarterRedemption {
+  date: string;
+  fundName: string;
+  folioNumber: string;
+  units: number;
+  amount: number;
+}
+
 export interface AdvanceTaxInstallment {
-  installmentNumber: number;   // 1–4
-  dueDate: string;             // YYYY-MM-DD
-  cumulativePercent: number;   // 15, 45, 75, 100
-  cumulativeAmount: number;    // cumulativePercent/100 * estimatedAnnualTax
-  dueAmount: number;           // this installment only (delta from previous)
-  isPastDue: boolean;          // dueDate < today
-  isCurrentInstallment: boolean; // true on the first upcoming (not-yet-past-due) installment
+  installmentNumber: number;
+  dueDate: string;
+  cutoffDate: string;
+  cumulativePercent: number;
+  cumulativeTaxUpToCutoff: number;
+  cumulativeObligation: number;
+  dueAmount: number;
+  quarterSTCG: number;
+  quarterLTCG: number;
+  quarterTaxContribution: number;
+  quarterRedemptions: QuarterRedemption[];
+  isPastDue: boolean;
+  isCurrentInstallment: boolean;
 }
 
 export interface AdvanceTaxEstimate {
   currentFy: string;
-  estimatedAnnualTax: number;
-  realisedTax: {
-    netSTCG: number;
-    netLTCG: number;
-    estimatedSTCGTax: number;
-    estimatedLTCGTax: number;
-    totalTax: number;
-  };
-  paidSoFar: number;
-  totalStillDue: number;
+  fyType: 'current' | 'previous' | 'historical';
+  fullYearTax: number;
   installments: AdvanceTaxInstallment[];
 }
 

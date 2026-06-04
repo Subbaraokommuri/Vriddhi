@@ -23,7 +23,8 @@ import {
   getHarvestingReport,
   simulateRedemption,
   fetchFolios,
-  getAdvanceTaxEstimate
+  getAdvanceTaxEstimate,
+  downloadAdvanceTaxExcel
 } from '../lib/api.ts';
 import { 
   PanCapitalGainsSummary, 
@@ -39,6 +40,42 @@ import {
 } from '../lib/types.ts';
 
 type TaxTab = 'capital-gains' | 'unrealized' | 'harvesting' | 'simulator' | 'advance';
+
+function isCurrentOrPreviousFy(
+  fyType: 'current' | 'previous' | 'historical'
+): boolean {
+  return fyType === 'current' || fyType === 'previous';
+}
+
+function calc234CInterest(
+  shortfall: number,
+  installmentNumber: number
+): number {
+  if (shortfall <= 0) return 0;
+  const months = installmentNumber <= 3 ? 3 : 1;
+  return Math.round(shortfall * 0.01 * months * 100) / 100;
+}
+
+function calc234BInterest(
+  fullYearTax: number,
+  totalPaid: number,
+  selfAssessmentDate: string,
+  fyEndYear: number
+): { applicable: boolean; shortfall: number; interest: number } {
+  const assessed = fullYearTax;
+  const ninetyPct = assessed * 0.9;
+  if (totalPaid >= ninetyPct) return { applicable: false, shortfall: 0, interest: 0 };
+  const shortfall = assessed - totalPaid;
+  const april1 = new Date(`${fyEndYear}-04-01`);
+  const saDate = new Date(selfAssessmentDate);
+  const diffMs = saDate.getTime() - april1.getTime();
+  const months = Math.max(1, Math.ceil(diffMs / (1000 * 60 * 60 * 24 * 30)));
+  return {
+    applicable: true,
+    shortfall,
+    interest: Math.round(shortfall * 0.01 * months * 100) / 100
+  };
+}
 
 export function TaxReport() {
   const [activeTab, setActiveTab] = useState<TaxTab>('capital-gains');
@@ -78,7 +115,17 @@ export function TaxReport() {
   const [advanceTaxResult, setAdvanceTaxResult] = useState<AdvanceTaxEstimate | null>(null);
   const [advanceTaxLoading, setAdvanceTaxLoading] = useState(false);
   const [advanceTaxError, setAdvanceTaxError] = useState<string | null>(null);
-  const [paidSoFar, setPaidSoFar] = useState<string>('');
+  const [exportLoading, setExportLoading] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
+
+  // New Advance Tax state variables
+  const [paidAmounts, setPaidAmounts] = useState<Record<number, string>>({});
+  const [selfAssessmentDate, setSelfAssessmentDate] = useState<string>('');
+  const [showHistoricalInterest, setShowHistoricalInterest] = useState<boolean>(false);
+  const [historicalPaidAmounts, setHistoricalPaidAmounts] = useState<Record<number, string>>({});
+  const [historicalSelfAssessmentDate, setHistoricalSelfAssessmentDate] = useState<string>('');
+  const [historicalInterestCalculated, setHistoricalInterestCalculated] = useState<boolean>(false);
+  const [redemptionBreakdownOpen, setRedemptionBreakdownOpen] = useState<boolean>(false);
 
   // CG State
   const [cgData, setCgData] = useState<PanCapitalGainsSummary | null>(null);
@@ -162,6 +209,16 @@ export function TaxReport() {
     setHarvestingError(null);
     setAdvanceTaxResult(null);
     setAdvanceTaxError(null);
+    setExportError(null);
+    
+    // Reset all advance tax state
+    setPaidAmounts({});
+    setSelfAssessmentDate('');
+    setShowHistoricalInterest(false);
+    setHistoricalPaidAmounts({});
+    setHistoricalSelfAssessmentDate('');
+    setHistoricalInterestCalculated(false);
+    setRedemptionBreakdownOpen(false);
   };
 
   const handleFyChange = (fy: string) => {
@@ -170,18 +227,74 @@ export function TaxReport() {
     setCgError(null);
   };
 
+  const handleAdvanceTaxFyChange = (fy: string) => {
+    setAdvanceTaxFy(fy);
+    setAdvanceTaxResult(null);
+    setAdvanceTaxError(null);
+    setExportError(null);
+    setPaidAmounts({});
+    setSelfAssessmentDate('');
+    setShowHistoricalInterest(false);
+    setHistoricalPaidAmounts({});
+    setHistoricalSelfAssessmentDate('');
+    setHistoricalInterestCalculated(false);
+    setRedemptionBreakdownOpen(false);
+  };
+
   const calculateAdvanceTax = async () => {
     if (!selectedPan) return;
     setAdvanceTaxLoading(true);
     setAdvanceTaxError(null);
     try {
-      const paidSoFarValue = parseFloat(paidSoFar) || 0;
-      const data = await getAdvanceTaxEstimate(selectedPan, advanceTaxFy, paidSoFarValue);
+      const data = await getAdvanceTaxEstimate(selectedPan, advanceTaxFy);
       setAdvanceTaxResult(data);
     } catch (err: any) {
       setAdvanceTaxError(err.message);
     } finally {
       setAdvanceTaxLoading(false);
+    }
+  };
+
+  const handleAdvanceTaxExport = async () => {
+    if (!advanceTaxResult || !selectedPan) return;
+    setExportLoading(true);
+    setExportError(null);
+    try {
+      const fyType = advanceTaxResult.fyType;
+      const isInterest = isCurrentOrPreviousFy(fyType)
+        || historicalInterestCalculated;
+
+      const opts: Parameters<typeof downloadAdvanceTaxExcel>[2] = {
+        showInterest: isInterest
+      };
+
+      if (isCurrentOrPreviousFy(fyType)) {
+        // Use main paid amounts
+        opts.paid1 = parseFloat(paidAmounts[1] || '0') || 0;
+        opts.paid2 = parseFloat(paidAmounts[2] || '0') || 0;
+        opts.paid3 = parseFloat(paidAmounts[3] || '0') || 0;
+        opts.paid4 = parseFloat(paidAmounts[4] || '0') || 0;
+        opts.saDate = selfAssessmentDate ||
+          (advanceTaxResult
+            ? `${parseInt(advanceTaxResult.currentFy.split('-')[0]) + 1}-07-31`
+            : undefined);
+      } else if (historicalInterestCalculated) {
+        // Use historical paid amounts
+        opts.histPaid1 = parseFloat(historicalPaidAmounts[1] || '0') || 0;
+        opts.histPaid2 = parseFloat(historicalPaidAmounts[2] || '0') || 0;
+        opts.histPaid3 = parseFloat(historicalPaidAmounts[3] || '0') || 0;
+        opts.histPaid4 = parseFloat(historicalPaidAmounts[4] || '0') || 0;
+        opts.histSaDate = historicalSelfAssessmentDate ||
+          (advanceTaxResult
+            ? `${parseInt(advanceTaxResult.currentFy.split('-')[0]) + 1}-07-31`
+            : undefined);
+      }
+
+      await downloadAdvanceTaxExcel(selectedPan, advanceTaxFy, opts);
+    } catch (err: any) {
+      setExportError(err.message);
+    } finally {
+      setExportLoading(false);
     }
   };
 
@@ -262,6 +375,137 @@ export function TaxReport() {
       fyOptions.push(`${yr}-${endShort}`);
     }
   }
+
+  const fyEndYear = useMemo(() => {
+    if (!advanceTaxResult) return null;
+    return parseInt(advanceTaxResult.currentFy.split('-')[0]) + 1;
+  }, [advanceTaxResult]);
+
+  const installmentPaidAmounts = useMemo(() => {
+    return advanceTaxResult?.installments.map(
+      (inst) => parseFloat(paidAmounts[inst.installmentNumber] || '0') || 0
+    ) ?? [];
+  }, [advanceTaxResult, paidAmounts]);
+
+  // cumulative paid up to each installment:
+  const cumulativePaid = useMemo(() => {
+    return installmentPaidAmounts.reduce<number[]>(
+      (acc, val, i) => { acc.push((acc[i - 1] ?? 0) + val); return acc; }, []
+    );
+  }, [installmentPaidAmounts]);
+
+  const shortfalls = useMemo(() => {
+    return advanceTaxResult?.installments.map((inst, i) =>
+      Math.max(0, inst.cumulativeObligation - (cumulativePaid[i] ?? 0))
+    ) ?? [];
+  }, [advanceTaxResult, cumulativePaid]);
+
+  const total234CInterest = useMemo(() => {
+    return shortfalls.reduce(
+      (sum, s, i) => sum + calc234CInterest(s, i + 1), 0
+    );
+  }, [shortfalls]);
+
+  const totalPaid = useMemo(() => {
+    return installmentPaidAmounts.reduce((a, b) => a + b, 0);
+  }, [installmentPaidAmounts]);
+
+  const defaultSADate = useMemo(() => {
+    if (!advanceTaxFy) return '';
+    const startYr = parseInt(advanceTaxFy.split('-')[0]);
+    if (isNaN(startYr)) return '';
+    return `${startYr + 1}-07-31`;
+  }, [advanceTaxFy]);
+
+  const currentQuarterInfo = useMemo(() => {
+    if (!advanceTaxResult || advanceTaxResult.fyType !== 'current') return null;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const installments = advanceTaxResult.installments;
+    let currentInst = installments.find(inst => {
+      const dueDate = new Date(inst.dueDate);
+      dueDate.setHours(0, 0, 0, 0);
+      return today <= dueDate;
+    });
+
+    if (!currentInst) {
+      currentInst = installments[installments.length - 1];
+    }
+
+    const n = currentInst.installmentNumber;
+    const dueDate = new Date(currentInst.dueDate);
+    dueDate.setHours(0, 0, 0, 0);
+    const diffTime = dueDate.getTime() - today.getTime();
+    const daysUntilDueDate = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+    let dueMessage = "";
+    if (daysUntilDueDate > 0) {
+      dueMessage = `Next installment due in ${daysUntilDueDate} days.`;
+    } else if (daysUntilDueDate === 0) {
+      dueMessage = "Due today.";
+    } else {
+      dueMessage = "Past due.";
+    }
+
+    let quarterDateRange = "";
+    const startYr = parseInt(advanceTaxResult.currentFy.split('-')[0]);
+    if (n === 1) {
+      quarterDateRange = `Apr 1 - Jun 15, ${startYr}`;
+    } else if (n === 2) {
+      quarterDateRange = `Jun 16 - Sep 15, ${startYr}`;
+    } else if (n === 3) {
+      quarterDateRange = `Sep 16 - Dec 15, ${startYr}`;
+    } else if (n === 4) {
+      quarterDateRange = `Dec 16, ${startYr} - Mar 15, ${startYr + 1}`;
+    }
+
+    return {
+      n,
+      quarterDateRange,
+      dueMessage
+    };
+  }, [advanceTaxResult]);
+
+  const historicalPaidAmountsList = useMemo(() => {
+    return advanceTaxResult?.installments.map(
+      (inst) => parseFloat(historicalPaidAmounts[inst.installmentNumber] || '0') || 0
+    ) ?? [];
+  }, [advanceTaxResult, historicalPaidAmounts]);
+
+  const historicalCumulativePaid = useMemo(() => {
+    return historicalPaidAmountsList.reduce<number[]>(
+      (acc, val, i) => { acc.push((acc[i - 1] ?? 0) + val); return acc; }, []
+    );
+  }, [historicalPaidAmountsList]);
+
+  const historicalShortfalls = useMemo(() => {
+    return advanceTaxResult?.installments.map((inst, i) =>
+      Math.max(0, inst.cumulativeObligation - (historicalCumulativePaid[i] ?? 0))
+    ) ?? [];
+  }, [advanceTaxResult, historicalCumulativePaid]);
+
+  const historicalTotal234CInterest = useMemo(() => {
+    return historicalShortfalls.reduce(
+      (sum, s, i) => sum + calc234CInterest(s, i + 1), 0
+    );
+  }, [historicalShortfalls]);
+
+  const historicalTotalPaid = useMemo(() => {
+    return historicalPaidAmountsList.reduce((a, b) => a + b, 0);
+  }, [historicalPaidAmountsList]);
+
+  const historicalSASelectedDate = historicalSelfAssessmentDate || defaultSADate;
+
+  const historicalB234 = useMemo(() => {
+    if (!fyEndYear || !advanceTaxResult) return null;
+    return calc234BInterest(
+      advanceTaxResult.fullYearTax,
+      historicalTotalPaid,
+      historicalSASelectedDate,
+      fyEndYear
+    );
+  }, [fyEndYear, advanceTaxResult, historicalTotalPaid, historicalSASelectedDate]);
 
   if (pansLoading) {
     return (
@@ -1198,59 +1442,62 @@ export function TaxReport() {
 
           {activeTab === 'advance' && (
             <div className="space-y-8" id="advance-tax-tab-content">
-              {/* SECTION 1 - Controls row */}
-              <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4" id="advance-tax-controls-card">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                      Financial Year
-                    </label>
-                    <select
-                      className="block w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5 text-sm font-medium focus:ring-2 focus:ring-primary/20 transition-all outline-none"
-                      value={advanceTaxFy}
-                      onChange={(e) => setAdvanceTaxFy(e.target.value)}
-                      disabled={advanceTaxLoading}
-                      id="advance-tax-fy-select"
-                    >
-                      {advanceTaxFyOptions.map(opt => (
-                        <option key={opt.value} value={opt.value}>{opt.label}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                      Already paid this FY (₹)
-                    </label>
-                    <div className="flex gap-4">
-                      <input
-                        className="block flex-1 bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-primary/20 outline-none"
-                        value={paidSoFar}
-                        onChange={e => setPaidSoFar(e.target.value)}
-                        placeholder="0"
-                        type="number" 
-                        min="0"
-                        id="advance-tax-paid-so-far"
-                      />
-                      <button
-                        id="advance-tax-calculate-btn"
-                        onClick={calculateAdvanceTax}
-                        disabled={advanceTaxLoading || !selectedPan}
-                        className="bg-primary text-white px-6 py-2.5 rounded-xl font-medium hover:bg-primary-hover transition-all shadow-lg shadow-primary/20 disabled:opacity-50 h-[42px] flex items-center justify-center gap-2"
-                      >
-                        {advanceTaxLoading && <Loader2 className="w-4 h-4 animate-spin" />}
-                        Calculate
-                      </button>
-                    </div>
-                  </div>
+              {/* SECTION 1 — FY selector row */}
+              <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-wrap items-end gap-4" id="advance-tax-controls-card">
+                <div className="space-y-1.5 flex-1 min-w-[200px]">
+                  <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                    Financial Year
+                  </label>
+                  <select
+                    className="block w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5 text-sm font-medium focus:ring-2 focus:ring-primary/20 transition-all outline-none"
+                    value={advanceTaxFy}
+                    onChange={(e) => handleAdvanceTaxFyChange(e.target.value)}
+                    disabled={advanceTaxLoading}
+                    id="advance-tax-fy-select"
+                  >
+                    {advanceTaxFyOptions.map(opt => (
+                      <option key={opt.value} value={opt.value}>{opt.label}</option>
+                    ))}
+                  </select>
                 </div>
+                <div>
+                  <button
+                    id="advance-tax-calculate-btn"
+                    onClick={calculateAdvanceTax}
+                    disabled={advanceTaxLoading || !selectedPan}
+                    className="bg-primary text-white px-6 py-2.5 rounded-xl font-medium hover:bg-primary-hover transition-all shadow-lg shadow-primary/20 disabled:opacity-50 h-[42px] flex items-center justify-center gap-2"
+                  >
+                    {advanceTaxLoading && <Loader2 className="w-4 h-4 animate-spin" />}
+                    Calculate
+                  </button>
+                </div>
+                {advanceTaxResult && (
+                  <button
+                    onClick={handleAdvanceTaxExport}
+                    disabled={exportLoading}
+                    className="flex items-center gap-2 bg-white border border-slate-200
+                               text-slate-700 px-4 py-2.5 rounded-xl text-sm font-medium
+                               hover:bg-slate-50 transition-all shadow-sm
+                               disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+                  >
+                    {exportLoading
+                      ? <Loader2 className="w-4 h-4 animate-spin" />
+                      : <Download className="w-4 h-4" />
+                    }
+                    {exportLoading ? 'Exporting...' : 'Download Excel'}
+                  </button>
+                )}
                 {advanceTaxError && (
-                  <p className="text-sm font-medium text-rose-600 animate-pulse" id="advance-tax-error-msg">
+                  <p className="text-sm font-medium text-rose-600 animate-pulse w-full mt-2" id="advance-tax-error-msg">
                     {advanceTaxError}
                   </p>
                 )}
+                {exportError && (
+                  <p className="text-xs text-red-500 mt-1">{exportError}</p>
+                )}
               </div>
 
-              {/* LOADING STATE vs RESULTS */}
+              {/* LOADING STATE */}
               {advanceTaxLoading ? (
                 <div className="flex flex-col items-center justify-center py-24 text-slate-500" id="advance-tax-loading-spinner">
                   <Loader2 className="w-8 h-8 animate-spin mb-4 text-primary" />
@@ -1259,77 +1506,25 @@ export function TaxReport() {
               ) : (
                 advanceTaxResult && (
                   <>
-                    {/* SECTION 2 - Summary Cards */}
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4" id="advance-tax-summary-cards">
-                      {/* Card A */}
-                      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm" id="adv-tax-card-est-annual">
-                        <p className="text-sm font-medium text-slate-500 mb-2">Estimated Annual Tax</p>
-                        <p className="text-2xl font-bold text-slate-900">
-                          {formatCurrency(advanceTaxResult.estimatedAnnualTax)}
-                        </p>
-                        <p className="text-xs text-slate-400 mt-1">
-                          Based on realised gains in FY {advanceTaxResult.currentFy} so far
-                        </p>
-                      </div>
-
-                      {/* Card B */}
-                      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm" id="adv-tax-card-paid">
-                        <p className="text-sm font-medium text-slate-500 mb-2">Already Paid</p>
-                        <p className="text-2xl font-bold text-slate-900">
-                          {formatCurrency(advanceTaxResult.paidSoFar)}
-                        </p>
-                      </div>
-
-                      {/* Card C */}
-                      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm" id="adv-tax-card-still-due">
-                        <p className="text-sm font-medium text-slate-500 mb-2">Still Due</p>
-                        <p className={`text-2xl font-bold ${
-                          advanceTaxResult.totalStillDue > 0 ? "text-rose-600" : "text-emerald-600"
-                        }`}>
-                          {formatCurrency(advanceTaxResult.totalStillDue)}
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* SECTION 3 - Tax Breakdown */}
-                    <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm" id="advance-tax-breakdown">
-                      <h4 className="font-semibold text-slate-900 mb-4 h-5">Tax Breakdown</h4>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div className="space-y-3 bg-slate-50 p-4 rounded-xl" id="adv-tax-stcg-col">
-                          <div className="flex justify-between items-center text-sm">
-                            <span className="text-slate-500 font-medium">Net STCG</span>
-                            <span className="font-semibold text-slate-900">
-                              {formatCurrency(advanceTaxResult.realisedTax.netSTCG)}
-                            </span>
-                          </div>
-                          <div className="flex justify-between items-center text-sm border-t border-slate-200/60 pt-2">
-                            <span className="text-slate-500 font-medium">STCG Tax</span>
-                            <span className="font-bold text-slate-900">
-                              {formatCurrency(advanceTaxResult.realisedTax.estimatedSTCGTax)}
-                            </span>
-                          </div>
-                        </div>
-                        <div className="space-y-3 bg-slate-50 p-4 rounded-xl" id="adv-tax-ltcg-col">
-                          <div className="flex justify-between items-center text-sm">
-                            <span className="text-slate-500 font-medium">Net LTCG</span>
-                            <span className="font-semibold text-slate-900">
-                              {formatCurrency(advanceTaxResult.realisedTax.netLTCG)}
-                            </span>
-                          </div>
-                          <div className="flex justify-between items-center text-sm border-t border-slate-200/60 pt-2">
-                            <span className="text-slate-500 font-medium">LTCG Tax</span>
-                            <span className="font-bold text-slate-900">
-                              {formatCurrency(advanceTaxResult.realisedTax.estimatedLTCGTax)}
-                            </span>
-                          </div>
+                    {/* SECTION 2 — Current quarter indicator */}
+                    {advanceTaxResult.fyType === 'current' && currentQuarterInfo && (
+                      <div className="bg-amber-50 border border-amber-200 p-4 rounded-xl flex gap-3 text-amber-800 items-center shadow-sm font-medium flex-1" id="current-quarter-indicator">
+                        <Info className="w-5 h-5 flex-shrink-0 text-amber-600" />
+                        <div className="text-sm">
+                          You are in Q{currentQuarterInfo.n} ({currentQuarterInfo.quarterDateRange}). {currentQuarterInfo.dueMessage}
                         </div>
                       </div>
-                    </div>
+                    )}
 
-                    {/* SECTION 4 - Installment Schedule Table */}
+                    {/* SECTION 3 — Mode A Installment Table */}
                     <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden" id="advance-tax-installments">
-                      <div className="px-6 py-4 border-b border-slate-200 bg-slate-50/50">
+                      <div className="px-6 py-4 border-b border-slate-200 bg-slate-50/50 flex flex-wrap items-center justify-between gap-4">
                         <h4 className="font-semibold text-slate-900">Installment Schedule</h4>
+                        {advanceTaxFy !== currentInProgressFy && (
+                          <span className="text-xs text-amber-600 bg-amber-50 px-2 py-1 rounded font-medium italic">
+                            Historical FY — all installments are past due.
+                          </span>
+                        )}
                       </div>
                       <div className="overflow-x-auto">
                         <table className="w-full text-left border-collapse" id="advance-tax-installments-table">
@@ -1337,14 +1532,23 @@ export function TaxReport() {
                             <tr className="bg-slate-50/20 border-b border-slate-200 font-semibold text-xs text-slate-500 uppercase">
                               <th className="px-6 py-4">Installment</th>
                               <th className="px-6 py-4">Due Date</th>
-                              <th className="px-6 py-4 text-right">Cumulative %</th>
-                              <th className="px-6 py-4 text-right">This Installment</th>
-                              <th className="px-6 py-4 text-right">Cumulative Due</th>
-                              <th className="px-6 py-4 text-center">Status</th>
+                              <th className="px-6 py-4">Gains This Quarter</th>
+                              <th className="px-6 py-4 text-right">Cumulative Tax</th>
+                              <th className="px-6 py-4 text-right">Cumulative Obligation</th>
+                              <th className="px-6 py-4 text-right">This Installment Due</th>
+                              {isCurrentOrPreviousFy(advanceTaxResult.fyType) && (
+                                <>
+                                  <th className="px-6 py-4 text-center w-28">Paid</th>
+                                  <th className="px-6 py-4 text-right">Shortfall</th>
+                                  <th className="px-6 py-4 text-right">234C Interest</th>
+                                </>
+                              )}
                             </tr>
                           </thead>
                           <tbody>
-                            {advanceTaxResult.installments.map((inst) => {
+                            {advanceTaxResult.installments.map((inst, i) => {
+                              const isCurrentOrPrev = isCurrentOrPreviousFy(advanceTaxResult.fyType);
+                              
                               let rowClass = "border-b border-slate-100 last:border-0 hover:bg-slate-50/50 transition-colors";
                               if (inst.isPastDue) {
                                 rowClass += " opacity-60 bg-slate-50/30";
@@ -1352,62 +1556,363 @@ export function TaxReport() {
                                 rowClass += " ring-2 ring-primary ring-inset bg-primary/5 font-semibold";
                               }
 
-                              let statusBg = "bg-slate-100 text-slate-600";
-                              let statusText = "Upcoming";
-                              if (inst.isPastDue) {
-                                statusBg = "bg-slate-200 text-slate-500";
-                                statusText = "Past due";
-                              } else if (inst.isCurrentInstallment) {
-                                statusBg = "bg-amber-100 text-amber-800";
-                                statusText = "Due next";
-                              }
-
                               return (
                                 <tr key={inst.installmentNumber} className={rowClass} id={`adv-tax-row-inst-${inst.installmentNumber}`}>
                                   <td className="px-6 py-4">
-                                    Installment {inst.installmentNumber}
+                                    <span className="font-medium">Installment {inst.installmentNumber}</span>
+                                    <span className="ml-1.5 px-1.5 py-0.5 rounded text-[10px] uppercase font-bold bg-slate-100 text-slate-600">
+                                      Q{inst.installmentNumber}
+                                    </span>
                                   </td>
-                                  <td className="px-6 py-4 font-mono font-medium text-slate-600">
+                                  <td className="px-6 py-4 text-slate-600 font-mono text-sm">
                                     {formatDate(inst.dueDate)}
                                   </td>
+                                  <td className="px-6 py-4 text-xs font-mono text-slate-600 leading-relaxed">
+                                    <div className="text-slate-850">{formatCurrency(inst.quarterSTCG)} STCG</div>
+                                    <div className="text-slate-500">{formatCurrency(inst.quarterLTCG)} LTCG</div>
+                                  </td>
                                   <td className="px-6 py-4 text-right font-mono text-slate-600">
-                                    {inst.cumulativePercent}%
+                                    {formatCurrency(inst.cumulativeTaxUpToCutoff)}
+                                  </td>
+                                  <td className="px-6 py-4 text-right font-mono text-slate-600 font-medium">
+                                    {formatCurrency(inst.cumulativeObligation)} ({inst.cumulativePercent}%)
                                   </td>
                                   <td className="px-6 py-4 text-right font-bold text-slate-900 font-mono">
                                     {formatCurrency(inst.dueAmount)}
                                   </td>
-                                  <td className="px-6 py-4 text-right font-semibold text-slate-900 font-mono">
-                                    {formatCurrency(inst.cumulativeAmount)}
-                                  </td>
-                                  <td className="px-6 py-4 text-center">
-                                    <div className="flex items-center justify-center gap-1.5">
-                                      <span className={`px-2 py-1 rounded text-xs font-bold ${statusBg}`}>
-                                        {statusText}
-                                      </span>
-                                      {inst.isCurrentInstallment && (
-                                        <span className="px-2 py-1 rounded text-xs font-bold bg-primary text-white animate-pulse">
-                                          Pay now
-                                        </span>
-                                      )}
-                                    </div>
-                                  </td>
+                                  {isCurrentOrPrev && (
+                                    <>
+                                      <td className="px-6 py-4 text-center">
+                                        <input
+                                          type="number"
+                                          placeholder="0"
+                                          value={paidAmounts[inst.installmentNumber] ?? ''}
+                                          onChange={(e) => {
+                                            const val = e.target.value;
+                                            setPaidAmounts(prev => ({
+                                              ...prev,
+                                              [inst.installmentNumber]: val
+                                            }));
+                                          }}
+                                          className="w-24 bg-slate-50 border border-slate-200 rounded px-2 py-1 text-xs text-center focus:ring-1 focus:ring-primary outline-none"
+                                        />
+                                      </td>
+                                      <td className={`px-6 py-4 text-right font-mono font-medium ${shortfalls[i] > 0 ? 'text-rose-600 font-semibold' : 'text-slate-500'}`}>
+                                        {formatCurrency(shortfalls[i])}
+                                      </td>
+                                      <td className={`px-6 py-4 text-right font-mono font-bold ${calc234CInterest(shortfalls[i], inst.installmentNumber) > 0 ? 'text-rose-600 font-extrabold' : 'text-slate-500'}`}>
+                                        {formatCurrency(calc234CInterest(shortfalls[i], inst.installmentNumber))}
+                                      </td>
+                                    </>
+                                  )}
                                 </tr>
                               );
                             })}
                           </tbody>
                         </table>
                       </div>
-                      {advanceTaxFy !== currentInProgressFy && (
-                        <div className="px-6 py-3 bg-amber-50/60 border-t border-slate-200/60 text-xs text-amber-700 font-medium italic animate-fade-in" id="historical-fy-note">
-                          Historical FY — all installments are past due.
+                    </div>
+
+                    {/* SECTION 4 — Summary row */}
+                    {isCurrentOrPreviousFy(advanceTaxResult.fyType) && (
+                      <div className="grid grid-cols-1 md:grid-cols-4 gap-4" id="advance-tax-summary-row">
+                        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+                          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Obligation</p>
+                          <p className="text-lg font-bold text-slate-900 mt-1 font-mono">
+                            {formatCurrency(advanceTaxResult.installments[3]?.cumulativeObligation ?? 0)}
+                          </p>
+                        </div>
+                        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+                          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Paid</p>
+                          <p className="text-lg font-bold text-slate-900 mt-1 font-mono">
+                            {formatCurrency(totalPaid)}
+                          </p>
+                        </div>
+                        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+                          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Shortfall</p>
+                          <p className={`text-lg font-bold mt-1 font-mono ${
+                            Math.max(0, (advanceTaxResult.installments[3]?.cumulativeObligation ?? 0) - totalPaid) > 0 
+                              ? 'text-rose-500' 
+                              : 'text-emerald-600'
+                          }`}>
+                            {formatCurrency(Math.max(0, (advanceTaxResult.installments[3]?.cumulativeObligation ?? 0) - totalPaid))}
+                          </p>
+                        </div>
+                        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm animate-fade-in">
+                          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider font-medium">Estimated 234C Interest</p>
+                          <p className={`text-lg font-extrabold mt-1 font-mono ${total234CInterest > 0 ? 'text-rose-500' : 'text-slate-900'}`}>
+                            {formatCurrency(total234CInterest)}
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* SECTION 5 — 234B warning */}
+                    {isCurrentOrPreviousFy(advanceTaxResult.fyType) && fyEndYear && (
+                      (() => {
+                        const b234 = calc234BInterest(
+                          advanceTaxResult.fullYearTax,
+                          totalPaid,
+                          selfAssessmentDate || defaultSADate,
+                          fyEndYear
+                        );
+
+                        if (!b234.applicable) return null;
+
+                        return (
+                          <div className="bg-amber-50 border border-amber-200 p-6 rounded-2xl flex flex-col md:flex-row gap-6 text-amber-900 shadow-sm" id="section-234b-warning">
+                            <div className="w-10 h-10 bg-amber-100/60 text-amber-600 rounded-xl flex items-center justify-center shrink-0">
+                              <AlertTriangle className="w-5 h-5" />
+                            </div>
+                            <div className="space-y-4 flex-1">
+                              <div>
+                                <p className="font-semibold text-amber-950">Section 234B Interest Applicable</p>
+                                <p className="text-sm mt-1 leading-relaxed text-amber-800">
+                                  If your total advance tax paid ({formatCurrency(totalPaid)}) is below 90% of your annual tax liability ({formatCurrency(advanceTaxResult.fullYearTax)}), Section 234B interest applies from April 1 at 1% per month.
+                                </p>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <span className="text-sm font-medium text-amber-900">Estimated 234B interest:</span>
+                                <span className="text-base font-extrabold text-amber-950 bg-amber-100 px-2 py-0.5 rounded font-mono">
+                                  {formatCurrency(b234.interest)}
+                                </span>
+                              </div>
+                              <div className="border-t border-amber-200/60 pt-4 flex flex-col sm:flex-row sm:items-center gap-4">
+                                <div className="space-y-1">
+                                  <label className="text-[10px] font-bold text-amber-700 uppercase tracking-wider block">Self-assessment payment date</label>
+                                  <input
+                                    type="date"
+                                    value={selfAssessmentDate || defaultSADate}
+                                    onChange={(e) => setSelfAssessmentDate(e.target.value)}
+                                    className="bg-white border border-amber-305 rounded-lg px-2.5 py-1 text-sm text-slate-800 outline-none focus:ring-1 focus:ring-amber-500 font-medium font-mono"
+                                  />
+                                </div>
+                                <p className="text-xs text-amber-700 italic max-w-sm">
+                                  Assumes self-assessment paid by {formatDate(selfAssessmentDate || defaultSADate)}. Edit to match your actual payment date.
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })()
+                    )}
+
+                    {/* SECTION 6 — Quarter-wise redemption breakdown */}
+                    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden" id="section-redemption-breakdown">
+                      <div className="px-6 py-4 border-b border-slate-200 bg-slate-50/50 flex items-center justify-between">
+                        <div className="space-y-0.5">
+                          <h4 className="font-semibold text-slate-900">Quarter-wise Redemption Breakdown</h4>
+                          <p className="text-xs text-slate-500">View redemptions that accrued capital gains during this Financial Year.</p>
+                        </div>
+                        <button
+                          onClick={() => setRedemptionBreakdownOpen(!redemptionBreakdownOpen)}
+                          className="flex items-center gap-1.5 px-3 py-1.5 border border-slate-200 rounded-lg text-xs font-medium bg-white hover:bg-slate-50 transition-all text-slate-600 outline-none cursor-pointer"
+                        >
+                          {redemptionBreakdownOpen ? (
+                            <>
+                              Hide Breakdown
+                              <ChevronUp className="w-3.5 h-3.5" />
+                            </>
+                          ) : (
+                            <>
+                              Show Redemption Breakdown
+                              <ChevronDown className="w-3.5 h-3.5" />
+                            </>
+                          )}
+                        </button>
+                      </div>
+
+                      {redemptionBreakdownOpen && (
+                        <div className="p-6 space-y-6 animate-fade-in">
+                          {(() => {
+                            const hasAnyRedemptions = advanceTaxResult.installments.some(
+                              inst => inst.quarterRedemptions && inst.quarterRedemptions.length > 0
+                            );
+
+                            if (!hasAnyRedemptions) {
+                              return (
+                                <p className="text-sm text-slate-400 italic text-center py-4">No redemptions in this FY.</p>
+                              );
+                            }
+
+                            return advanceTaxResult.installments.map(inst => {
+                              const redemptions = inst.quarterRedemptions;
+                              if (!redemptions || redemptions.length === 0) return null;
+
+                              return (
+                                <div key={inst.installmentNumber} className="space-y-2 border border-slate-100 rounded-xl p-4 bg-slate-50/30">
+                                  <div className="flex items-center justify-between">
+                                    <span className="font-bold text-sm text-slate-800">Quarter Q{inst.installmentNumber}</span>
+                                    <span className="text-xs text-slate-400">Before due date {formatDate(inst.dueDate)}</span>
+                                  </div>
+                                  <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white shadow-sm">
+                                    <table className="w-full text-left border-collapse text-xs">
+                                      <thead>
+                                        <tr className="bg-slate-50 border-b border-slate-200 font-semibold text-slate-500 uppercase">
+                                          <th className="px-4 py-2.5">Date</th>
+                                          <th className="px-4 py-2.5">Fund</th>
+                                          <th className="px-4 py-2.5">Folio</th>
+                                          <th className="px-4 py-2.5 text-right font-mono">Units</th>
+                                          <th className="px-4 py-2.5 text-right font-mono">Amount</th>
+                                        </tr>
+                                      </thead>
+                                      <tbody>
+                                        {redemptions.map((red, idx) => (
+                                          <tr key={idx} className="border-b border-slate-100 last:border-0 hover:bg-slate-50/50 transition-colors">
+                                            <td className="px-4 py-2 text-slate-600 font-mono">{formatDate(red.date)}</td>
+                                            <td className="px-4 py-2 text-slate-800 font-medium">{red.fundName}</td>
+                                            <td className="px-4 py-2 text-slate-500 font-mono">{red.folioNumber}</td>
+                                            <td className="px-4 py-2 text-right text-slate-950 font-mono">{red.units.toFixed(4)}</td>
+                                            <td className="px-4 py-2 text-right font-bold text-slate-700 font-mono">{formatCurrency(red.amount)}</td>
+                                          </tr>
+                                        ))}
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                </div>
+                              );
+                            });
+                          })()}
                         </div>
                       )}
                     </div>
+
+                    {/* SECTION 7 — Historical interest calculation */}
+                    {advanceTaxResult.fyType === 'historical' && fyEndYear && (
+                      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden animate-fade-in" id="section-historical-interest-card">
+                        <div className="px-6 py-4 border-b border-slate-200 bg-slate-50/50 flex items-center justify-between">
+                          <div className="space-y-0.5">
+                            <h4 className="font-semibold text-slate-900">Check 234C / 234B Interest (Historical)</h4>
+                            <p className="text-xs text-slate-500">For verifying past compliance or IT notices.</p>
+                          </div>
+                          <button
+                            onClick={() => {
+                              setShowHistoricalInterest(!showHistoricalInterest);
+                              if (!showHistoricalInterest) {
+                                setHistoricalInterestCalculated(false);
+                              }
+                            }}
+                            className="flex items-center gap-1.5 px-3 py-1.5 border border-slate-200 rounded-lg text-xs font-medium bg-white hover:bg-slate-50 transition-all text-slate-600 outline-none cursor-pointer"
+                          >
+                            {showHistoricalInterest ? (
+                              <>
+                                Collapse Tool
+                                <ChevronUp className="w-3.5 h-3.5" />
+                              </>
+                            ) : (
+                              <>
+                                Expand Tool
+                                <ChevronDown className="w-3.5 h-3.5" />
+                              </>
+                            )}
+                          </button>
+                        </div>
+
+                        {showHistoricalInterest && (
+                          <div className="p-6 space-y-6 animate-fade-in" id="historical-interest-tool-content">
+                            <div className="bg-slate-50 p-4 rounded-xl space-y-4">
+                              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider block">Historical Enter Payments</p>
+                              <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+                                {[1, 2, 3, 4].map(n => (
+                                  <div key={n} className="space-y-1">
+                                    <label className="text-xs text-slate-600 font-medium font-mono">Paid Q{n} (₹)</label>
+                                    <input
+                                      type="number"
+                                      placeholder="0"
+                                      value={historicalPaidAmounts[n] ?? ''}
+                                      onChange={(e) => {
+                                        const val = e.target.value;
+                                        setHistoricalPaidAmounts(prev => ({ ...prev, [n]: val }));
+                                      }}
+                                      className="w-full bg-white border border-slate-200 rounded px-2.5 py-1.5 text-sm text-center outline-none focus:ring-1 focus:ring-primary font-medium font-mono"
+                                    />
+                                  </div>
+                                ))}
+                              </div>
+
+                              <div className="flex flex-col sm:flex-row sm:items-end gap-4 border-t border-slate-200/60 pt-4">
+                                <div className="space-y-1">
+                                  <label className="text-[10px] font-bold text-slate-600 uppercase tracking-wider block">Self-assessment payment date</label>
+                                  <input
+                                    type="date"
+                                    value={historicalSelfAssessmentDate || defaultSADate}
+                                    onChange={(e) => setHistoricalSelfAssessmentDate(e.target.value)}
+                                    className="bg-white border border-slate-200 rounded px-3 py-1.5 text-sm text-slate-850 outline-none focus:ring-1 focus:ring-primary font-medium font-mono"
+                                  />
+                                </div>
+                                <button
+                                  onClick={() => setHistoricalInterestCalculated(true)}
+                                  className="bg-primary text-white px-5 py-2 rounded-lg font-medium hover:bg-primary-hover transition-all text-sm h-[38px] cursor-pointer"
+                                >
+                                  Calculate Interest
+                                </button>
+                              </div>
+                            </div>
+
+                            {historicalInterestCalculated && (
+                              <div className="space-y-6 border-t border-slate-100 pt-6 animate-fade-in">
+                                <div className="grid grid-cols-1 md:grid-cols-4 gap-4" id="historical-summary-results">
+                                  <div className="bg-slate-50 p-4 rounded-xl">
+                                    <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Obligation</p>
+                                    <p className="text-lg font-bold text-slate-900 mt-1 font-mono">
+                                      {formatCurrency(advanceTaxResult.installments[3]?.cumulativeObligation ?? 0)}
+                                    </p>
+                                  </div>
+                                  <div className="bg-slate-50 p-4 rounded-xl">
+                                    <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Paid</p>
+                                    <p className="text-lg font-bold text-slate-900 mt-1 font-mono">
+                                      {formatCurrency(historicalTotalPaid)}
+                                    </p>
+                                  </div>
+                                  <div className="bg-slate-50 p-4 rounded-xl">
+                                    <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Shortfall</p>
+                                    <p className={`text-lg font-bold mt-1 font-mono ${
+                                      Math.max(0, (advanceTaxResult.installments[3]?.cumulativeObligation ?? 0) - historicalTotalPaid) > 0 
+                                        ? 'text-rose-500' 
+                                        : 'text-emerald-600'
+                                    }`}>
+                                      {formatCurrency(Math.max(0, (advanceTaxResult.installments[3]?.cumulativeObligation ?? 0) - historicalTotalPaid))}
+                                    </p>
+                                  </div>
+                                  <div className="bg-slate-50 p-4 rounded-xl">
+                                    <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider font-medium">Estimated 234C Interest</p>
+                                    <p className={`text-lg font-extrabold mt-1 font-mono ${historicalTotal234CInterest > 0 ? 'text-rose-500' : 'text-slate-900'}`}>
+                                      {formatCurrency(historicalTotal234CInterest)}
+                                    </p>
+                                  </div>
+                                </div>
+
+                                {historicalB234 && historicalB234.applicable && (
+                                  <div className="bg-amber-50 border border-amber-200 p-4 rounded-xl flex gap-3 text-amber-900" id="historical-234b-result">
+                                    <AlertTriangle className="w-5 h-5 flex-shrink-0 mt-0.5 text-amber-600" />
+                                    <div className="text-sm space-y-1">
+                                      <p className="font-semibold text-amber-950">Section 234B Interest Applicable</p>
+                                      <p className="text-amber-800">
+                                        Section 234B interest is applicable since total paid ({formatCurrency(historicalTotalPaid)}) is below 90% of the annual tax liability ({formatCurrency(advanceTaxResult.fullYearTax)}).
+                                      </p>
+                                      <p className="font-bold text-amber-950">
+                                        Estimated 234B interest (up to {formatDate(historicalSASelectedDate)}): {formatCurrency(historicalB234.interest)}
+                                      </p>
+                                    </div>
+                                  </div>
+                                )}
+                                
+                                {historicalB234 && !historicalB234.applicable && (
+                                  <div className="bg-emerald-50 border border-emerald-110 p-4 rounded-xl text-sm text-emerald-800 font-medium">
+                                    ✓ No Section 234B interest applicable (paid amount is at least 90% of annual tax).
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </>
                 )
               )}
 
-              {/* SECTION 5 - Disclaimer */}
+              {/* SECTION 8 — Disclaimer */}
               <div className="flex items-center gap-2 text-slate-400 text-xs italic" id="advance-tax-disclaimer">
                 <Info className="w-4 h-4 mt-0.5 shrink-0" />
                 <p>Estimate based on realised gains only. Does not include gains from other asset classes. Consult a tax advisor for your final advance tax liability.</p>
