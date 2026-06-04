@@ -3,8 +3,9 @@ import {
   computeCapitalGains, 
   aggregatePanGains, 
   FolioCapitalGains, 
-  PanCapitalGainsSummary 
-} from '../lib/tax.ts';
+  PanCapitalGainsSummary,
+  MatchedLot
+} from '../lib/capital-gains.ts';
 import { db, log } from '../lib/db.ts';
 import { CONFIG } from '../lib/config.ts';
 
@@ -178,13 +179,18 @@ async function getCapitalGainsSummary(pan: string, fyInput?: string) {
       estimatedSTCGTax: 0,
       estimatedLTCGTax: 0,
       folios: [],
-      hasGrandfatheringFlags: false
+      hasGrandfatheringFlags: false,
+      ltcgBE: 0,
+      ltcgAE: 0,
+      ltcgExemptionUsedBE: 0,
+      ltcgExemptionUsedAE: 0
     };
   }
 
   // Bulk fetch all transactions
   const allTxns = db.prepare(`
-    SELECT t.date, t.transaction_type, t.units, t.amount, t.nav, t.folio_id 
+    SELECT t.date, t.transaction_type, t.units, t.amount, t.nav, t.folio_id,
+           t.transaction_subtype, t.merger_ratio, t.source_fund_id
     FROM transactions t 
     WHERE t.folio_id IN (SELECT id FROM folios WHERE pan = ?) 
     ORDER BY t.date ASC
@@ -199,9 +205,48 @@ async function getCapitalGainsSummary(pan: string, fyInput?: string) {
     txnMap.get(txn.folio_id)!.push(txn);
   }
 
+  // Map from fund_id → { isin, transactions[] }
+  const allTxnsByFundId = new Map<string, { isin: string; transactions: any[] }>();
+
+  // Populate by iterating the folio+transaction data already fetched.
+  // Use the folio's fund_id as the key and fund's isin as the isin value.
+  // Accumulate — a fund can have multiple folios.
+  for (const f of folios) {
+    const txns = txnMap.get(f.id) || [];
+    const existing = allTxnsByFundId.get(f.fund_id);
+    if (existing) {
+      existing.transactions.push(...txns);
+    } else {
+      allTxnsByFundId.set(f.fund_id, {
+        isin: f.isin,  // the funds.isin column
+        transactions: [...txns]
+      });
+    }
+  }
+
   const folioGains: FolioCapitalGains[] = [];
   for (const f of folios) {
     const txns = txnMap.get(f.id) || [];
+
+    const hasMergerIn = txns.some(
+      t => (t.transaction_subtype ?? '') === 'merger_in'
+    );
+
+    let mergerSourceMap: Parameters<typeof computeCapitalGains>[10] = undefined;
+
+    if (hasMergerIn) {
+      const sourceIds = [...new Set(
+        txns
+          .filter(t => t.transaction_subtype === 'merger_in' && t.source_fund_id)
+          .map(t => t.source_fund_id as string)
+      )];
+      mergerSourceMap = new Map(
+        sourceIds
+          .filter(id => allTxnsByFundId.has(id))
+          .map(id => [id, allTxnsByFundId.get(id)!])
+      );
+    }
+
     const result = computeCapitalGains(
       f.id,
       f.folio_number,
@@ -212,7 +257,8 @@ async function getCapitalGainsSummary(pan: string, fyInput?: string) {
       txns,
       navOnDate,
       fyStart,
-      fyEnd
+      fyEnd,
+      mergerSourceMap
     );
     
     // Skip if no sells in FY
@@ -222,6 +268,27 @@ async function getCapitalGainsSummary(pan: string, fyInput?: string) {
   }
 
   const summary = aggregatePanGains(pan, investor.name, folioGains);
+
+  // Compute BE/AE LTCG split for exemption bar display (BUG-TAX-02 + BUG-TAX-05)
+  let _ltcgBE = 0;
+  let _ltcgAE = 0;
+  for (const f of folioGains) {
+    for (const lot of f.matchedLots) {
+      if (lot.units < 0.00005) continue;
+      if (lot.gainType === 'LTCG' && (lot.taxRate ?? 0) > 0) {
+        if (lot.transferredFlag === 'BE') _ltcgBE += lot.gain;
+        else if (lot.transferredFlag === 'AE') _ltcgAE += lot.gain;
+      }
+    }
+  }
+  const _stcgLoss = summary.totalSTCG < 0 ? Math.abs(summary.totalSTCG) : 0;
+  const _aeAfterSetoff = Math.max(0, _ltcgAE - _stcgLoss);
+  const _remainingLoss = Math.max(0, _stcgLoss - Math.max(0, _ltcgAE));
+  const _beAfterSetoff = Math.max(0, _ltcgBE - _remainingLoss);
+  const ltcgExemptionUsedBE = _beAfterSetoff > 0
+    ? Math.min(_beAfterSetoff, CONFIG.TAX.EQUITY_LTCG_EXEMPTION_OLD) : 0;
+  const ltcgExemptionUsedAE = _aeAfterSetoff > 0
+    ? Math.min(_aeAfterSetoff, CONFIG.TAX.EQUITY_LTCG_EXEMPTION_NEW) : 0;
 
   // Proportionally allocate LTCG Tax
   if (summary.totalLTCG > 0) {
@@ -234,7 +301,7 @@ async function getCapitalGainsSummary(pan: string, fyInput?: string) {
     }
   }
 
-  return { fy, ...summary };
+  return { fy, ...summary, ltcgBE: _ltcgBE, ltcgAE: _ltcgAE, ltcgExemptionUsedBE, ltcgExemptionUsedAE };
 }
 
 /**
@@ -284,7 +351,7 @@ router.get('/capital-gains/export', async (req, res) => {
         const units = lot.units.toFixed(4);
         const saleNav = lot.saleNav.toFixed(4);
         const saleValue = (lot.units * lot.saleNav).toFixed(2);
-        const col7 = (Math.max(lot.costPerUnit, lot.fmvJan2018 ?? 0) * lot.units).toFixed(2);
+        const col7 = (lot.costPerUnit * lot.units).toFixed(2);
         
         // col9: Lower of FMV and Sale Value
         const lowerFmvSale = lot.fmvJan2018 
@@ -330,6 +397,229 @@ router.get('/capital-gains/export', async (req, res) => {
     
   } catch (error: any) {
     log('app', 'ERROR', MODULE, `Error in export: ${error.message}`);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /api/tax/capital-gains-audit-csv
+ */
+router.get('/capital-gains-audit-csv', async (req, res) => {
+  try {
+    // STEP 1 — Validate params and call the existing internal helper:
+    const { pan, fy } = req.query as { pan: string; fy?: string };
+    if (!pan) return res.status(400).json({ error: 'PAN is required' });
+    const summary = await getCapitalGainsSummary(pan, fy);
+
+    // STEP 2 — Build investor name lookup map (one DB query):
+    const foliosList = db.prepare('SELECT id, investor_name FROM folios WHERE pan = ?').all(pan) as Array<{ id: string; investor_name: string | null }>;
+    const investorNameMap = new Map<string, string>();
+    for (const f of foliosList) {
+      investorNameMap.set(f.id, f.investor_name?.trim() || '');
+    }
+
+    // STEP 3 — Build sell description lookup map (one DB query):
+    const sellTxns = db.prepare(`
+      SELECT folio_id, date, description
+      FROM transactions
+      WHERE transaction_type = 'sell'
+        AND folio_id IN (SELECT id FROM folios WHERE pan = ?)
+      ORDER BY date ASC
+    `).all(pan) as Array<{ folio_id: string; date: string; description: string | null }>;
+
+    const sellDescMap = new Map<string, string>();
+    for (const tx of sellTxns) {
+      const key = `${tx.folio_id}|${tx.date}`;
+      if (!sellDescMap.has(key)) {
+        sellDescMap.set(key, tx.description || '');
+      }
+    }
+
+    // STEP 4 — Build Section 1 CSV rows (one row per matched lot):
+    const section1Rows: string[][] = [];
+    for (const folio of summary.folios) {
+      for (const lot of folio.matchedLots) {
+        if (lot.units < 0.00005) continue;
+
+        const investorName = investorNameMap.get(folio.folioId) ?? '';
+
+        // Gain Type
+        let derivedGainType: string = lot.gainType;
+        if (lot.gainType === 'LTCG' && lot.taxRate === 0) {
+          derivedGainType = 'LTCG_EXEMPT';
+        }
+
+        const row = [
+          folio.fundName,
+          folio.isin,
+          folio.folioNumber,
+          investorName,
+          summary.pan,
+          lot.buyDate,
+          lot.buyNav.toFixed(4),
+          lot.units.toFixed(4),
+          lot.sellDate,
+          lot.saleNav.toFixed(4),
+          lot.units.toFixed(4),
+          lot.holdingDays.toString(),
+          derivedGainType,
+          lot.acquiredFlag,
+          lot.transferredFlag,
+          lot.fmvJan2018 != null ? lot.fmvJan2018.toFixed(4) : '',
+          lot.buyNav.toFixed(4),
+          lot.costPerUnit.toFixed(4),
+          lot.grandfatheringApplied ? 'Y' : 'N',
+          lot.fmvMissing ? 'Y' : 'N',
+          (lot.costPerUnit * lot.units).toFixed(2),
+          (lot.saleNav * lot.units).toFixed(2),
+          lot.gain.toFixed(2),
+          lot.taxRate != null ? (lot.taxRate * 100).toFixed(1) : 'SLAB',
+          lot.estimatedTax != null ? lot.estimatedTax.toFixed(2) : 'SLAB',
+          sellDescMap.get(`${folio.folioId}|${lot.sellDate}`) ?? ''
+        ];
+
+        section1Rows.push(row);
+      }
+    }
+
+    // STEP 5 — Compute Section 2 PAN Summary values from matchedLots.
+    const qualifyingLots: MatchedLot[] = [];
+    for (const folio of summary.folios) {
+      for (const lot of folio.matchedLots) {
+        if (lot.units < 0.00005) continue;
+        qualifyingLots.push(lot);
+      }
+    }
+
+    let totalSTCG = 0;
+    let totalSTCG_BE = 0;
+    let totalSTCG_AE = 0;
+    let totalLTCG_exempt = 0;
+    let taxableLtcg_BE = 0;
+    let taxableLtcg_AE = 0;
+
+    for (const lot of qualifyingLots) {
+      if (lot.gainType === 'STCG') {
+        totalSTCG += lot.gain;
+        if (lot.transferredFlag === 'BE') {
+          totalSTCG_BE += lot.gain;
+        } else if (lot.transferredFlag === 'AE') {
+          totalSTCG_AE += lot.gain;
+        }
+      } else if (lot.gainType === 'LTCG') {
+        if ((lot.taxRate ?? 0) === 0) {
+          totalLTCG_exempt += lot.gain;
+        } else if ((lot.taxRate ?? 0) > 0) {
+          if (lot.transferredFlag === 'BE') {
+            taxableLtcg_BE += lot.gain;
+          } else if (lot.transferredFlag === 'AE') {
+            taxableLtcg_AE += lot.gain;
+          }
+        }
+      }
+    }
+
+    // STCG loss set-off (apply to AE first, then BE — same as aggregatePanGains)
+    const stcgLoss         = totalSTCG < 0 ? Math.abs(totalSTCG) : 0;
+    const ae_after_setoff  = Math.max(0, taxableLtcg_AE - stcgLoss);
+    const remaining_loss   = Math.max(0, stcgLoss - Math.max(0, taxableLtcg_AE));
+    const be_after_setoff  = Math.max(0, taxableLtcg_BE - remaining_loss);
+    const stcgLossApplied  = Math.min(stcgLoss, Math.max(0, taxableLtcg_AE + taxableLtcg_BE));
+
+    // Exemptions (two separate pots — never combined)
+    const exemption_BE = be_after_setoff > 0
+      ? Math.min(be_after_setoff, CONFIG.TAX.EQUITY_LTCG_EXEMPTION_OLD) : 0;
+    const exemption_AE = ae_after_setoff > 0
+      ? Math.min(ae_after_setoff, CONFIG.TAX.EQUITY_LTCG_EXEMPTION_NEW) : 0;
+
+    const finalTaxable_BE  = Math.max(0, be_after_setoff - exemption_BE);
+    const finalTaxable_AE  = Math.max(0, ae_after_setoff - exemption_AE);
+
+    const finalLTCGTax =
+      finalTaxable_BE * CONFIG.TAX.EQUITY_LTCG_RATE_OLD +
+      finalTaxable_AE * CONFIG.TAX.EQUITY_LTCG_RATE_NEW;
+
+    // Compute STCG tax from net gain per rate bucket — consistent with
+    // aggregatePanGains() fix for BUG-TAX-03
+    const _csv_taxableBE = totalSTCG_BE >= 0
+      ? Math.max(0, totalSTCG_BE + Math.min(0, totalSTCG_AE))
+      : 0;
+    const _csv_taxableAE = totalSTCG_AE >= 0
+      ? Math.max(0, totalSTCG_AE + Math.min(0, totalSTCG_BE))
+      : 0;
+    const finalSTCGTax =
+      _csv_taxableBE * CONFIG.TAX.EQUITY_STCG_RATE_OLD +
+      _csv_taxableAE * CONFIG.TAX.EQUITY_STCG_RATE_NEW;
+    const totalEstimatedTax = finalSTCGTax + finalLTCGTax;
+
+    // STEP 6 — Assemble the full CSV string.
+    const section1Header = [
+      "Fund Name", "ISIN", "Folio Number", "Investor Name", "PAN", "Buy Date", "Buy NAV", "Buy Units",
+      "Sell Date", "Sale NAV", "Units Sold", "Holding Days", "Gain Type", "Acquired Flag", "Transferred Flag",
+      "FMV Jan 31 2018", "Actual Cost Per Unit", "Effective Cost Per Unit", "Grandfathering Applied",
+      "FMV Missing", "Total Cost", "Total Sale Value", "Gain / Loss", "Tax Rate %", "Estimated Tax (pre-exemption)",
+      "Sell Description"
+    ];
+
+    const section2RowsRaw = [
+      ["Total STCG",             totalSTCG.toFixed(2)],
+      ["Total STCG BE (15%)",    totalSTCG_BE.toFixed(2)],
+      ["Total STCG AE (20%)",    totalSTCG_AE.toFixed(2)],
+      ["Total LTCG Exempt",      totalLTCG_exempt.toFixed(2)],
+      ["Total LTCG BE (taxable)",taxableLtcg_BE.toFixed(2)],
+      ["Total LTCG AE (taxable)",taxableLtcg_AE.toFixed(2)],
+      ["STCG Loss Set-off Applied", stcgLossApplied.toFixed(2)],
+      ["LTCG BE After Set-off",  be_after_setoff.toFixed(2)],
+      ["LTCG AE After Set-off",  ae_after_setoff.toFixed(2)],
+      ["LTCG BE Exemption Used (Rs 1,00,000 pot)", exemption_BE.toFixed(2)],
+      ["LTCG AE Exemption Used (Rs 1,25,000 pot)", exemption_AE.toFixed(2)],
+      ["Final Taxable LTCG BE",  finalTaxable_BE.toFixed(2)],
+      ["Final Taxable LTCG AE",  finalTaxable_AE.toFixed(2)],
+      ["Final LTCG Tax",         finalLTCGTax.toFixed(2)],
+      ["Final STCG Tax",         finalSTCGTax.toFixed(2)],
+      ["Total Estimated Tax",    totalEstimatedTax.toFixed(2)]
+    ];
+
+    const allCsvRows: string[][] = [];
+    allCsvRows.push(section1Header);
+    for (const r of section1Rows) {
+      allCsvRows.push(r);
+    }
+    allCsvRows.push(Array(26).fill(''));
+    allCsvRows.push(['SECTION 2 — PAN SUMMARY', ...Array(25).fill('')]);
+    allCsvRows.push(['Field', 'Value', ...Array(24).fill('')]);
+    for (const s2 of section2RowsRaw) {
+      allCsvRows.push([s2[0], s2[1], ...Array(24).fill('')]);
+    }
+
+    function escapeCsvCell(val: string | number | null | undefined): string {
+      if (val === null || val === undefined) {
+        return '';
+      }
+      let str = String(val);
+      const needsQuotes = str.includes(',') || str.includes('"') || str.includes('\n') || str.includes('\r');
+      if (str.includes('"')) {
+        str = str.replace(/"/g, '""');
+      }
+      if (needsQuotes) {
+        return `"${str}"`;
+      }
+      return str;
+    }
+
+    const csvContent = allCsvRows.map(row => row.map(escapeCsvCell).join(',')).join('\n');
+
+    // STEP 7 — Set response headers and send:
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="vriddhi-capital-gains-audit-${pan}-FY${summary.fy}.csv"`
+    );
+    res.send(csvContent);
+
+  } catch (error: any) {
+    // STEP 8 — Wrap in try/catch. On error:
+    log('app', 'ERROR', MODULE, `Error in capital-gains-audit-csv: ${error.message}`);
     res.status(500).json({ error: error.message });
   }
 });

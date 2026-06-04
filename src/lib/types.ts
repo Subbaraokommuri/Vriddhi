@@ -301,6 +301,10 @@ export interface PanCapitalGainsSummary {
   estimatedLTCGTax: number;
   folios: FolioCapitalGains[];
   hasGrandfatheringFlags: boolean;
+  ltcgBE: number;
+  ltcgAE: number;
+  ltcgExemptionUsedBE: number;
+  ltcgExemptionUsedAE: number;
 }
 
 export interface UnrealizedGainsSummary extends PanCapitalGainsSummary {

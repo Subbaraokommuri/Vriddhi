@@ -9,6 +9,9 @@ export interface TaxLot {
   costPerUnit: number;        // grandfathered CoA if pre-2018, else buyNav
   isGrandfathered: boolean;
   fmvJan2018: number | null;  // null = NAV not in DB
+  transaction_subtype?: string;
+  merger_ratio?: number | null;
+  source_fund_id?: string | null;
 }
 
 export interface MatchedLot {
@@ -74,11 +77,22 @@ export function computeCapitalGains(
     transaction_type: string,
     units: number,
     amount: number,
-    nav: number
+    nav: number,
+    description?: string,
+    transaction_subtype?: string,
+    merger_ratio?: number | null,
+    source_fund_id?: string | null
   }>,
   navOnDate: (isin: string, date: string) => number | null,
   fyStart: string,
-  fyEnd: string
+  fyEnd: string,
+  mergerSourceMap?: Map<string, { isin: string; transactions: Array<{
+    date: string;
+    transaction_type: string;
+    units: number;
+    amount: number;
+    nav: number;
+  }> }>
 ): FolioCapitalGains {
   const warnings: string[] = [];
   const taxLots: TaxLot[] = [];
@@ -87,6 +101,7 @@ export function computeCapitalGains(
   const sortedTxns = [...transactions].sort((a, b) => a.date.localeCompare(b.date));
 
   // Build TaxLot array
+  const warnedDates = new Set<string>();
   for (const txn of sortedTxns) {
     if (txn.transaction_type.toLowerCase() === 'buy' && txn.units > 0 && txn.amount > 0) {
       const buyDate = txn.date;
@@ -105,8 +120,26 @@ export function computeCapitalGains(
         remainingUnits: txn.units,
         costPerUnit: txn.nav, // Initial, might be updated during match for grandfathering
         isGrandfathered,
-        fmvJan2018
+        fmvJan2018,
+        transaction_subtype: txn.transaction_subtype,
+        merger_ratio: txn.merger_ratio,
+        source_fund_id: txn.source_fund_id
       });
+
+      // Scheme merger detection
+      const desc = txn.description || '';
+      const mergerKeywords = [
+        'merger in',
+        'merger out',
+        'transfer in due to merger',
+        'transfer out due to merger',
+        'scheme merger'
+      ];
+      const isMerger = mergerKeywords.some(kw => desc.toLowerCase().includes(kw));
+      if (isMerger && !warnedDates.has(buyDate)) {
+        warnedDates.add(buyDate);
+        warnings.push(`⚠️ Possible scheme merger detected on ${buyDate} for ${fundName}. If this was a SEBI-mandated merger (not an investor-initiated switch), the cost basis and holding period shown may be incorrect. Verify with your fund house and CA before filing.`);
+      }
     }
   }
 
@@ -132,6 +165,20 @@ export function computeCapitalGains(
       
       // Only process if within FY
       if (sellDate >= fyStart && sellDate <= fyEnd) {
+        if (txn.transaction_subtype === 'merger_out') {
+          // SEBI merger: consume lots to keep FIFO accurate, but generate
+          // no MatchedLot — no capital gain arises under Section 47(xviii).
+          let unitsToMerge = Math.abs(txn.units);
+          for (const lot of taxLots) {
+            if (unitsToMerge <= 0.00005) break;
+            if (lot.remainingUnits <= 0) continue;
+            const consumed = Math.min(unitsToMerge, lot.remainingUnits);
+            lot.remainingUnits -= consumed;
+            unitsToMerge -= consumed;
+          }
+          continue;  // skip MatchedLot creation entirely
+        }
+
         let unitsToSell = Math.abs(txn.units);
         const saleNav = txn.nav;
 
@@ -141,6 +188,162 @@ export function computeCapitalGains(
           if (lot.remainingUnits <= 0) continue;
 
           const consumedFromLot = Math.min(unitsToSell, lot.remainingUnits);
+
+          if (lot.transaction_subtype === 'merger_in' && lot.merger_ratio && lot.source_fund_id) {
+            // --- CASE A: source fund data available ---
+            const entry = mergerSourceMap?.get(lot.source_fund_id);
+
+            if (entry) {
+              // Build source lots from Fund A buy transactions
+              // Only include buys on or before the merger date (lot.buyDate)
+              const sourceBuys = entry.transactions
+                .filter(t =>
+                  t.transaction_type.toLowerCase() === 'buy' &&
+                  (t.units ?? 0) > 0 &&
+                  (t.amount ?? 0) > 0 &&
+                  t.date <= lot.buyDate
+                )
+                .sort((a, b) => a.date.localeCompare(b.date));
+
+              // How many Fund B units from this merger_in lot were consumed by
+              // PRIOR sells (before this sell)?
+              // lot.remainingUnits has NOT yet been decremented for this sell.
+              const fundBConsumedPrior = lot.buyUnits - lot.remainingUnits;
+
+              // Convert to Fund A basis — these are Fund A units already traced
+              // in prior sells. Use this to skip into the source lot stack.
+              let skipFundAUnits = fundBConsumedPrior / lot.merger_ratio;
+
+              // How many Fund A units to trace for THIS sell's consumption
+              let remainingTrace = consumedFromLot / lot.merger_ratio;
+
+              const adjustedSellNav = saleNav * lot.merger_ratio;
+
+              for (const srcTxn of sourceBuys) {
+                if (remainingTrace <= 0.00005) break;
+
+                const srcLotTotal = srcTxn.units;  // original units in this Fund A lot
+
+                // Skip Fund A lots already consumed by prior sells
+                if (skipFundAUnits >= srcLotTotal - 0.00005) {
+                  skipFundAUnits -= srcLotTotal;
+                  continue;
+                }
+
+                // How much of this source lot is available for this sell
+                const availableInSrcLot = srcLotTotal - skipFundAUnits;
+                skipFundAUnits = 0;
+
+                const take = Math.min(availableInSrcLot, remainingTrace);
+                if (take <= 0.00005) continue;
+
+                // Holding period and gain type using ORIGINAL Fund A buy date
+                const diffTime = new Date(sellDate).getTime() - new Date(srcTxn.date).getTime();
+                const srcHoldingDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+                const srcGainType: 'STCG' | 'LTCG' | 'DEBT_SLAB' = isDebtFund
+                  ? 'DEBT_SLAB'
+                  : srcHoldingDays > CONFIG.TAX.LTCG_HOLDING_DAYS ? 'LTCG' : 'STCG';
+
+                // Grandfathering using Fund A ISIN and adjustedSellNav
+                const srcIsGrandfathered = srcTxn.date <= CONFIG.TAX.GRANDFATHERING_DATE;
+                const srcFmv = srcIsGrandfathered
+                  ? navOnDate(entry.isin, CONFIG.TAX.GRANDFATHERING_DATE)  // Fund A ISIN — not isin
+                  : null;
+
+                let srcCostPerUnit = srcTxn.nav;
+                let srcGrandfatheringApplied = false;
+                let srcFmvMissing = false;
+
+                if (srcGainType === 'LTCG' && srcIsGrandfathered) {
+                  if (srcFmv !== null) {
+                    // All three values now in Fund A basis
+                    srcCostPerUnit = Math.max(srcTxn.nav, Math.min(srcFmv, adjustedSellNav));
+                    srcGrandfatheringApplied = true;
+                  } else {
+                    srcFmvMissing = true;
+                    // Graceful fallback: use purchase NAV
+                  }
+                }
+
+                const srcGain = (adjustedSellNav - srcCostPerUnit) * take;
+
+                // Tax rate and flags (same logic as existing engine)
+                const srcAcquiredFlag = srcTxn.date <= CONFIG.TAX.GRANDFATHERING_DATE ? 'BE' : 'AE';
+                const srcTransferredFlag = sellDate < CONFIG.TAX.EQUITY_RATE_CHANGE_DATE ? 'BE' : 'AE';
+                const sellDateObj = new Date(sellDate);
+                const rateChangeDate = new Date(CONFIG.TAX.EQUITY_RATE_CHANGE_DATE);
+                const ltcgTaxableFrom = new Date(CONFIG.TAX.EQUITY_LTCG_TAXABLE_FROM);
+
+                let srcTaxRate: number | null = null;
+                if (srcGainType === 'STCG') {
+                  srcTaxRate = sellDateObj >= rateChangeDate
+                    ? CONFIG.TAX.EQUITY_STCG_RATE_NEW
+                    : CONFIG.TAX.EQUITY_STCG_RATE_OLD;
+                } else if (srcGainType === 'LTCG') {
+                  if (sellDateObj < ltcgTaxableFrom) {
+                    srcTaxRate = 0;
+                  } else {
+                    srcTaxRate = sellDateObj >= rateChangeDate
+                      ? CONFIG.TAX.EQUITY_LTCG_RATE_NEW
+                      : CONFIG.TAX.EQUITY_LTCG_RATE_OLD;
+                  }
+                }
+
+                const srcEstimatedTax = srcTaxRate !== null
+                  ? (srcGain > 0 ? srcGain * srcTaxRate : 0)
+                  : null;
+
+                matchedLots.push({
+                  buyDate:              srcTxn.date,        // Fund A original buy date
+                  sellDate,
+                  units:                take,               // Fund A units
+                  costPerUnit:          srcCostPerUnit,
+                  saleNav:              adjustedSellNav,     // Fund B NAV × merger_ratio
+                  gain:                 srcGain,
+                  holdingDays:          srcHoldingDays,
+                  gainType:             srcGainType,
+                  acquiredFlag:         srcAcquiredFlag,
+                  transferredFlag:      srcTransferredFlag,
+                  buyNav:               srcTxn.nav,
+                  fmvJan2018:           srcFmv,
+                  taxRate:              srcTaxRate,
+                  estimatedTax:         srcEstimatedTax,
+                  grandfatheringApplied: srcGrandfatheringApplied,
+                  fmvMissing:           srcFmvMissing
+                });
+
+                remainingTrace -= take;
+              }
+
+              if (remainingTrace > 0.00005) {
+                warnings.push(
+                  `⚠️ Merger look-through: source lots exhausted before all units traced ` +
+                  `for lot dated ${lot.buyDate}. Partial cost basis used.`
+                );
+              }
+
+            } else {
+              // --- CASE B: no source data — graceful fallback ---
+              // Fall through to the normal MatchedLot creation below.
+              // The merger_in NAV becomes the cost basis.
+              warnings.push(
+                `⚠️ Merger look-through failed for lot dated ${lot.buyDate} in ${fundName}` +
+                ` — source fund data unavailable. Cost basis defaults to merger-in NAV.` +
+                ` Verify with your CA before filing.`
+              );
+              // (normal MatchedLot creation continues after this if-block)
+            }
+
+            // In CASE A: consume lot.remainingUnits and unitsToSell normally
+            // (even in look-through, the lot stack must reflect actual Fund B units consumed)
+            lot.remainingUnits -= consumedFromLot;
+            unitsToSell -= consumedFromLot;
+
+            // In CASE A: skip the existing MatchedLot creation that follows
+            if (entry) continue;
+
+            // In CASE B: fall through to existing MatchedLot creation below
+          }
           
           // Calculate holding days
           const diffTime = new Date(sellDate).getTime() - new Date(lot.buyDate).getTime();
@@ -248,18 +451,32 @@ export function computeCapitalGains(
   let totalSTCG = 0;
   let totalLTCG = 0;
   let totalDebtGain = 0;
-  let estimatedSTCGTax = 0;
+  let _folio_stcgBE = 0;  // STCG from sells before Jul 23 2024 (15% rate)
+  let _folio_stcgAE = 0;  // STCG from sells on/after Jul 23 2024 (20% rate)
 
   for (const lot of matchedLots) {
     if (lot.gainType === 'STCG') {
       totalSTCG += lot.gain;
-      estimatedSTCGTax += lot.estimatedTax || 0;
+      if (lot.transferredFlag === 'BE') _folio_stcgBE += lot.gain;
+      else _folio_stcgAE += lot.gain;
     } else if (lot.gainType === 'LTCG') {
       totalLTCG += lot.gain;
     } else if (lot.gainType === 'DEBT_SLAB') {
       totalDebtGain += lot.gain;
     }
   }
+
+  // Compute STCG tax from net gain per rate bucket — not per-lot with flooring
+  // Cross-bucket set-off: a loss in one bucket reduces the taxable amount in the other
+  const _folio_taxableBE = _folio_stcgBE >= 0
+    ? Math.max(0, _folio_stcgBE + Math.min(0, _folio_stcgAE))
+    : 0;
+  const _folio_taxableAE = _folio_stcgAE >= 0
+    ? Math.max(0, _folio_stcgAE + Math.min(0, _folio_stcgBE))
+    : 0;
+  const estimatedSTCGTax =
+    _folio_taxableBE * CONFIG.TAX.EQUITY_STCG_RATE_OLD +
+    _folio_taxableAE * CONFIG.TAX.EQUITY_STCG_RATE_NEW;
 
   return {
     folioId,
@@ -288,13 +505,11 @@ export function aggregatePanGains(
   let totalSTCG = 0;
   let totalLTCG = 0;
   let totalDebtGain = 0;
-  let estimatedSTCGTax = 0;
 
   for (const f of folioGains) {
     totalSTCG += f.totalSTCG;
     totalLTCG += f.totalLTCG;
     totalDebtGain += f.totalDebtGain;
-    estimatedSTCGTax += f.estimatedSTCGTax;
   }
 
   // Only accumulate TAXABLE LTCG (taxRate > 0 excludes pre-2018 exempt lots)
@@ -339,8 +554,27 @@ export function aggregatePanGains(
   const ltcgExemptionUsed = exemption_BE + exemption_AE;
   const ltcgTaxable       = finalTaxable_BE + finalTaxable_AE;
 
-  // When net STCG is a loss, all STCG is set off — no STCG tax due
-  const finalEstimatedSTCGTax = totalSTCG >= 0 ? estimatedSTCGTax : 0;
+  // Recompute STCG tax from net gain per rate bucket across all folios
+  // This correctly handles within-folio and cross-folio loss offsets
+  let _pan_stcgBE = 0;
+  let _pan_stcgAE = 0;
+  for (const f of folioGains) {
+    for (const lot of f.matchedLots) {
+      if (lot.gainType === 'STCG') {
+        if (lot.transferredFlag === 'BE') _pan_stcgBE += lot.gain;
+        else _pan_stcgAE += lot.gain;
+      }
+    }
+  }
+  const _pan_taxableBE = _pan_stcgBE >= 0
+    ? Math.max(0, _pan_stcgBE + Math.min(0, _pan_stcgAE))
+    : 0;
+  const _pan_taxableAE = _pan_stcgAE >= 0
+    ? Math.max(0, _pan_stcgAE + Math.min(0, _pan_stcgBE))
+    : 0;
+  const finalEstimatedSTCGTax =
+    _pan_taxableBE * CONFIG.TAX.EQUITY_STCG_RATE_OLD +
+    _pan_taxableAE * CONFIG.TAX.EQUITY_STCG_RATE_NEW;
 
   return {
     pan,

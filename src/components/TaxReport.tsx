@@ -18,6 +18,7 @@ import {
   getTaxPans, 
   getCapitalGains, 
   downloadCapitalGainsCsv, 
+  downloadAuditCsv,
   getUnrealizedGains,
   getHarvestingReport,
   simulateRedemption,
@@ -91,6 +92,11 @@ export function TaxReport() {
 
   // Expanded folios for CG
   const [expandedFolios, setExpandedFolios] = useState<Record<string, boolean>>({});
+
+  const mergerWarnings = useMemo(() => {
+    if (!cgData || !cgData.folios) return [];
+    return cgData.folios.flatMap(f => f.warnings || []).filter(w => w.toLowerCase().includes('merger'));
+  }, [cgData]);
 
   // Harvesting State
   const [harvestingData, setHarvestingData] = useState<HarvestingReport | null>(null);
@@ -427,28 +433,94 @@ export function TaxReport() {
                     </div>
                   </div>
 
-                  {/* Exemption Bar */}
+                  {/* Exemption Bar — BUG-TAX-02 + BUG-TAX-05 fixed */}
                   <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <h4 className="font-semibold text-slate-900">Equity LTCG Exemption</h4>
-                        <span className="text-xs text-slate-400 font-normal">(Sec 112A)</span>
+                    <div className="flex items-center gap-2">
+                      <h4 className="font-semibold text-slate-900">Equity LTCG Exemption</h4>
+                      <span className="text-xs text-slate-400 font-normal">(Sec 112A)</span>
+                    </div>
+
+                    {/* BE pot — shown when there is BE LTCG, or when there is no LTCG at all (default) */}
+                    {cgData.ltcgAE === 0 && (
+                      <div className="space-y-2">
+                        {cgData.ltcgBE > 0 && cgData.ltcgAE > 0 && (
+                          <p className="text-xs font-medium text-slate-500">BE pot (pre Jul 23 2024 · 10%)</p>
+                        )}
+                        <div className="flex items-center justify-between text-sm font-medium">
+                          <span className="text-primary">{formatCurrency(cgData.ltcgExemptionUsedBE)}</span>
+                          <span className="text-slate-400"> of {formatCurrency(100000)} used</span>
+                        </div>
+                        <div className="h-2.5 bg-slate-100 rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-primary transition-all duration-1000 ease-out"
+                            style={{ width: `${Math.min(100, (cgData.ltcgExemptionUsedBE / 100000) * 100)}%` }}
+                          />
+                        </div>
                       </div>
-                      <p className="text-sm font-medium">
-                        <span className="text-primary">{formatCurrency(cgData.ltcgExemptionUsed)}</span>
-                        <span className="text-slate-400"> of {formatCurrency(125000)} used</span>
-                      </p>
-                    </div>
-                    <div className="h-2.5 bg-slate-100 rounded-full overflow-hidden">
-                      <div 
-                        className="h-full bg-primary transition-all duration-1000 ease-out"
-                        style={{ width: `${Math.min(100, (cgData.ltcgExemptionUsed / 125000) * 100)}%` }}
-                      />
-                    </div>
+                    )}
+
+                    {/* AE pot — shown when there is AE LTCG */}
+                    {cgData.ltcgAE > 0 && (
+                      <div className="space-y-2">
+                        {cgData.ltcgBE > 0 && (
+                          <p className="text-xs font-medium text-slate-500">AE pot (Jul 23 2024 onwards · 12.5%)</p>
+                        )}
+                        <div className="flex items-center justify-between text-sm font-medium">
+                          <span className="text-primary">{formatCurrency(cgData.ltcgExemptionUsedAE)}</span>
+                          <span className="text-slate-400"> of {formatCurrency(125000)} used</span>
+                        </div>
+                        <div className="h-2.5 bg-slate-100 rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-primary transition-all duration-1000 ease-out"
+                            style={{ width: `${Math.min(100, (cgData.ltcgExemptionUsedAE / 125000) * 100)}%` }}
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Split: show both pots when both are active */}
+                    {cgData.ltcgBE > 0 && cgData.ltcgAE > 0 && (
+                      <>
+                        <div className="space-y-2">
+                          <p className="text-xs font-medium text-slate-500">BE pot (pre Jul 23 2024 · 10%)</p>
+                          <div className="flex items-center justify-between text-sm font-medium">
+                            <span className="text-primary">{formatCurrency(cgData.ltcgExemptionUsedBE)}</span>
+                            <span className="text-slate-400"> of {formatCurrency(100000)} used</span>
+                          </div>
+                          <div className="h-2.5 bg-slate-100 rounded-full overflow-hidden">
+                            <div
+                              className="h-full bg-primary transition-all duration-1000 ease-out"
+                              style={{ width: `${Math.min(100, (cgData.ltcgExemptionUsedBE / 100000) * 100)}%` }}
+                            />
+                          </div>
+                        </div>
+                        <div className="space-y-2">
+                          <p className="text-xs font-medium text-slate-500">AE pot (Jul 23 2024 onwards · 12.5%)</p>
+                          <div className="flex items-center justify-between text-sm font-medium">
+                            <span className="text-primary">{formatCurrency(cgData.ltcgExemptionUsedAE)}</span>
+                            <span className="text-slate-400"> of {formatCurrency(125000)} used</span>
+                          </div>
+                          <div className="h-2.5 bg-slate-100 rounded-full overflow-hidden">
+                            <div
+                              className="h-full bg-primary transition-all duration-1000 ease-out"
+                              style={{ width: `${Math.min(100, (cgData.ltcgExemptionUsedAE / 125000) * 100)}%` }}
+                            />
+                          </div>
+                        </div>
+                      </>
+                    )}
+
+                    {/* Rate note — BUG-TAX-05 fixed */}
                     {cgData.ltcgTaxable > 0 && (
                       <p className="text-xs text-slate-500 flex items-center gap-1.5">
                         <Info className="w-3.5 h-3.5 text-primary" />
-                        Net taxable LTCG: {formatCurrency(cgData.ltcgTaxable)} (taxable at 12.5% recently)
+                        Net taxable LTCG: {formatCurrency(cgData.ltcgTaxable)} (
+                          {cgData.ltcgBE > 0 && cgData.ltcgAE > 0
+                            ? 'BE portion at 10%, AE portion at 12.5%'
+                            : cgData.ltcgAE > 0
+                              ? 'taxable at 12.5%'
+                              : 'taxable at 10%'}
+                        )
                       </p>
                     )}
                   </div>
@@ -460,6 +532,33 @@ export function TaxReport() {
                       <div className="text-sm">
                         <p className="font-semibold">Grandfathering Warning</p>
                         <p className="mt-0.5 opacity-90">One or more lots were purchased before Jan 31, 2018. FMV data was unavailable for some units — these are marked with ⚠ below. Verify manually before filing.</p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* STCG Warning — BUG-TAX-04 */}
+                  {cgData.totalSTCG !== 0 && (
+                    <div className="bg-amber-50 border border-amber-200 p-4 rounded-xl flex gap-3 text-amber-800">
+                      <AlertTriangle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+                      <div className="text-sm">
+                        <p className="font-semibold">ClearTax and Quicko CSVs cover LTCG only (Schedule 112A)</p>
+                        <p className="mt-0.5 opacity-90">
+                          Your STCG of {formatCurrency(cgData.totalSTCG)} is not included in these files.
+                          Report it separately in your ITR under Short Term Capital Gains from Equity MF.
+                          Use the Audit CSV for a complete per-lot breakdown covering both STCG and LTCG.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Scheme Merger Warnings — FEAT-TAX-02 Phase 1 */}
+                  {mergerWarnings.length > 0 && (
+                    <div className="bg-amber-50 border border-amber-200 p-4 rounded-xl flex gap-3 text-amber-800">
+                      <AlertTriangle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+                      <div className="text-sm space-y-1">
+                        {mergerWarnings.map((warning, index) => (
+                          <p key={index} className="opacity-90">{warning}</p>
+                        ))}
                       </div>
                     </div>
                   )}
@@ -481,6 +580,14 @@ export function TaxReport() {
                     >
                       <Download className="w-4 h-4" />
                       Download Quicko CSV
+                    </button>
+                    <button
+                      onClick={() => downloadAuditCsv(selectedPan, selectedFy)}
+                      disabled={cgData.folios.length === 0}
+                      className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-medium hover:bg-slate-50 transition-all disabled:opacity-50"
+                    >
+                      <Download className="w-4 h-4" />
+                      Download Audit CSV
                     </button>
                   </div>
 

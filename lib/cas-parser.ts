@@ -15,6 +15,9 @@ export interface CasTransaction {
   units: number | null;
   nav: number | null;
   balance: number | null;
+  transaction_subtype?: 'merger_in' | 'merger_out' | '';
+  merger_ratio?: number;     // merging_fund_NAV / surviving_fund_NAV. Set only on merger_in.
+  source_isin?: string;      // ISIN of the merging fund. Set only on merger_in.
 }
 
 export interface CasScheme {
@@ -840,9 +843,75 @@ function parseKFinText(lines: string[]): CasParseResult {
 // SECTION 4 — Public API
 // ============================================================================
 
+function tagMergerPairs(result: CasParseResult): void {
+  interface TxnRef { isin: string; txn: CasTransaction; }
+  const all: TxnRef[] = [];
+  for (const folio of result.folios) {
+    for (const scheme of folio.schemes) {
+      for (const txn of scheme.transactions) {
+        all.push({ isin: scheme.isin, txn });
+      }
+    }
+  }
+
+  const mergerKeywords = [
+    'merger in',
+    'merger out',
+    'transfer in due to merger',
+    'transfer out due to merger',
+    'scheme merger'
+  ];
+  const excludeKeywords = [
+    'switch',
+    'lateral shift',
+    'consolidation'
+  ];
+
+  const candidates = all.filter(({ txn }) => {
+    const desc = (txn.description || '').toLowerCase();
+    const hasMerger = mergerKeywords.some(kw => desc.includes(kw));
+    const hasExclude = excludeKeywords.some(kw => desc.includes(kw));
+    return hasMerger && !hasExclude;
+  });
+
+  const sell_side = candidates.filter(c => (c.txn.units ?? 0) < 0);
+  const buy_side = candidates.filter(c => (c.txn.units ?? 0) > 0);
+  const pairedBuys = new Set<CasTransaction>();
+
+  for (const sell of sell_side) {
+    const sellAmt = Math.abs(sell.txn.amount ?? 0);
+    if (sellAmt === 0) continue;
+
+    const matchedBuy = buy_side.find(buy => {
+      if (pairedBuys.has(buy.txn)) return false;
+      if (sell.txn.date !== buy.txn.date) return false;
+      if (sell.isin === buy.isin) return false;
+
+      const buyAmt = Math.abs(buy.txn.amount ?? 0);
+      if (buyAmt === 0) return false;
+
+      const relativeDiff = Math.abs(sellAmt - buyAmt) / Math.max(sellAmt, buyAmt);
+      return relativeDiff <= 0.001;
+    });
+
+    if (matchedBuy) {
+      pairedBuys.add(matchedBuy.txn);
+      sell.txn.transaction_subtype = 'merger_out';
+      matchedBuy.txn.transaction_subtype = 'merger_in';
+      
+      const sellNav = Math.abs(sell.txn.nav ?? 1);
+      const buyNav = Math.abs(matchedBuy.txn.nav ?? 1);
+      matchedBuy.txn.merger_ratio = sellNav / buyNav;
+      matchedBuy.txn.source_isin = sell.isin;
+    }
+  }
+}
+
 export function parseCasText(lines: string[]): CasParseResult {
   const source = detectSource(lines);
-  return source === 'KFINTECH' ? parseKFinText(lines) : parseCamsText(lines);
+  const result = source === 'KFINTECH' ? parseKFinText(lines) : parseCamsText(lines);
+  tagMergerPairs(result);
+  return result;
 }
 
 export function parseCasPdf(pdfPath: string, password?: string): CasParseResult {

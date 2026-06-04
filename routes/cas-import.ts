@@ -107,6 +107,7 @@ router.post('/confirm', upload.single('file'), async (req, res) => {
     let new_transactions = 0;
     let skipped_transactions = 0;
     let schemes_updated = 0;
+    let zero_unit_transactions = 0;
     const import_id = uuidv4();
 
     const WARNING_CHECKS_LOG = [
@@ -244,15 +245,34 @@ router.post('/confirm', upload.single('file'), async (req, res) => {
           const insertTxn = db.prepare(`
             INSERT OR IGNORE INTO transactions
               (id, folio_id, date, transaction_type, amount, units,
-              nav, balance_units, description, source)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'cas')
+              nav, balance_units, description, source,
+              transaction_subtype, merger_ratio, source_fund_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'cas', ?, ?, ?)
           `);
 
           for (const txn of scheme.transactions) {
+            // Skip zero-unit administrative transactions (folio consolidations,
+            // recovery payouts). These carry no financial information.
+            if ((txn.units || 0) === 0) {
+              zero_unit_transactions++;
+              continue;
+            }
+
             const crossKey = `${folio_id}|${txn.date}|${txn.type}|${Math.round((txn.amount || 0) * 100)}|${Math.round((txn.units || 0) * 10000)}`;
             if (existingTxnKeys.has(crossKey)) {
               skipped_transactions++;
               continue;
+            }
+
+            let source_fund_id: string | null = null;
+            if (txn.source_isin) {
+              const sourceRow = db.prepare('SELECT id FROM funds WHERE isin = ?')
+                                  .get(txn.source_isin) as { id: string } | undefined;
+              source_fund_id = sourceRow ? sourceRow.id : null;
+              if (!sourceRow) {
+                log('import', 'WARN', 'cas-import',
+                    `merger source fund not found for ISIN ${txn.source_isin} — source_fund_id set to null`);
+              }
             }
 
             const result = insertTxn.run(
@@ -264,7 +284,10 @@ router.post('/confirm', upload.single('file'), async (req, res) => {
               txn.units,
               txn.nav,
               txn.balance,
-              txn.description
+              txn.description,
+              txn.transaction_subtype ?? '',
+              txn.merger_ratio ?? null,
+              source_fund_id
             );
 
             if (result.changes === 1) {
@@ -299,12 +322,14 @@ router.post('/confirm', upload.single('file'), async (req, res) => {
     log('import', 'INFO', 'CAS-IMPORT',
       `COMPLETE import: new=${new_transactions}, ` +
       `skipped=${skipped_transactions}, ` +
+      `zero_unit=${zero_unit_transactions}, ` +
       `schemes=${schemes_updated}, import_id=${import_id}`);
 
     res.json({
       message: "Import complete",
       new_transactions,
       skipped_transactions,
+      zero_unit_transactions,
       schemes_updated,
       import_id,
       portfolio_id: 'default'

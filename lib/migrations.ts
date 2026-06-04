@@ -368,6 +368,21 @@ export function runMigrations(db: Database.Database) {
     db.exec("ALTER TABLE transactions ADD COLUMN description TEXT DEFAULT ''");
   }
 
+  const colsCheck_subtype = (db.prepare("PRAGMA table_info(transactions)").all() as any[]).map(r => r.name);
+  if (!colsCheck_subtype.includes('transaction_subtype')) {
+    db.prepare("ALTER TABLE transactions ADD COLUMN transaction_subtype TEXT DEFAULT ''").run();
+  }
+
+  const colsCheck_ratio = (db.prepare("PRAGMA table_info(transactions)").all() as any[]).map(r => r.name);
+  if (!colsCheck_ratio.includes('merger_ratio')) {
+    db.prepare("ALTER TABLE transactions ADD COLUMN merger_ratio REAL").run();
+  }
+
+  const colsCheck_source = (db.prepare("PRAGMA table_info(transactions)").all() as any[]).map(r => r.name);
+  if (!colsCheck_source.includes('source_fund_id')) {
+    db.prepare("ALTER TABLE transactions ADD COLUMN source_fund_id TEXT").run();
+  }
+
   // Tag Management Tables
   db.exec(`
     CREATE TABLE IF NOT EXISTS tag_themes (

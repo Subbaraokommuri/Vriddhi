@@ -425,6 +425,11 @@ export function downloadCapitalGainsCsv(
   window.location.href = `/api/tax/capital-gains/export?${params}`;
 }
 
+export function downloadAuditCsv(pan: string, fy: string): void {
+  const params = new URLSearchParams({ pan, fy });
+  window.location.href = `/api/tax/capital-gains-audit-csv?${params}`;
+}
+
 export async function getUnrealizedGains(
   pan: string
 ): Promise<UnrealizedGainsSummary> {

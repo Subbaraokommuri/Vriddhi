@@ -31,6 +31,7 @@ export function CasImport({ onImportSuccess }: CasImportProps) {
     message: string;
     new_transactions: number;
     skipped_transactions: number;
+    zero_unit_transactions: number;
     schemes_updated: number;
     import_id: string;
   } | null>(null);
@@ -441,6 +442,15 @@ export function CasImport({ onImportSuccess }: CasImportProps) {
                 <span className="text-sm text-slate-500 font-medium">Skipped (Duplicates)</span>
                 <span className="text-lg font-bold text-slate-400">{importResult.skipped_transactions}</span>
               </div>
+              {importResult.zero_unit_transactions > 0 && (
+                <>
+                  <div className="w-full h-px bg-slate-50" />
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-slate-500 font-medium">Skipped (Admin, Zero-unit)</span>
+                    <span className="text-lg font-bold text-slate-400">{importResult.zero_unit_transactions}</span>
+                  </div>
+                </>
+              )}
             </div>
 
             <button
