@@ -12,6 +12,7 @@ interface FundsFilterBarProps {
   pans: string[];
   subCategories: string[];
   availableTags: string[];
+  investorNames: string[];
 }
 
 export function FundsFilterBar({ 
@@ -22,7 +23,8 @@ export function FundsFilterBar({
   categories, 
   pans, 
   subCategories,
-  availableTags
+  availableTags,
+  investorNames
 }: FundsFilterBarProps) {
   const updateFilter = (key: keyof FolioXirrFilters, value: any) => {
     onChange({ ...filters, [key]: value });
@@ -35,6 +37,7 @@ export function FundsFilterBar({
       tag: '',
       search: '',
       pan: '',
+      investorName: '',
       fundHouse: '',
       category: '',
       subCategory: '',
@@ -45,21 +48,23 @@ export function FundsFilterBar({
 
   return (
     <div className="space-y-5">
-      {/* ROW 1: Search, PAN, Fund House, Active Only */}
+      {/* ROW 1: Investor Name, PAN, Active Only */}
       <div className="flex flex-wrap items-end gap-4">
-        {/* Search */}
-        <div className="flex-1 min-w-[240px] space-y-1">
-          <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Search</label>
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-            <input
-              type="text"
-              placeholder="Fund name or folio..."
-              value={filters.search || ''}
-              onChange={(e) => updateFilter('search', e.target.value)}
-              className="w-full pl-9 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#01696f]/20"
-            />
-          </div>
+        {/* Investor Name */}
+        <div className="min-w-[180px] space-y-1">
+          <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+            Investor Name
+          </label>
+          <select
+            value={filters.investorName || ''}
+            onChange={(e) => updateFilter('investorName', e.target.value || undefined)}
+            className="block w-full pl-3 pr-10 py-1.5 text-sm border-slate-200 bg-slate-50 rounded-lg focus:outline-none focus:ring-[#01696f] focus:border-[#01696f]"
+          >
+            <option value="">All Investors</option>
+            {investorNames.map(name => (
+              <option key={name} value={name}>{name}</option>
+            ))}
+          </select>
         </div>
 
         {/* PAN */}
@@ -72,24 +77,9 @@ export function FundsFilterBar({
             onChange={(e) => updateFilter('pan', e.target.value || undefined)}
             className="block w-full pl-3 pr-10 py-1.5 text-sm border-slate-200 bg-slate-50 rounded-lg focus:outline-none focus:ring-[#01696f] focus:border-[#01696f]"
           >
-            <option value="">All Investors</option>
+            <option value="">All PANs</option>
             {pans.map(p => (
               <option key={p} value={p}>{p}</option>
-            ))}
-          </select>
-        </div>
-
-        {/* Fund House */}
-        <div className="min-w-[180px] space-y-1">
-          <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Fund House</label>
-          <select
-            value={filters.fundHouse || ''}
-            onChange={(e) => updateFilter('fundHouse', e.target.value)}
-            className="block w-full pl-3 pr-10 py-1.5 text-sm border-slate-200 bg-slate-50 rounded-lg focus:outline-none focus:ring-[#01696f] focus:border-[#01696f]"
-          >
-            <option value="">All Houses</option>
-            {fundHouses.map(h => (
-              <option key={h} value={h}>{h}</option>
             ))}
           </select>
         </div>
@@ -113,6 +103,39 @@ export function FundsFilterBar({
           <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider cursor-pointer select-none" onClick={() => updateFilter('activeOnly', !filters.activeOnly)}>
             Active Only
           </label>
+        </div>
+      </div>
+
+      {/* ROW 2: Search and Fund House */}
+      <div className="flex flex-wrap items-end gap-4 pt-4 border-t border-slate-100">
+        {/* Search */}
+        <div className="flex-1 min-w-[240px] space-y-1">
+          <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Search</label>
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <input
+              type="text"
+              placeholder="Fund name or folio..."
+              value={filters.search || ''}
+              onChange={(e) => updateFilter('search', e.target.value)}
+              className="w-full pl-9 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#01696f]/20"
+            />
+          </div>
+        </div>
+
+        {/* Fund House */}
+        <div className="min-w-[180px] space-y-1">
+          <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Fund House</label>
+          <select
+            value={filters.fundHouse || ''}
+            onChange={(e) => updateFilter('fundHouse', e.target.value)}
+            className="block w-full pl-3 pr-10 py-1.5 text-sm border-slate-200 bg-slate-50 rounded-lg focus:outline-none focus:ring-[#01696f] focus:border-[#01696f]"
+          >
+            <option value="">All Houses</option>
+            {fundHouses.map(h => (
+              <option key={h} value={h}>{h}</option>
+            ))}
+          </select>
         </div>
       </div>
 

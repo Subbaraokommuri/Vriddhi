@@ -10,7 +10,11 @@ export function Header({
   activeTab, 
   folios
 }: HeaderProps) {
-  const displayTabName = activeTab === 'fundsxirr' ? 'Funds & Folios' : activeTab.replace(/([A-Z])/g, ' $1').trim().replace('-', ' ');
+  const displayTabName =
+    activeTab === 'fundsxirr' ? 'Funds & Folios' :
+    activeTab === 'performance' ? 'Relative Performance' :
+    activeTab === 'tax' ? 'Income Tax' :
+    activeTab.replace(/([A-Z])/g, ' $1').trim().replace('-', ' ');
 
   return (
     <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-8 sticky top-0 z-10">

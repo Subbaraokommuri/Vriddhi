@@ -422,7 +422,7 @@ router.get('/capital-gains/export', async (req, res) => {
           saleNav,
           saleValue,
           col7,
-          lot.buyNav.toFixed(4),
+          (lot.buyNav * lot.units).toFixed(2),
           lowerFmvSale,
           fmvPerUnit,
           totalFmv,

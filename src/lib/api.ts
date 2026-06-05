@@ -206,6 +206,38 @@ export async function updateNavs(): Promise<{ updated: number; errors?: { fundId
   return handleResponse<{ updated: number; errors?: { fundId: string; name: string; error: string }[] }>(res);
 }
 
+export async function refreshNavAndBenchmarks(
+  activeBenchmarkIds: string[]
+): Promise<{
+  navResult: any;
+  navError: string | null;
+  benchmarkResults: { id: string; inserted: number }[];
+  benchmarkErrors: { id: string; error: string }[];
+}> {
+  let navResult: any = null;
+  let navError: string | null = null;
+
+  try {
+    navResult = await updateNavs();
+  } catch (err: any) {
+    navError = err.message || 'NAV update failed';
+  }
+
+  const benchmarkResults: { id: string; inserted: number }[] = [];
+  const benchmarkErrors: { id: string; error: string }[] = [];
+
+  for (const id of activeBenchmarkIds) {
+    try {
+      const result = await fetchBenchmarkData(id);
+      benchmarkResults.push({ id, inserted: result.inserted ?? 0 });
+    } catch (err: any) {
+      benchmarkErrors.push({ id, error: err.message || 'Fetch failed' });
+    }
+  }
+
+  return { navResult, navError, benchmarkResults, benchmarkErrors };
+}
+
 export async function refreshAmfiCodes(): Promise<{ updated: number; notFound: number; failedCount: number }> {
   const res = await fetch('/api/nav/refresh-amfi-codes', { method: 'POST' });
   return handleResponse<{ updated: number; notFound: number; failedCount: number }>(res);
@@ -342,6 +374,7 @@ export interface FolioXirrFilters {
   themeId?: string;
   search?: string;
   pan?: string;
+  investorName?: string;
 }
 
 export async function getFoliosXirr(filters?: FolioXirrFilters): Promise<FolioXirr[]> {

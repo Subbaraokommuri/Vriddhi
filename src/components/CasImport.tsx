@@ -39,7 +39,12 @@ export function CasImport({ onImportSuccess }: CasImportProps) {
   const [syncing, setSyncing] = useState(false);
   const [syncStep, setSyncStep] = useState('');
   const [maintenanceError, setMaintenanceError] = useState<string | null>(null);
-  const [maintenanceSuccess, setMaintenanceSuccess] = useState<string | null>(null);
+  const [syncResult, setSyncResult] = useState<{
+    amfiUpdated: number;
+    fullBackfill: number;
+    incremental: number;
+    upToDate: number;
+  } | null>(null);
   const [dlError, setDlError] = useState<string | null>(null);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -145,7 +150,7 @@ export function CasImport({ onImportSuccess }: CasImportProps) {
 
   const handleSyncFundData = async () => {
     setMaintenanceError(null);
-    setMaintenanceSuccess(null);
+    setSyncResult(null);
     setSyncing(true);
     setSyncStep("Step 1/2: Refreshing AMFI codes…");
     try {
@@ -154,9 +159,12 @@ export function CasImport({ onImportSuccess }: CasImportProps) {
       setSyncStep("Step 2/2: Fetching NAV history (2–3 min)…");
       const navResult = await backfillNavHistory();
       
-      setMaintenanceSuccess(
-        `Sync complete — AMFI: ${amfiResult.updated} updated; NAV: ${navResult.full_backfill} new, ${navResult.incremental} updated, ${navResult.up_to_date} current.`
-      );
+      setSyncResult({
+        amfiUpdated: amfiResult.updated,
+        fullBackfill: navResult.full_backfill,
+        incremental: navResult.incremental,
+        upToDate: navResult.up_to_date,
+      });
       if (onImportSuccess) onImportSuccess();
     } catch (error: any) {
       console.error('Failed to sync fund data:', error);
@@ -506,15 +514,39 @@ export function CasImport({ onImportSuccess }: CasImportProps) {
           )}
         </button>
 
-        {syncing && (
-          <p className="text-xs text-slate-400 italic animate-pulse">
-            {syncStep}
-          </p>
-        )}
-
-        {maintenanceSuccess && (
-          <div className="p-3 bg-emerald-50 border border-emerald-100 rounded-xl text-xs font-medium text-emerald-700">
-            {maintenanceSuccess}
+        {syncResult && (
+          <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-xl space-y-2">
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-bold text-emerald-800">
+                {syncResult.fullBackfill + syncResult.incremental > 0
+                  ? '✓ Sync complete'
+                  : '✓ All funds are up to date'}
+              </p>
+              <button
+                onClick={() => setSyncResult(null)}
+                className="text-emerald-400 hover:text-emerald-600 text-xs font-bold ml-2 leading-none"
+                title="Dismiss"
+              >
+                ✕
+              </button>
+            </div>
+            {syncResult.fullBackfill + syncResult.incremental > 0 ? (
+              <ul className="text-xs text-emerald-700 space-y-0.5">
+                {syncResult.fullBackfill > 0 && (
+                  <li>• {syncResult.fullBackfill} fund{syncResult.fullBackfill !== 1 ? 's' : ''} received fresh NAV history and metadata</li>
+                )}
+                {syncResult.incremental > 0 && (
+                  <li>• {syncResult.incremental} fund{syncResult.incremental !== 1 ? 's' : ''} had recent entries appended</li>
+                )}
+                {syncResult.upToDate > 0 && (
+                  <li>• {syncResult.upToDate} fund{syncResult.upToDate !== 1 ? 's' : ''} already current — no changes needed</li>
+                )}
+              </ul>
+            ) : (
+              <p className="text-xs text-emerald-700">
+                {syncResult.upToDate} fund{syncResult.upToDate !== 1 ? 's' : ''} checked — NAV history and metadata are current.
+              </p>
+            )}
           </div>
         )}
 

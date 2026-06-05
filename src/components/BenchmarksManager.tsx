@@ -413,8 +413,7 @@ export function BenchmarksManager({
           <div className="flex border-b" style={{ borderColor: 'var(--color-border)' }}>
             {[
               { id: 'nifty_tri', label: 'Nifty TRI' },
-              { id: 'mf_nav', label: 'MF Benchmark' },
-              { id: 'manual', label: 'Manual' }
+              { id: 'mf_nav', label: 'MF Benchmark' }
             ].map(tab => (
               <button
                 key={tab.id}
@@ -695,7 +694,7 @@ export function BenchmarksManager({
               </div>
             )}
 
-            {activeTab === 'manual' && (
+            {false && activeTab === 'manual' && (
               <form onSubmit={handleManualAdd} className="max-w-xl mx-auto space-y-6 py-4">
                 <div className="space-y-4">
                   <div className="space-y-1.5">
@@ -823,15 +822,18 @@ export function BenchmarksManager({
                       >
                         {fetchingId === b.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
                       </button>
-                      <button
-                        onClick={() => handleImportClick(b.id)}
-                        disabled={uploadingId === b.id || fetchingId === b.id}
-                        className="p-1 px-2 rounded-lg hover:bg-slate-100 transition-colors disabled:opacity-50"
-                        style={{ color: 'var(--color-primary)' }}
-                        title="Import CSV"
-                      >
-                        {uploadingId === b.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
-                      </button>
+                      {/* Hidden CSV Import button per specifications */}
+                      {false && (
+                        <button
+                          onClick={() => handleImportClick(b.id)}
+                          disabled={uploadingId === b.id || fetchingId === b.id}
+                          className="p-1 px-2 rounded-lg hover:bg-slate-100 transition-colors disabled:opacity-50"
+                          style={{ color: 'var(--color-primary)' }}
+                          title="Import CSV"
+                        >
+                          {uploadingId === b.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                        </button>
+                      )}
                       <button
                         onClick={() => handleDelete(b)}
                         className="p-1 px-2 rounded-lg text-rose-500 hover:bg-rose-50 transition-colors disabled:opacity-50"

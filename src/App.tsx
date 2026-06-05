@@ -134,7 +134,7 @@ export default function App() {
     { id: 'benchmarks', label: 'Benchmarks', icon: PieChart },
     { id: 'tags', label: 'Tag Manager', icon: Tag },
     { id: 'performance', label: 'Performance', icon: BarChart2 },
-    { id: 'tax', label: 'Tax', icon: Receipt },
+    { id: 'tax', label: 'Income Tax', icon: Receipt },
     { id: 'logs', label: 'Logs', icon: FileText },
     { id: 'import', label: 'Import CAS PDF', icon: Upload },
   ];

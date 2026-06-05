@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { getFundsXirrGrouped, updateNavs, FolioXirrFilters, downloadFundsGroupedCsv, getFoliosBenchmarkXirr, getThemeTags, getOverallXirr } from '../lib/api';
+import { getFundsXirrGrouped, updateNavs, FolioXirrFilters, downloadFundsGroupedCsv, getFoliosBenchmarkXirr, getThemeTags, getOverallXirr, refreshNavAndBenchmarks } from '../lib/api';
 import { FundGroupXirr, FolioXirr, FolioBenchmarkXirrResult, GroupBenchmarkXirrResult, OverallXirrResult, OverallBenchmarkXirrResult } from '../lib/types';
 import { FundsFilterBar } from './FundsFilterBar';
 import { FundGroupRow } from './FundGroupRow';
-import { RefreshCw, Download, ChevronUp, ChevronDown, ChevronRight, AlertCircle, X, SlidersHorizontal, Target, AlertTriangle } from 'lucide-react';
+import { RefreshCw, Loader2, Download, ChevronUp, ChevronDown, ChevronRight, AlertCircle, X, SlidersHorizontal, Target, AlertTriangle } from 'lucide-react';
 import { cn, formatCurrency, formatPercent } from '../lib/utils';
 
 interface FundsXirrProps {
@@ -18,13 +18,15 @@ export function FundsXirr({ themes, onNavsUpdated, benchmarks }: FundsXirrProps)
   const [groups, setGroups] = useState<FundGroupXirr[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [filters, setFilters] = useState<FolioXirrFilters>({ activeOnly: true, themeId: '', tag: '' });
+  const [filters, setFilters] = useState<FolioXirrFilters>({ activeOnly: true, themeId: '', tag: '', investorName: '' });
   const [availableTags, setAvailableTags] = useState<string[]>([]);
   const [sortCol, setSortCol] = useState<SortKey>('fundName');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const [updating, setUpdating] = useState(false);
   const [updateErrors, setUpdateErrors] = useState<{ name: string; error: string }[]>([]);
   const [expandedFundIds, setExpandedFundIds] = useState<Set<string>>(new Set());
+  const [refreshing, setRefreshing] = useState(false);
+  const [refreshMessage, setRefreshMessage] = useState<string | null>(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [benchmarkOpen, setBenchmarkOpen] = useState(false);
 
@@ -88,6 +90,32 @@ export function FundsXirr({ themes, onNavsUpdated, benchmarks }: FundsXirrProps)
     }
   };
 
+  const handleRefreshData = async () => {
+    const activeBenchmarkIds = (benchmarks || [])
+      .filter((b: any) => b.is_active)
+      .map((b: any) => b.id);
+    setRefreshing(true);
+    setRefreshMessage(null);
+    try {
+      const result = await refreshNavAndBenchmarks(activeBenchmarkIds);
+      const benchOk = result.benchmarkResults.length;
+      const benchFail = result.benchmarkErrors.length;
+      const total = benchOk + benchFail;
+      let msg = result.navError ? `NAV update failed. ${result.navError}` : 'NAVs updated.';
+      if (total > 0) {
+        msg += ` ${benchOk}/${total} benchmark${total !== 1 ? 's' : ''} refreshed.`;
+        if (benchFail > 0) msg += ` (${benchFail} failed)`;
+      }
+      setRefreshMessage(msg);
+      setTimeout(() => setRefreshMessage(null), 5000);
+      if (onNavsUpdated) onNavsUpdated();
+    } catch (err: any) {
+      setRefreshMessage('Refresh failed: ' + (err.message || String(err)));
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
   const toggleFund = (fundId: string) => {
     setExpandedFundIds(prev => {
       const next = new Set(prev);
@@ -122,12 +150,28 @@ export function FundsXirr({ themes, onNavsUpdated, benchmarks }: FundsXirrProps)
         candidateFolios = candidateFolios.filter(f => f.pan === filters.pan);
       }
 
+      // Handle investorName filter
+      if (filters.investorName) {
+        const target = filters.investorName.trim().toUpperCase();
+        candidateFolios = candidateFolios.filter(
+          f => f.investorName?.trim().toUpperCase() === target
+        );
+      }
+
       // d. If candidateFolios.length === 0 after (b) and (c): exclude group, continue.
       if (candidateFolios.length === 0) {
         continue;
       }
 
       // e. Group-level filters (apply to the group as a whole — exclude entire group if not matched):
+      if (filters.investorName) {
+        const target = filters.investorName.trim().toUpperCase();
+        const hasMatch = (group.folios || []).some(
+          (f: any) => f.investorName?.trim().toUpperCase() === target
+        );
+        if (!hasMatch) continue;
+      }
+
       // - search (non-empty)
       if (filters.search) {
         const searchLower = filters.search.toLowerCase();
@@ -330,6 +374,23 @@ export function FundsXirr({ themes, onNavsUpdated, benchmarks }: FundsXirrProps)
     return [...new Set(allPans.filter(Boolean))].sort();
   }, [groups]);
 
+  const uniqueInvestorNames = useMemo(() => {
+    const seen = new Set<string>();
+    const names: string[] = [];
+    (groups || []).forEach((group: any) => {
+      (group.folios || []).forEach((folio: any) => {
+        if (folio.investorName) {
+          const key = folio.investorName.trim().toUpperCase();
+          if (!seen.has(key)) {
+            seen.add(key);
+            names.push(folio.investorName.trim());
+          }
+        }
+      });
+    });
+    return names.sort();
+  }, [groups]);
+
   const subCategories = useMemo(() => {
     const source = filters.category
       ? groups.filter(g => g.assetClass === filters.category)
@@ -414,14 +475,24 @@ export function FundsXirr({ themes, onNavsUpdated, benchmarks }: FundsXirrProps)
             <Download className="w-4 h-4" />
             Export CSV
           </button>
-          <button
-            onClick={handleUpdateNavs}
-            disabled={updating}
-            className="flex items-center gap-2 px-4 py-2 bg-[#01696f] hover:bg-[#0c4e54] text-white rounded-xl text-sm font-semibold transition-colors disabled:opacity-50"
-          >
-            <RefreshCw className={cn("w-4 h-4", updating && "animate-spin")} />
-            {updating ? 'Updating...' : 'Update NAVs'}
-          </button>
+          <div className="flex flex-col items-end gap-1">
+            <button
+              onClick={handleRefreshData}
+              disabled={refreshing}
+              className="flex items-center gap-2 px-4 py-2 bg-[#01696f] text-white rounded-xl text-sm font-bold hover:bg-[#014f53] transition-all disabled:opacity-50"
+            >
+              {refreshing
+                ? <Loader2 className="w-4 h-4 animate-spin" />
+                : <RefreshCw className="w-4 h-4" />}
+              Refresh Data
+            </button>
+            <span className="text-[10px] text-slate-400 font-medium">NAV + Benchmarks</span>
+            {refreshMessage && (
+              <span className="text-[10px] text-slate-500 max-w-[220px] text-right leading-tight">
+                {refreshMessage}
+              </span>
+            )}
+          </div>
         </div>
       </div>
 
@@ -485,6 +556,7 @@ export function FundsXirr({ themes, onNavsUpdated, benchmarks }: FundsXirrProps)
               pans={pans}
               subCategories={subCategories}
               availableTags={availableTags}
+              investorNames={uniqueInvestorNames}
             />
           </div>
         )}

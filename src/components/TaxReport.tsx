@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   Receipt, 
   Download, 
@@ -85,6 +85,20 @@ export function TaxReport() {
   const [pansLoading, setPansLoading] = useState(true);
   const [pansError, setPansError] = useState<string | null>(null);
 
+  const [fyDropdownOpen, setFyDropdownOpen] = useState(false);
+  const fyDropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!fyDropdownOpen) return;
+    const handleOutsideClick = (e: MouseEvent) => {
+      if (fyDropdownRef.current && !fyDropdownRef.current.contains(e.target as Node)) {
+        setFyDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleOutsideClick);
+    return () => document.removeEventListener('mousedown', handleOutsideClick);
+  }, [fyDropdownOpen]);
+
   // Advance Tax State
   const currentInProgressFy = useMemo(() => {
     const today = new Date();
@@ -104,7 +118,7 @@ export function TaxReport() {
     const options = [
       { value: currentInProgressFy, label: `${currentInProgressFy} (In Progress)` }
     ];
-    for (let i = 1; i <= 5; i++) {
+    for (let i = 1; i <= startYear - 2010; i++) {
       const yr = startYear - i;
       const endShort = (yr + 1).toString().slice(-2);
       options.push({ value: `${yr}-${endShort}`, label: `FY ${yr}-${endShort}` });
@@ -367,8 +381,8 @@ export function TaxReport() {
 
   // Generate FY Options
   const fyOptions: string[] = [];
-  if (selectedFy) {
-    const [startYearStr] = selectedFy.split('-');
+  {
+    const [startYearStr] = currentInProgressFy.split('-');
     const maxStartYear = parseInt(startYearStr);
     for (let yr = maxStartYear; yr >= 2010; yr--) {
       const endShort = (yr + 1).toString().slice(-2);
@@ -546,23 +560,44 @@ export function TaxReport() {
         {activeTab === 'capital-gains' && (
           <div className="space-y-1.5">
             <label className="text-xs font-medium text-slate-500 uppercase tracking-wider">Financial Year</label>
-            <select 
-              className="block w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5 text-sm font-medium focus:ring-2 focus:ring-primary/20 transition-all outline-none"
-              value={selectedFy}
-              onChange={(e) => handleFyChange(e.target.value)}
-              disabled={cgLoading}
-            >
-              {fyOptions.map(fy => (
-                <option key={fy} value={fy}>FY {fy}</option>
-              ))}
-            </select>
+            <div className="relative" ref={fyDropdownRef}>
+              <button
+                type="button"
+                onClick={() => { if (!cgLoading) setFyDropdownOpen(prev => !prev); }}
+                disabled={cgLoading}
+                className="flex items-center justify-between w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5 text-sm font-medium focus:ring-2 focus:ring-primary/20 transition-all outline-none disabled:opacity-50 min-w-[130px]"
+              >
+                <span>{selectedFy ? `FY ${selectedFy}` : 'Select FY'}</span>
+                <ChevronDown className="w-4 h-4 text-slate-400 ml-2 shrink-0" />
+              </button>
+              {fyDropdownOpen && (
+                <div className="absolute top-full left-0 mt-1 w-full min-w-[130px] bg-white border border-slate-200 rounded-lg shadow-md z-50 overflow-hidden">
+                  <div className="max-h-48 overflow-y-auto">
+                    {fyOptions.map(fy => (
+                      <button
+                        key={fy}
+                        type="button"
+                        onClick={() => { handleFyChange(fy); setFyDropdownOpen(false); }}
+                        className={`w-full text-left px-4 py-2 text-sm transition-colors ${
+                          selectedFy === fy
+                            ? 'bg-[#01696f]/10 text-[#01696f] font-semibold'
+                            : 'text-slate-700 hover:bg-slate-50'
+                        }`}
+                      >
+                        FY {fy}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         )}
 
         <div className="flex-1" />
 
         <div className="flex p-1 bg-slate-100 rounded-xl">
-          {(['capital-gains', 'unrealized', 'harvesting', 'simulator', 'advance'] as TaxTab[]).map(tab => (
+          {(['capital-gains', 'advance', 'unrealized', 'harvesting', 'simulator'] as TaxTab[]).map(tab => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -573,9 +608,9 @@ export function TaxReport() {
               }`}
             >
               {tab === 'capital-gains' ? 'Capital Gains' : 
+               tab === 'advance' ? 'Advance Tax' :
                tab === 'unrealized' ? 'Unrealized' :
-               tab === 'harvesting' ? 'Harvesting' :
-               tab === 'simulator' ? 'Simulator' : 'Advance Tax'}
+               tab === 'harvesting' ? 'Harvesting' : 'Simulator'}
             </button>
           ))}
         </div>
