@@ -460,39 +460,43 @@ export function FundsXirr({ themes, onNavsUpdated, benchmarks }: FundsXirrProps)
           )}
         </div>
 
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => downloadFundsGroupedCsv({
-              search: filters.search,
-              fundHouse: filters.fundHouse,
-              category: filters.category,
-              plan: filters.plan,
-              fundOption: filters.fundOption,
-              activeOnly: filters.activeOnly,
-            })}
-            className="flex items-center gap-2 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-sm font-semibold transition-colors"
-          >
-            <Download className="w-4 h-4" />
-            Export CSV
-          </button>
-          <div className="flex flex-col items-end gap-1">
+        <div className="flex flex-col items-end gap-1">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => downloadFundsGroupedCsv({
+                search: filters.search,
+                fundHouse: filters.fundHouse,
+                category: filters.category,
+                plan: filters.plan,
+                fundOption: filters.fundOption,
+                activeOnly: filters.activeOnly,
+              })}
+              className="flex items-center gap-2 px-4 py-2 bg-[#01696f] hover:bg-[#014f53] text-white rounded-xl text-sm font-semibold transition-colors"
+            >
+              <Download className="w-4 h-4" />
+              Export CSV
+            </button>
             <button
               onClick={handleRefreshData}
               disabled={refreshing}
-              className="flex items-center gap-2 px-4 py-2 bg-[#01696f] text-white rounded-xl text-sm font-bold hover:bg-[#014f53] transition-all disabled:opacity-50"
+              className="flex flex-col items-center justify-center gap-0.5 px-4 py-1 bg-[#01696f] text-white rounded-xl text-sm font-bold hover:bg-[#014f53] transition-all disabled:opacity-50"
             >
-              {refreshing
-                ? <Loader2 className="w-4 h-4 animate-spin" />
-                : <RefreshCw className="w-4 h-4" />}
-              Refresh Data
-            </button>
-            <span className="text-[10px] text-slate-400 font-medium">NAV + Benchmarks</span>
-            {refreshMessage && (
-              <span className="text-[10px] text-slate-500 max-w-[220px] text-right leading-tight">
-                {refreshMessage}
+              <span className="flex items-center gap-2">
+                {refreshing
+                  ? <Loader2 className="w-4 h-4 animate-spin" />
+                  : <RefreshCw className="w-4 h-4" />}
+                Refresh Data
               </span>
-            )}
+              <span className="text-[9px] font-normal opacity-80 leading-none">
+                NAV + Benchmarks
+              </span>
+            </button>
           </div>
+          {refreshMessage && (
+            <span className="text-[10px] text-slate-500 max-w-[220px] text-right leading-tight">
+              {refreshMessage}
+            </span>
+          )}
         </div>
       </div>
 

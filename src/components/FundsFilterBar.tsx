@@ -47,11 +47,11 @@ export function FundsFilterBar({
   };
 
   return (
-    <div className="space-y-5">
-      {/* ROW 1: Investor Name, PAN, Active Only */}
-      <div className="flex flex-wrap items-end gap-4">
+    <div className="space-y-0">
+      {/* ROW 1 — flex items-stretch gap-3 */}
+      <div className="flex items-stretch gap-3">
         {/* Investor Name */}
-        <div className="min-w-[180px] space-y-1">
+        <div className="bg-white border border-slate-200 rounded-xl p-3 space-y-1.5 flex-1">
           <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
             Investor Name
           </label>
@@ -68,7 +68,7 @@ export function FundsFilterBar({
         </div>
 
         {/* PAN */}
-        <div className="w-[150px] space-y-1">
+        <div className="bg-white border border-slate-200 rounded-xl p-3 space-y-1.5 flex-1">
           <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
             PAN
           </label>
@@ -85,7 +85,10 @@ export function FundsFilterBar({
         </div>
 
         {/* Active Only */}
-        <div className="flex items-center gap-2 pb-1.5">
+        <div className="bg-white border border-slate-200 rounded-xl p-3 space-y-1.5 flex-none w-auto px-4 flex flex-col items-center justify-center">
+          <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider cursor-pointer select-none" onClick={() => updateFilter('activeOnly', !filters.activeOnly)}>
+            Active Only
+          </label>
           <button
             onClick={() => updateFilter('activeOnly', !filters.activeOnly)}
             className={cn(
@@ -100,16 +103,13 @@ export function FundsFilterBar({
               )}
             />
           </button>
-          <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider cursor-pointer select-none" onClick={() => updateFilter('activeOnly', !filters.activeOnly)}>
-            Active Only
-          </label>
         </div>
       </div>
 
-      {/* ROW 2: Search and Fund House */}
-      <div className="flex flex-wrap items-end gap-4 pt-4 border-t border-slate-100">
+      {/* ROW 2 — flex items-stretch gap-3 pt-4 border-t border-slate-100 */}
+      <div className="flex items-stretch gap-3 pt-4 border-t border-slate-100 mt-4">
         {/* Search */}
-        <div className="flex-1 min-w-[240px] space-y-1">
+        <div className="bg-white border border-slate-200 rounded-xl p-3 space-y-1.5 flex-[2]">
           <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Search</label>
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
@@ -124,7 +124,7 @@ export function FundsFilterBar({
         </div>
 
         {/* Fund House */}
-        <div className="min-w-[180px] space-y-1">
+        <div className="bg-white border border-slate-200 rounded-xl p-3 space-y-1.5 flex-1">
           <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Fund House</label>
           <select
             value={filters.fundHouse || ''}
@@ -139,10 +139,10 @@ export function FundsFilterBar({
         </div>
       </div>
 
-      {/* ROW 2: Category, Sub-category, Plan chips, Option chips */}
-      <div className="flex flex-wrap items-end gap-6 pt-4 border-t border-slate-100">
+      {/* ROW 3 — flex items-stretch gap-3 pt-4 border-t border-slate-100 */}
+      <div className="flex items-stretch gap-3 pt-4 border-t border-slate-100 mt-4">
         {/* Category */}
-        <div className="min-w-[170px] space-y-1">
+        <div className="bg-white border border-slate-200 rounded-xl p-3 space-y-1.5 flex-1">
           <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Category</label>
           <select
             value={filters.category || ''}
@@ -159,7 +159,7 @@ export function FundsFilterBar({
         </div>
 
         {/* Sub-category */}
-        <div className="min-w-[170px] space-y-1">
+        <div className="bg-white border border-slate-200 rounded-xl p-3 space-y-1.5 flex-1">
           <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
             Sub-category
           </label>
@@ -177,7 +177,7 @@ export function FundsFilterBar({
         </div>
 
         {/* Plan */}
-        <div className="space-y-1.5">
+        <div className="bg-white border border-slate-200 rounded-xl p-3 space-y-1.5 flex-none w-auto">
           <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Plan</label>
           <div className="flex gap-1.5">
             {['All', 'Direct', 'Regular'].map(p => (
@@ -198,7 +198,7 @@ export function FundsFilterBar({
         </div>
 
         {/* Option */}
-        <div className="space-y-1.5">
+        <div className="bg-white border border-slate-200 rounded-xl p-3 space-y-1.5 flex-none w-auto">
           <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Option</label>
           <div className="flex gap-1.5">
             {['All', 'Growth', 'IDCW'].map(o => (
@@ -219,52 +219,49 @@ export function FundsFilterBar({
         </div>
       </div>
 
-      {/* ROW 3: Theme dropdown, Tag dropdown, Clear All button */}
-      <div className="flex flex-wrap items-center justify-between pt-4 border-t border-slate-100 gap-4">
-        <div className="flex flex-wrap items-end gap-4">
-          {/* Theme Dropdown */}
-          <div className="min-w-[180px] space-y-1.5">
-            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Theme</label>
-            <select
-              value={filters.themeId || ''}
-              onChange={(e) => {
-                onChange({ ...filters, themeId: e.target.value, tag: '' });
-              }}
-              className="block w-full pl-3 pr-10 py-1.5 text-sm border-slate-200 bg-slate-50 rounded-lg focus:outline-none focus:ring-[#01696f] focus:border-[#01696f]"
-            >
-              <option value="">All Themes</option>
-              {themes.map(t => (
-                <option key={t.id} value={t.id}>{t.name}</option>
-              ))}
-            </select>
-          </div>
-
-          {/* Tag Dropdown */}
-          <div className="min-w-[180px] space-y-1.5">
-            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Tag</label>
-            <select
-              value={filters.tag || ''}
-              onChange={(e) => updateFilter('tag', e.target.value)}
-              disabled={!filters.themeId || availableTags.length === 0}
-              className="block w-full pl-3 pr-10 py-1.5 text-sm border-slate-200 bg-slate-50 rounded-lg focus:outline-none focus:ring-[#01696f] focus:border-[#01696f] disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              <option value="">All Tags</option>
-              {availableTags.map(tag => (
-                <option key={tag} value={tag}>{tag}</option>
-              ))}
-            </select>
-          </div>
-        </div>
-
-        <div>
-          <button
-            onClick={clearFilters}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-xl transition-colors border border-transparent hover:border-rose-100"
+      {/* ROW 4 — flex items-center gap-3 pt-4 border-t border-slate-100 */}
+      <div className="flex items-center gap-3 pt-4 border-t border-slate-100 mt-4">
+        {/* Theme */}
+        <div className="bg-white border border-slate-200 rounded-xl p-3 space-y-1.5 flex-1">
+          <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Theme</label>
+          <select
+            value={filters.themeId || ''}
+            onChange={(e) => {
+              onChange({ ...filters, themeId: e.target.value, tag: '' });
+            }}
+            className="block w-full pl-3 pr-10 py-1.5 text-sm border-slate-200 bg-slate-50 rounded-lg focus:outline-none focus:ring-[#01696f] focus:border-[#01696f]"
           >
-            <X className="w-3.5 h-3.5" />
-            Clear All
-          </button>
+            <option value="">All Themes</option>
+            {themes.map(t => (
+              <option key={t.id} value={t.id}>{t.name}</option>
+            ))}
+          </select>
         </div>
+
+        {/* Tag */}
+        <div className="bg-white border border-slate-200 rounded-xl p-3 space-y-1.5 flex-1">
+          <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Tag</label>
+          <select
+            value={filters.tag || ''}
+            onChange={(e) => updateFilter('tag', e.target.value)}
+            disabled={!filters.themeId || availableTags.length === 0}
+            className="block w-full pl-3 pr-10 py-1.5 text-sm border-slate-200 bg-slate-50 rounded-lg focus:outline-none focus:ring-[#01696f] focus:border-[#01696f] disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            <option value="">All Tags</option>
+            {availableTags.map(tag => (
+              <option key={tag} value={tag}>{tag}</option>
+            ))}
+          </select>
+        </div>
+
+        {/* Clear All button */}
+        <button
+          onClick={clearFilters}
+          className="ml-auto flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-xl transition-colors border border-transparent hover:border-rose-100"
+        >
+          <X className="w-3.5 h-3.5" />
+          Clear All
+        </button>
       </div>
     </div>
   );

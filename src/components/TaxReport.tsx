@@ -571,12 +571,34 @@ export function TaxReport() {
 
   return (
     <div className="space-y-8">
-      {/* Top Controls */}
-      <div className="flex flex-wrap items-center gap-6 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-        <div className="space-y-1.5">
+      {/* CARD 1: Full-width tab bar */}
+      <div className="bg-white p-2 rounded-2xl border border-slate-200 shadow-sm animate-fade-in">
+        <div className="flex p-1 bg-slate-100 rounded-xl w-full">
+          {(['capital-gains', 'advance', 'unrealized', 'harvesting', 'simulator'] as TaxTab[]).map(tab => (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all ${
+                activeTab === tab 
+                  ? 'bg-white text-primary shadow-sm' 
+                  : 'text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              {tab === 'capital-gains' ? 'Capital Gains' : 
+               tab === 'advance' ? 'Advance Tax' :
+               tab === 'unrealized' ? 'Unrealized' :
+               tab === 'harvesting' ? 'Harvesting' : 'Simulator'}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* CARD 2: Controls row (tab-specific) */}
+      <div className="flex flex-wrap items-end gap-4 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm animate-fade-in">
+        <div className="space-y-1.5 flex-1 min-w-[200px]">
           <label className="text-xs font-medium text-slate-500 uppercase tracking-wider">Investor PAN</label>
           <select 
-            className="block w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5 text-sm font-medium focus:ring-2 focus:ring-primary/20 transition-all outline-none"
+            className="block w-full h-[42px] bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5 text-sm font-medium focus:ring-2 focus:ring-[#01696f]/20 transition-all outline-none"
             value={selectedPan}
             onChange={(e) => handlePanChange(e.target.value)}
             disabled={cgLoading || unrealizedLoading || advanceTaxLoading}
@@ -588,14 +610,14 @@ export function TaxReport() {
         </div>
 
         {activeTab === 'capital-gains' && (
-          <div className="space-y-1.5">
+          <div className="space-y-1.5 flex-1 min-w-[200px] animate-fade-in">
             <label className="text-xs font-medium text-slate-500 uppercase tracking-wider">Financial Year</label>
             <div className="relative" ref={fyDropdownRef}>
               <button
                 type="button"
                 onClick={() => { if (!cgLoading) setFyDropdownOpen(prev => !prev); }}
                 disabled={cgLoading}
-                className="flex items-center justify-between w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5 text-sm font-medium focus:ring-2 focus:ring-primary/20 transition-all outline-none disabled:opacity-50 min-w-[130px]"
+                className="flex items-center justify-between w-full h-[42px] bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5 text-sm font-medium focus:ring-2 focus:ring-[#01696f]/20 transition-all outline-none disabled:opacity-50"
               >
                 <span>{selectedFy ? `FY ${selectedFy}` : 'Select FY'}</span>
                 <ChevronDown className="w-4 h-4 text-slate-400 ml-2 shrink-0" />
@@ -624,26 +646,39 @@ export function TaxReport() {
           </div>
         )}
 
-        <div className="flex-1" />
-
-        <div className="flex p-1 bg-slate-100 rounded-xl">
-          {(['capital-gains', 'advance', 'unrealized', 'harvesting', 'simulator'] as TaxTab[]).map(tab => (
-            <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              className={`px-4 py-2 text-sm font-medium rounded-lg transition-all ${
-                activeTab === tab 
-                  ? 'bg-white text-primary shadow-sm' 
-                  : 'text-slate-500 hover:text-slate-700'
-              }`}
+        {activeTab === 'advance' && (
+          <div className="space-y-1.5 flex-1 min-w-[200px] animate-fade-in">
+            <label className="text-xs font-medium text-slate-500 uppercase tracking-wider">Financial Year</label>
+            <select
+              className="block w-full h-[42px] bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5 text-sm font-medium focus:ring-2 focus:ring-[#01696f]/20 transition-all outline-none"
+              value={advanceTaxFy}
+              onChange={(e) => handleAdvanceTaxFyChange(e.target.value)}
+              disabled={advanceTaxLoading}
+              id="advance-tax-fy-select"
             >
-              {tab === 'capital-gains' ? 'Capital Gains' : 
-               tab === 'advance' ? 'Advance Tax' :
-               tab === 'unrealized' ? 'Unrealized' :
-               tab === 'harvesting' ? 'Harvesting' : 'Simulator'}
+              {advanceTaxFyOptions.map(opt => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
+            </select>
+          </div>
+        )}
+
+        {activeTab === 'advance' && advanceTaxResult && (
+          <div className="flex-shrink-0 animate-fade-in">
+            <button
+              onClick={handleAdvanceTaxExport}
+              disabled={exportLoading}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg shadow-emerald-500/10 px-5 py-2.5 rounded-xl font-medium text-sm flex items-center gap-2 transition-all cursor-pointer"
+            >
+              {exportLoading ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <FileSpreadsheet className="w-4 h-4" />
+              )}
+              {exportLoading ? 'Exporting...' : 'Download Excel Report'}
             </button>
-          ))}
-        </div>
+          </div>
+        )}
       </div>
 
       <AnimatePresence mode="wait">
@@ -845,25 +880,6 @@ export function TaxReport() {
                     </div>
                   )}
 
-                  {/* STCG Warning — BUG-TAX-04 */}
-                  {cgData.totalSTCG !== 0 && (
-                    <div className="bg-amber-50 border border-amber-200 p-4 rounded-xl flex gap-3 text-amber-800">
-                      <AlertTriangle className="w-5 h-5 flex-shrink-0 mt-0.5" />
-                      <div className="text-sm">
-                        <p className="font-semibold">ClearTax and Quicko CSVs cover LTCG only (Schedule 112A)</p>
-                        <p className="mt-0.5 opacity-90">
-                          This file does not include STCG. For FY {selectedFy}, your net STCG is{' '}
-                          <span className="font-medium">{formatCurrency(Math.abs(cgData.totalSTCG))}</span>
-                          {cgData.totalSTCG >= 0
-                            ? '. Enter this as a single consolidated amount in Schedule CG of your ITR-2 under Section 111A (Short Term Capital Gains from equity MF where STT is paid).'
-                            : ' (a net loss — report it in Schedule CG; it can be carried forward for 8 years to offset future STCG and LTCG).'
-                          }{' '}
-                          The Audit CSV has the full per-lot detail for both STCG and LTCG.
-                        </p>
-                      </div>
-                    </div>
-                  )}
-
                   {/* Scheme Merger Warnings — FEAT-TAX-02 Phase 1 */}
                   {mergerWarnings.length > 0 && (
                     <div className="bg-amber-50 border border-amber-200 p-4 rounded-xl flex gap-3 text-amber-800">
@@ -878,11 +894,12 @@ export function TaxReport() {
 
                   {/* Download Row */}
                   <div className="space-y-3">
-                    <div className="flex items-center gap-3 flex-wrap">
+                    <div className="flex flex-wrap items-center gap-3 bg-slate-50 border border-slate-200 p-4 rounded-2xl shadow-sm animate-fade-in">
                       <button
                         onClick={() => downloadCapitalGainsCsv(selectedPan, selectedFy, 'cleartax')}
                         disabled={cgData.folios.length === 0}
-                        className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-medium hover:bg-slate-50 transition-all disabled:opacity-50"
+                        title="ClearTax: Upload directly to ClearTax. Applies to Equity (Schedule 112A). Does not include STCG."
+                        className="px-4 py-2.5 rounded-xl text-sm font-medium border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 hover:text-slate-900 transition-all focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 cursor-pointer"
                       >
                         <Download className="w-4 h-4" />
                         Download ClearTax CSV
@@ -890,7 +907,8 @@ export function TaxReport() {
                       <button
                         onClick={() => downloadCapitalGainsCsv(selectedPan, selectedFy, 'quicko')}
                         disabled={cgData.folios.length === 0}
-                        className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-medium hover:bg-slate-50 transition-all disabled:opacity-50"
+                        title="Quicko: Upload directly to Quicko. Applies to Equity (Schedule 112A). Does not include STCG."
+                        className="px-4 py-2.5 rounded-xl text-sm font-medium border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 hover:text-slate-900 transition-all focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 cursor-pointer"
                       >
                         <Download className="w-4 h-4" />
                         Download Quicko CSV
@@ -898,20 +916,15 @@ export function TaxReport() {
                       <button
                         onClick={() => downloadAuditCsv(selectedPan, selectedFy)}
                         disabled={cgData.folios.length === 0}
-                        className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-medium hover:bg-slate-50 transition-all disabled:opacity-50"
+                        className="px-4 py-2.5 rounded-xl text-sm font-medium border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 hover:text-slate-900 transition-all focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 cursor-pointer"
                       >
                         <Download className="w-4 h-4" />
                         Download Audit CSV
                       </button>
-                    </div>
-
-                    <hr className="border-slate-200 my-1" />
-
-                    <div className="flex items-center gap-3 flex-wrap">
                       <button
                         onClick={handleDownloadCgExcel}
                         disabled={cgData.folios.length === 0 || cgExcelLoading}
-                        className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-medium hover:bg-slate-50 transition-all disabled:opacity-50"
+                        className="px-4 py-2.5 rounded-xl text-sm font-medium border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 hover:text-slate-900 transition-all focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 cursor-pointer"
                       >
                         <FileSpreadsheet className="w-4 h-4" />
                         {cgExcelLoading ? 'Generating...' : 'Download Capital Gains Excel'}
@@ -919,7 +932,7 @@ export function TaxReport() {
                       <button
                         onClick={handleDownloadItrSummary}
                         disabled={cgData.folios.length === 0 || itrLoading}
-                        className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-medium hover:bg-slate-50 transition-all disabled:opacity-50"
+                        className="px-4 py-2.5 rounded-xl text-sm font-medium border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 hover:text-slate-900 transition-all focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 cursor-pointer"
                       >
                         <FileText className="w-4 h-4" />
                         {itrLoading ? 'Generating...' : 'Download ITR Summary'}
@@ -1541,60 +1554,37 @@ export function TaxReport() {
 
           {activeTab === 'advance' && (
             <div className="space-y-8" id="advance-tax-tab-content">
-              {/* SECTION 1 — FY selector row */}
-              <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-wrap items-end gap-4" id="advance-tax-controls-card">
-                <div className="space-y-1.5 flex-1 min-w-[200px]">
-                  <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                    Financial Year
-                  </label>
-                  <select
-                    className="block w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5 text-sm font-medium focus:ring-2 focus:ring-primary/20 transition-all outline-none"
-                    value={advanceTaxFy}
-                    onChange={(e) => handleAdvanceTaxFyChange(e.target.value)}
-                    disabled={advanceTaxLoading}
-                    id="advance-tax-fy-select"
-                  >
-                    {advanceTaxFyOptions.map(opt => (
-                      <option key={opt.value} value={opt.value}>{opt.label}</option>
-                    ))}
-                  </select>
+              {advanceTaxError && (
+                <div className="bg-red-50 border border-red-200 text-red-700 p-4 rounded-xl flex items-center gap-3 animate-fade-in">
+                  <AlertTriangle className="w-5 h-5 flex-shrink-0" />
+                  <p>{advanceTaxError}</p>
                 </div>
-                <div>
-                  <button
-                    id="advance-tax-calculate-btn"
+              )}
+              {exportError && (
+                <div className="bg-red-50 border border-red-200 text-red-700 p-4 rounded-xl flex items-center gap-3 animate-fade-in">
+                  <AlertTriangle className="w-5 h-5 flex-shrink-0" />
+                  <p>{exportError}</p>
+                </div>
+              )}
+
+              {!advanceTaxResult && !advanceTaxLoading && (
+                <div className="bg-white p-12 rounded-2xl border border-slate-200 text-center space-y-6">
+                  <div className="w-16 h-16 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center mx-auto">
+                    <Receipt className="w-8 h-8" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-semibold text-slate-800">Computation Required</h3>
+                    <p className="text-slate-500 text-sm mt-1">Select an Investor and Financial Year in the controls panel to compute estimated advance installments.</p>
+                  </div>
+                  <button 
                     onClick={calculateAdvanceTax}
-                    disabled={advanceTaxLoading || !selectedPan}
-                    className="bg-primary text-white px-6 py-2.5 rounded-xl font-medium hover:bg-primary-hover transition-all shadow-lg shadow-primary/20 disabled:opacity-50 h-[42px] flex items-center justify-center gap-2"
+                    disabled={!selectedPan}
+                    className="bg-primary text-white px-6 py-2.5 rounded-xl font-medium hover:bg-primary-hover transition-all shadow-lg shadow-primary/20 disabled:opacity-50"
                   >
-                    {advanceTaxLoading && <Loader2 className="w-4 h-4 animate-spin" />}
-                    Calculate
+                    Calculate Advance Tax
                   </button>
                 </div>
-                {advanceTaxResult && (
-                  <button
-                    onClick={handleAdvanceTaxExport}
-                    disabled={exportLoading}
-                    className="flex items-center gap-2 bg-white border border-slate-200
-                               text-slate-700 px-4 py-2.5 rounded-xl text-sm font-medium
-                               hover:bg-slate-50 transition-all shadow-sm
-                               disabled:opacity-50 disabled:cursor-not-allowed font-medium"
-                  >
-                    {exportLoading
-                      ? <Loader2 className="w-4 h-4 animate-spin" />
-                      : <Download className="w-4 h-4" />
-                    }
-                    {exportLoading ? 'Exporting...' : 'Download Excel'}
-                  </button>
-                )}
-                {advanceTaxError && (
-                  <p className="text-sm font-medium text-rose-600 animate-pulse w-full mt-2" id="advance-tax-error-msg">
-                    {advanceTaxError}
-                  </p>
-                )}
-                {exportError && (
-                  <p className="text-xs text-red-500 mt-1">{exportError}</p>
-                )}
-              </div>
+              )}
 
               {/* LOADING STATE */}
               {advanceTaxLoading ? (
@@ -1618,12 +1608,14 @@ export function TaxReport() {
                     {/* SECTION 3 — Mode A Installment Table */}
                     <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden" id="advance-tax-installments">
                       <div className="px-6 py-4 border-b border-slate-200 bg-slate-50/50 flex flex-wrap items-center justify-between gap-4">
-                        <h4 className="font-semibold text-slate-900">Installment Schedule</h4>
-                        {advanceTaxFy !== currentInProgressFy && (
-                          <span className="text-xs text-amber-600 bg-amber-50 px-2 py-1 rounded font-medium italic">
-                            Historical FY — all installments are past due.
-                          </span>
-                        )}
+                        <div className="flex items-center gap-3">
+                          <h4 className="font-semibold text-slate-900">Installment Schedule</h4>
+                          {advanceTaxFy !== currentInProgressFy && (
+                            <span className="text-xs text-amber-600 bg-amber-50 px-2 py-1 rounded font-medium italic">
+                              Historical FY — all installments are past due.
+                            </span>
+                          )}
+                        </div>
                       </div>
                       <div className="overflow-x-auto">
                         <table className="w-full text-left border-collapse" id="advance-tax-installments-table">
