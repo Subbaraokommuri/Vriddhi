@@ -18,6 +18,7 @@ import xirrRouter from './routes/xirr.ts';
 import logsRouter from './routes/logs.ts';
 import casRouter from './routes/cas-import.ts';
 import taxRouter from './routes/tax.ts';
+import taxExportRouter from './routes/tax-export.ts';
 import relativePerformanceRouter from './routes/relative-performance.ts';
 
 initDb();
@@ -37,6 +38,7 @@ async function startServer() {
   app.use('/api', relativePerformanceRouter);
   app.use('/api/cas', casRouter);
   app.use('/api/tax', taxRouter);
+  app.use('/api/tax', taxExportRouter);
 
   // Vite setup
   if (process.env.NODE_ENV !== 'production') {

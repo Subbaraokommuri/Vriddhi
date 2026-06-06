@@ -242,7 +242,7 @@ async function getCapitalGainsSummary(pan: string, fyInput?: string) {
   // Bulk fetch all transactions
   const allTxns = db.prepare(`
     SELECT t.date, t.transaction_type, t.units, t.amount, t.nav, t.folio_id,
-           t.transaction_subtype, t.merger_ratio, t.source_fund_id
+           t.transaction_subtype, t.merger_ratio, t.source_fund_id, t.buy_effective_cost
     FROM transactions t 
     WHERE t.folio_id IN (SELECT id FROM folios WHERE pan = ?) 
     ORDER BY t.date ASC
@@ -695,7 +695,7 @@ router.get('/unrealized', async (req, res) => {
     `).all(pan) as any[];
 
     const allTxns = db.prepare(`
-      SELECT t.date, t.transaction_type, t.units, t.amount, t.nav, t.folio_id 
+      SELECT t.date, t.transaction_type, t.units, t.amount, t.nav, t.folio_id, t.buy_effective_cost 
       FROM transactions t 
       WHERE t.folio_id IN (SELECT id FROM folios WHERE pan = ?) 
       ORDER BY t.date ASC
@@ -756,7 +756,7 @@ router.get('/harvesting', async (req, res) => {
       `).all(pan) as any[];
 
       const allTxns = db.prepare(`
-        SELECT t.date, t.transaction_type, t.units, t.amount, t.nav, t.folio_id 
+        SELECT t.date, t.transaction_type, t.units, t.amount, t.nav, t.folio_id, t.buy_effective_cost 
         FROM transactions t 
         WHERE t.folio_id IN (SELECT id FROM folios WHERE pan = ?) 
         ORDER BY t.date ASC
@@ -860,7 +860,7 @@ router.get('/simulate', async (req, res) => {
       return res.status(400).json({ error: `Simulation units (${simUnits.toFixed(4)}) exceed stated balance (${folio.stated_balance.toFixed(4)})` });
     }
 
-    const txns = db.prepare('SELECT date, transaction_type, units, amount, nav FROM transactions WHERE folio_id = ? ORDER BY date ASC').all(folioId) as any[];
+    const txns = db.prepare('SELECT date, transaction_type, units, amount, nav, buy_effective_cost FROM transactions WHERE folio_id = ? ORDER BY date ASC').all(folioId) as any[];
     const today = new Date().toISOString().split('T')[0];
     
     txns.push({
@@ -996,7 +996,7 @@ async function computeAdvanceTaxData(
   const allTxns = db.prepare(`
     SELECT t.date, t.transaction_type, t.units, t.amount, t.nav,
            t.folio_id, t.description,
-           t.transaction_subtype, t.merger_ratio, t.source_fund_id
+           t.transaction_subtype, t.merger_ratio, t.source_fund_id, t.buy_effective_cost
     FROM transactions t
     WHERE t.folio_id IN (SELECT id FROM folios WHERE pan = ?)
     ORDER BY t.date ASC

@@ -594,5 +594,42 @@ export async function downloadAdvanceTaxExcel(
   URL.revokeObjectURL(url);
 }
 
+export async function downloadCapitalGainsExcel(pan: string, fy: string): Promise<void> {
+  const params = new URLSearchParams({ pan, fy });
+  const response = await fetch(`/api/tax/capital-gains/excel?${params.toString()}`);
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({ error: 'Export failed' }));
+    throw new Error(err.error || 'Export failed');
+  }
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `vriddhi-capital-gains-${pan}-FY${fy}.xlsx`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+export async function downloadItrSummary(pan: string, fy: string): Promise<void> {
+  const params = new URLSearchParams({ pan, fy });
+  const response = await fetch(`/api/tax/capital-gains/itr-summary?${params.toString()}`);
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({ error: 'Export failed' }));
+    throw new Error(err.error || 'Export failed');
+  }
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `vriddhi-itr-summary-${pan}-FY${fy}.html`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+
 
 

@@ -9,6 +9,7 @@ import { parseCasPdf } from '../lib/cas-parser.ts';
 import { generateHtml } from '../lib/cas-reconcile-html.ts';
 import { runChecks } from '../lib/cas-reconcile.ts';
 import { log } from '../lib/logger.ts';
+import { CONFIG } from '../lib/config.ts';
 
 const router = express.Router();
 
@@ -246,8 +247,8 @@ router.post('/confirm', upload.single('file'), async (req, res) => {
             INSERT OR IGNORE INTO transactions
               (id, folio_id, date, transaction_type, amount, units,
               nav, balance_units, description, source,
-              transaction_subtype, merger_ratio, source_fund_id)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'cas', ?, ?, ?)
+              transaction_subtype, merger_ratio, source_fund_id, buy_effective_cost)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'cas', ?, ?, ?, ?)
           `);
 
           for (const txn of scheme.transactions) {
@@ -275,6 +276,14 @@ router.post('/confirm', upload.single('file'), async (req, res) => {
               }
             }
 
+            const buyEffectiveCost: number | null =
+              txn.type === 'buy' &&
+              (txn.units ?? 0) > 0 &&
+              txn.amount != null &&
+              txn.date >= CONFIG.TAX.STAMP_DUTY_START_DATE
+                ? txn.amount / ((txn.units as number) * (1 - CONFIG.TAX.STAMP_DUTY_RATE))
+                : (txn.nav ?? null);
+
             const result = insertTxn.run(
               uuidv4(),
               folio_id,
@@ -287,7 +296,8 @@ router.post('/confirm', upload.single('file'), async (req, res) => {
               txn.description,
               txn.transaction_subtype ?? '',
               txn.merger_ratio ?? null,
-              source_fund_id
+              source_fund_id,
+              buyEffectiveCost
             );
 
             if (result.changes === 1) {

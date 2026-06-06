@@ -10,7 +10,9 @@ import {
   Wallet,
   TrendingUp,
   ArrowRight,
-  Info
+  Info,
+  FileSpreadsheet,
+  FileText
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { formatCurrency, formatDate } from '../lib/utils.ts';
@@ -19,6 +21,8 @@ import {
   getCapitalGains, 
   downloadCapitalGainsCsv, 
   downloadAuditCsv,
+  downloadCapitalGainsExcel,
+  downloadItrSummary,
   getUnrealizedGains,
   getHarvestingReport,
   simulateRedemption,
@@ -131,6 +135,10 @@ export function TaxReport() {
   const [advanceTaxError, setAdvanceTaxError] = useState<string | null>(null);
   const [exportLoading, setExportLoading] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
+  const [cgExcelLoading, setCgExcelLoading] = useState(false);
+  const [cgExcelError, setCgExcelError]     = useState<string | null>(null);
+  const [itrLoading,    setItrLoading]       = useState(false);
+  const [itrError,      setItrError]         = useState<string | null>(null);
 
   // New Advance Tax state variables
   const [paidAmounts, setPaidAmounts] = useState<Record<number, string>>({});
@@ -224,6 +232,10 @@ export function TaxReport() {
     setAdvanceTaxResult(null);
     setAdvanceTaxError(null);
     setExportError(null);
+    setCgExcelLoading(false);
+    setCgExcelError(null);
+    setItrLoading(false);
+    setItrError(null);
     
     // Reset all advance tax state
     setPaidAmounts({});
@@ -239,6 +251,10 @@ export function TaxReport() {
     setSelectedFy(fy);
     setCgData(null);
     setCgError(null);
+    setCgExcelLoading(false);
+    setCgExcelError(null);
+    setItrLoading(false);
+    setItrError(null);
   };
 
   const handleAdvanceTaxFyChange = (fy: string) => {
@@ -325,6 +341,20 @@ export function TaxReport() {
       setCgLoading(false);
     }
   };
+
+  async function handleDownloadCgExcel() {
+    setCgExcelLoading(true); setCgExcelError(null);
+    try { await downloadCapitalGainsExcel(selectedPan, selectedFy); }
+    catch (e: any) { setCgExcelError(e.message || 'Export failed'); }
+    finally { setCgExcelLoading(false); }
+  }
+
+  async function handleDownloadItrSummary() {
+    setItrLoading(true); setItrError(null);
+    try { await downloadItrSummary(selectedPan, selectedFy); }
+    catch (e: any) { setItrError(e.message || 'Export failed'); }
+    finally { setItrLoading(false); }
+  }
 
   const calculateUnrealized = async () => {
     if (!selectedPan) return;
@@ -822,9 +852,13 @@ export function TaxReport() {
                       <div className="text-sm">
                         <p className="font-semibold">ClearTax and Quicko CSVs cover LTCG only (Schedule 112A)</p>
                         <p className="mt-0.5 opacity-90">
-                          Your STCG of {formatCurrency(cgData.totalSTCG)} is not included in these files.
-                          Report it separately in your ITR under Short Term Capital Gains from Equity MF.
-                          Use the Audit CSV for a complete per-lot breakdown covering both STCG and LTCG.
+                          This file does not include STCG. For FY {selectedFy}, your net STCG is{' '}
+                          <span className="font-medium">{formatCurrency(Math.abs(cgData.totalSTCG))}</span>
+                          {cgData.totalSTCG >= 0
+                            ? '. Enter this as a single consolidated amount in Schedule CG of your ITR-2 under Section 111A (Short Term Capital Gains from equity MF where STT is paid).'
+                            : ' (a net loss — report it in Schedule CG; it can be carried forward for 8 years to offset future STCG and LTCG).'
+                          }{' '}
+                          The Audit CSV has the full per-lot detail for both STCG and LTCG.
                         </p>
                       </div>
                     </div>
@@ -843,31 +877,61 @@ export function TaxReport() {
                   )}
 
                   {/* Download Row */}
-                  <div className="flex items-center gap-3">
-                    <button
-                      onClick={() => downloadCapitalGainsCsv(selectedPan, selectedFy, 'cleartax')}
-                      disabled={cgData.folios.length === 0}
-                      className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-medium hover:bg-slate-50 transition-all disabled:opacity-50"
-                    >
-                      <Download className="w-4 h-4" />
-                      Download ClearTax CSV
-                    </button>
-                    <button
-                      onClick={() => downloadCapitalGainsCsv(selectedPan, selectedFy, 'quicko')}
-                      disabled={cgData.folios.length === 0}
-                      className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-medium hover:bg-slate-50 transition-all disabled:opacity-50"
-                    >
-                      <Download className="w-4 h-4" />
-                      Download Quicko CSV
-                    </button>
-                    <button
-                      onClick={() => downloadAuditCsv(selectedPan, selectedFy)}
-                      disabled={cgData.folios.length === 0}
-                      className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-medium hover:bg-slate-50 transition-all disabled:opacity-50"
-                    >
-                      <Download className="w-4 h-4" />
-                      Download Audit CSV
-                    </button>
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-3 flex-wrap">
+                      <button
+                        onClick={() => downloadCapitalGainsCsv(selectedPan, selectedFy, 'cleartax')}
+                        disabled={cgData.folios.length === 0}
+                        className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-medium hover:bg-slate-50 transition-all disabled:opacity-50"
+                      >
+                        <Download className="w-4 h-4" />
+                        Download ClearTax CSV
+                      </button>
+                      <button
+                        onClick={() => downloadCapitalGainsCsv(selectedPan, selectedFy, 'quicko')}
+                        disabled={cgData.folios.length === 0}
+                        className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-medium hover:bg-slate-50 transition-all disabled:opacity-50"
+                      >
+                        <Download className="w-4 h-4" />
+                        Download Quicko CSV
+                      </button>
+                      <button
+                        onClick={() => downloadAuditCsv(selectedPan, selectedFy)}
+                        disabled={cgData.folios.length === 0}
+                        className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-medium hover:bg-slate-50 transition-all disabled:opacity-50"
+                      >
+                        <Download className="w-4 h-4" />
+                        Download Audit CSV
+                      </button>
+                    </div>
+
+                    <hr className="border-slate-200 my-1" />
+
+                    <div className="flex items-center gap-3 flex-wrap">
+                      <button
+                        onClick={handleDownloadCgExcel}
+                        disabled={cgData.folios.length === 0 || cgExcelLoading}
+                        className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-medium hover:bg-slate-50 transition-all disabled:opacity-50"
+                      >
+                        <FileSpreadsheet className="w-4 h-4" />
+                        {cgExcelLoading ? 'Generating...' : 'Download Capital Gains Excel'}
+                      </button>
+                      <button
+                        onClick={handleDownloadItrSummary}
+                        disabled={cgData.folios.length === 0 || itrLoading}
+                        className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-medium hover:bg-slate-50 transition-all disabled:opacity-50"
+                      >
+                        <FileText className="w-4 h-4" />
+                        {itrLoading ? 'Generating...' : 'Download ITR Summary'}
+                      </button>
+                    </div>
+
+                    {cgExcelError && (
+                      <p className="text-sm text-danger mt-1">{cgExcelError}</p>
+                    )}
+                    {itrError && (
+                      <p className="text-sm text-danger mt-1">{itrError}</p>
+                    )}
                   </div>
 
                   {/* Folio Table */}

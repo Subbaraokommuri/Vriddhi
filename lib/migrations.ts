@@ -383,6 +383,11 @@ export function runMigrations(db: Database.Database) {
     db.prepare("ALTER TABLE transactions ADD COLUMN source_fund_id TEXT").run();
   }
 
+  const colsCheck_effectiveCost = (db.prepare("PRAGMA table_info(transactions)").all() as any[]).map(r => r.name);
+  if (!colsCheck_effectiveCost.includes('buy_effective_cost')) {
+    db.prepare("ALTER TABLE transactions ADD COLUMN buy_effective_cost REAL").run();
+  }
+
   // Tag Management Tables
   db.exec(`
     CREATE TABLE IF NOT EXISTS tag_themes (

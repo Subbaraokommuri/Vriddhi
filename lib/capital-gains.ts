@@ -7,6 +7,7 @@ export interface TaxLot {
   buyUnits: number;
   remainingUnits: number;     // decrements as sells consume this lot
   costPerUnit: number;        // grandfathered CoA if pre-2018, else buyNav
+  buyEffectiveCost: number;
   isGrandfathered: boolean;
   fmvJan2018: number | null;  // null = NAV not in DB
   transaction_subtype?: string;
@@ -81,7 +82,8 @@ export function computeCapitalGains(
     description?: string,
     transaction_subtype?: string,
     merger_ratio?: number | null,
-    source_fund_id?: string | null
+    source_fund_id?: string | null,
+    buy_effective_cost?: number | null
   }>,
   navOnDate: (isin: string, date: string) => number | null,
   fyStart: string,
@@ -119,6 +121,7 @@ export function computeCapitalGains(
         buyUnits: txn.units,
         remainingUnits: txn.units,
         costPerUnit: txn.nav, // Initial, might be updated during match for grandfathering
+        buyEffectiveCost: txn.buy_effective_cost ?? txn.nav,
         isGrandfathered,
         fmvJan2018,
         transaction_subtype: txn.transaction_subtype,
@@ -251,6 +254,8 @@ export function computeCapitalGains(
                   : null;
 
                 let srcCostPerUnit = srcTxn.nav;
+                // TODO BUG-STAMP-01: extend to srcTxn.buy_effective_cost when mergerSourceMap 
+                // carries the column; pre-2020 source lots are unaffected today.
                 let srcGrandfatheringApplied = false;
                 let srcFmvMissing = false;
 
@@ -362,14 +367,14 @@ export function computeCapitalGains(
           const transferredFlag = sellDate < CONFIG.TAX.EQUITY_RATE_CHANGE_DATE ? 'BE' : 'AE';
 
           // Grandfathering Logic
-          let costPerUnit = lot.buyNav;
+          let costPerUnit = lot.buyEffectiveCost;
           let grandfatheringApplied = false;
           let fmvMissing = false;
 
           if (gainType === 'LTCG' && lot.isGrandfathered) {
             if (lot.fmvJan2018 !== null) {
-              // Formula: MAX(buyNav, MIN(fmvJan2018, saleNav))
-              costPerUnit = Math.max(lot.buyNav, Math.min(lot.fmvJan2018, saleNav));
+              // Formula: MAX(buyEffectiveCost, MIN(fmvJan2018, saleNav))
+              costPerUnit = Math.max(lot.buyEffectiveCost, Math.min(lot.fmvJan2018, saleNav));
               grandfatheringApplied = true;
             } else {
               fmvMissing = true;

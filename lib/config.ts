@@ -53,6 +53,10 @@ export const CONFIG = {
 
     // Holding threshold: strictly more than 12 calendar months = LTCG
     LTCG_HOLDING_DAYS:          365,
+
+    // Stamp duty on MF subscriptions — SEBI circular effective Jul 1 2020
+    STAMP_DUTY_START_DATE: '2020-07-01',
+    STAMP_DUTY_RATE:        0.00005,       // 0.005% deducted before unit allotment
   },
   
   // ETF proxies track TRI (dividends reinvested in NAV). Marginal ~0.1% expense ratio drag is acceptable.
