@@ -21,3 +21,9 @@ dist/
 *.tsbuildinfo
 
 **/.DS_Store
+
+# Generated test/finance exports (never commit)
+test.html
+test.xlsx
+*.html-export
+*.xlsx
