@@ -25,5 +25,8 @@ dist/
 # Generated test/finance exports (never commit)
 test.html
 test.xlsx
+*.csv
 *.html-export
 *.xlsx
+exports/
+reports/
