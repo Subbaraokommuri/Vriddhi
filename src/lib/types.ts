@@ -305,6 +305,7 @@ export interface PanCapitalGainsSummary {
   ltcgAE: number;
   ltcgExemptionUsedBE: number;
   ltcgExemptionUsedAE: number;
+  lossCarryForwardNote?: string | null;
 }
 
 export interface UnrealizedGainsSummary extends PanCapitalGainsSummary {

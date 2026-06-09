@@ -178,6 +178,21 @@ router.post('/confirm', upload.single('file'), async (req, res) => {
         );
       }
 
+      const folioNameMap = new Map<string, string>();
+      const panNameMap = new Map<string, string>();
+
+      for (const folio of data.folios) {
+        const nameVal = folio.investor_name && folio.investor_name.trim();
+        if (nameVal) {
+          if (folio.folio_full && !folioNameMap.has(folio.folio_full)) {
+            folioNameMap.set(folio.folio_full, nameVal);
+          }
+          if (folio.pan && !panNameMap.has(folio.pan)) {
+            panNameMap.set(folio.pan, nameVal);
+          }
+        }
+      }
+
       for (const folio of data.folios) {
         for (const scheme of folio.schemes) {
           schemes_updated++;
@@ -189,8 +204,8 @@ router.post('/confirm', upload.single('file'), async (req, res) => {
           if (!fund) {
             fund_id = uuidv4();
             db.prepare(`
-              INSERT INTO funds (id, name, isin, plan, fund_option, registrar, category)
-              VALUES (?, ?, ?, ?, ?, ?, ?)
+              INSERT INTO funds (id, name, isin, plan, fund_option, registrar, category, exit_load_schedule_raw, exit_load_schedule, exit_load_complex)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             `).run(
               fund_id,
               scheme.fund_name,
@@ -198,19 +213,35 @@ router.post('/confirm', upload.single('file'), async (req, res) => {
               scheme.plan || 'Unknown',
               scheme.option || 'Unknown',
               folio.registrar || '',
-              'Unknown'
+              'Unknown',
+              (scheme as any).exit_load_schedule_raw ?? null,
+              (scheme as any).exit_load_schedule != null ? JSON.stringify((scheme as any).exit_load_schedule) : null,
+              (scheme as any).exit_load_complex ? 1 : 0
             );
           } else {
             fund_id = fund.id;
             db.prepare(`
-              UPDATE funds SET plan = ?, fund_option = ?, registrar = ? WHERE id = ?
-            `).run(scheme.plan || 'Unknown', scheme.option || 'Unknown', folio.registrar || '', fund_id);
+              UPDATE funds SET plan = ?, fund_option = ?, registrar = ?, exit_load_schedule_raw = ?, exit_load_schedule = ?, exit_load_complex = ? WHERE id = ?
+            `).run(
+              scheme.plan || 'Unknown',
+              scheme.option || 'Unknown',
+              folio.registrar || '',
+              (scheme as any).exit_load_schedule_raw ?? null,
+              (scheme as any).exit_load_schedule != null ? JSON.stringify((scheme as any).exit_load_schedule) : null,
+              (scheme as any).exit_load_complex ? 1 : 0,
+              fund_id
+            );
           }
 
           // STEP B — Upsert folio
           let dbFolio = db.prepare("SELECT id FROM folios WHERE folio_number = ? AND fund_id = ?")
             .get(folio.folio_full, fund_id) as any;
           let folio_id: string;
+
+          const resolvedName = (folio.investor_name && folio.investor_name.trim())
+            || folioNameMap.get(folio.folio_full)
+            || panNameMap.get(folio.pan)
+            || '';
 
           if (!dbFolio) {
             folio_id = uuidv4();
@@ -222,14 +253,14 @@ router.post('/confirm', upload.single('file'), async (req, res) => {
               folio.folio_full,
               fund_id,
               folio.pan,
-              folio.investor_name,
+              resolvedName,
               folio.kyc_ok ? 1 : 0
             );
           } else {
             folio_id = dbFolio.id;
             db.prepare(`
               UPDATE folios SET investor_name = ?, kyc_ok = ? WHERE id = ?
-            `).run(folio.investor_name, folio.kyc_ok ? 1 : 0, folio_id);
+            `).run(resolvedName, folio.kyc_ok ? 1 : 0, folio_id);
           }
 
           // Always update stated values
@@ -247,8 +278,9 @@ router.post('/confirm', upload.single('file'), async (req, res) => {
             INSERT OR IGNORE INTO transactions
               (id, folio_id, date, transaction_type, amount, units,
               nav, balance_units, description, source,
-              transaction_subtype, merger_ratio, source_fund_id, buy_effective_cost)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'cas', ?, ?, ?, ?)
+              transaction_subtype, merger_ratio, source_fund_id, buy_effective_cost,
+              stt, tds, sub_type)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'cas', ?, ?, ?, ?, ?, ?, ?)
           `);
 
           for (const txn of scheme.transactions) {
@@ -261,7 +293,7 @@ router.post('/confirm', upload.single('file'), async (req, res) => {
 
             const crossKey = `${folio_id}|${txn.date}|${txn.type}|${Math.round((txn.amount || 0) * 100)}|${Math.round((txn.units || 0) * 10000)}`;
             if (existingTxnKeys.has(crossKey)) {
-              skipped_transactions++;
+               skipped_transactions++;
               continue;
             }
 
@@ -297,7 +329,10 @@ router.post('/confirm', upload.single('file'), async (req, res) => {
               txn.transaction_subtype ?? '',
               txn.merger_ratio ?? null,
               source_fund_id,
-              buyEffectiveCost
+              buyEffectiveCost,
+              txn.stt ?? null,
+              txn.tds ?? null,
+              txn.sub_type ?? null
             );
 
             if (result.changes === 1) {

@@ -53,6 +53,9 @@ export const CONFIG = {
 
     // Holding threshold: strictly more than 12 calendar months = LTCG
     LTCG_HOLDING_DAYS:          365,
+    LTCG_HOLDING_MONTHS: 12,
+    BLEND_EPSILON: 0.0005,
+    DEFAULT_LOAD_FREE_DAYS: 365,
 
     // Stamp duty on MF subscriptions — SEBI circular effective Jul 1 2020
     STAMP_DUTY_START_DATE: '2020-07-01',

@@ -880,6 +880,16 @@ export function TaxReport() {
                     </div>
                   )}
 
+                  {cgData.lossCarryForwardNote && (
+                    <div className="bg-blue-50 border border-blue-200 p-4 rounded-xl flex gap-3 text-blue-800">
+                      <Info className="w-5 h-5 flex-shrink-0 mt-0.5" />
+                      <div className="text-sm">
+                        <p className="font-semibold">Capital Loss Carry-Forward</p>
+                        <p className="mt-0.5 opacity-90">{cgData.lossCarryForwardNote}</p>
+                      </div>
+                    </div>
+                  )}
+
                   {/* Scheme Merger Warnings — FEAT-TAX-02 Phase 1 */}
                   {mergerWarnings.length > 0 && (
                     <div className="bg-amber-50 border border-amber-200 p-4 rounded-xl flex gap-3 text-amber-800">

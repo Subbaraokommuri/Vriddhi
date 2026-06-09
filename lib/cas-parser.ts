@@ -18,6 +18,9 @@ export interface CasTransaction {
   transaction_subtype?: 'merger_in' | 'merger_out' | '';
   merger_ratio?: number;     // merging_fund_NAV / surviving_fund_NAV. Set only on merger_in.
   source_isin?: string;      // ISIN of the merging fund. Set only on merger_in.
+  stt?: number;
+  tds?: number;
+  sub_type?: 'sip' | 'lumpsum' | 'switch_in' | 'switch_out' | 'idcw' | '';
 }
 
 export interface CasScheme {
@@ -35,6 +38,9 @@ export interface CasScheme {
   stated_market_value: number | null;
   net_cost: number;
   transactions: CasTransaction[];
+  exit_load_schedule_raw?: string;
+  exit_load_schedule?: Array<{ holdingDays: number; rate: number; freeQuantityPct?: number; fromDate?: string }>;
+  exit_load_complex?: boolean;
 }
 
 export interface CasFolio {
@@ -147,6 +153,16 @@ function classifyTxn(desc: string): "buy" | "sell" | null {
   if (["redemption", "switch-out", "switch out", "swp"].some(k => d.includes(k))) return "sell";
   if (["purchase", "sip", "switch-in", "switch in", "reinvest", "allotment"].some(k => d.includes(k))) return "buy";
   return null;
+}
+
+function deriveSubType(desc: string, type: 'buy' | 'sell'): 'sip' | 'lumpsum' | 'switch_in' | 'switch_out' | 'idcw' | '' {
+  const d = desc.toLowerCase();
+  if (d.includes('switch-in') || d.includes('switch in')) return 'switch_in';
+  if (d.includes('switch out') || d.includes('switch-out')) return 'switch_out';
+  if (d.includes('sip') || d.includes('systematic investment')) return 'sip';
+  if (d.includes('idcw') || d.includes('dividend')) return 'idcw';
+  if (type === 'buy') return 'lumpsum';
+  return '';
 }
 
 function detectSource(lines: string[]): 'CAMS' | 'KFINTECH' {
@@ -406,6 +422,34 @@ function parseCamsText(lines: string[]): CasParseResult {
       continue;
     }
 
+    // Exit load handling
+    if (/ENTRY LOAD|EXIT LOAD/i.test(line.trim())) {
+      if (!curScheme) {
+        i++;
+        continue;
+      }
+      const rawLines = [line];
+      let j = i + 1;
+      while (j < n) {
+        const cl = raw[j];
+        const isStop = RE_FOLIO.test(cl) ||
+                       (RE_REGISTRAR.test(cl) && !cl.includes('Folio No')) ||
+                       RE_CLOSING_CAMS.test(cl) ||
+                       (RE_DATE.test(cl.trim()) && (cl.match(RE_NUM_CAMS) || []).length >= 4);
+        if (isStop) {
+          break;
+        }
+        rawLines.push(cl);
+        j++;
+      }
+      curScheme.exit_load_schedule_raw = rawLines.join(' ');
+      const result = parseExitLoadSchedule(curScheme.exit_load_schedule_raw);
+      curScheme.exit_load_schedule = result.schedule ?? undefined;
+      curScheme.exit_load_complex = result.complex;
+      i = j;
+      continue;
+    }
+
     if (shouldSkipCams(line)) {
       i++;
       continue;
@@ -441,8 +485,55 @@ function parseCamsText(lines: string[]): CasParseResult {
           amount,
           units,
           nav: price,
-          balance
+          balance,
+          sub_type: deriveSubType(desc, t)
         });
+
+        // Look-ahead for STT & TDS
+        let j = i + 1;
+        while (j < n) {
+          const la = raw[j].trim();
+          if (!la) {
+            j++;
+            continue;
+          }
+          if (/\*\*\*\s*STT\s*Paid/i.test(la)) {
+            const nums = extractNumsCams(la);
+            const val = nums.length > 0 ? nums[0] : null;
+            if (val !== null) {
+              curScheme.transactions[curScheme.transactions.length - 1].stt = val;
+            }
+            j++;
+            continue;
+          }
+          if (/\*\*\*\s*TDS\s*on\s*Above/i.test(la)) {
+            const nums = extractNumsCams(la);
+            const val = nums.length > 0 ? nums[0] : null;
+            if (val !== null) {
+              curScheme.transactions[curScheme.transactions.length - 1].tds = val;
+            }
+            j++;
+            continue;
+          }
+          if (/\*\*\*/.test(la)) {
+            j++;
+            continue;
+          }
+          // Only break on genuine structure boundaries — folio header, scheme header,
+          // or a real transaction line (date prefix with 4+ numbers).
+          // Plain text continuation words (e.g. "STT") are skipped over.
+          RE_NUM_CAMS.lastIndex = 0;
+          if (
+            RE_FOLIO.test(la) ||
+            (RE_REGISTRAR.test(la) && !la.includes('Folio No')) ||
+            RE_CLOSING_CAMS.test(la) ||
+            (RE_DATE.test(la) && (la.match(RE_NUM_CAMS) || []).length >= 4)
+          ) {
+            break;
+          }
+          j++;
+        }
+        i = j - 1;
       }
     }
     i++;
@@ -771,6 +862,34 @@ function parseKFinText(lines: string[]): CasParseResult {
       continue;
     }
 
+    // Exit load handling
+    if (/ENTRY LOAD|EXIT LOAD|Current Load Structure/i.test(line.trim())) {
+      if (!curScheme) {
+        i++;
+        continue;
+      }
+      const rawLines = [line];
+      let j = i + 1;
+      while (j < n) {
+        const cl = raw[j];
+        const isStop = RE_FOLIO.test(cl) ||
+                       (RE_REGISTRAR.test(cl) && !cl.includes('Folio No')) ||
+                       RE_CLOSING_KFIN.test(cl) ||
+                       (RE_DATE.test(cl.trim()) && (cl.match(RE_NUM_KFIN) || []).length >= 4);
+        if (isStop) {
+          break;
+        }
+        rawLines.push(cl);
+        j++;
+      }
+      curScheme.exit_load_schedule_raw = rawLines.join(' ');
+      const result = parseExitLoadSchedule(curScheme.exit_load_schedule_raw);
+      curScheme.exit_load_schedule = result.schedule ?? undefined;
+      curScheme.exit_load_complex = result.complex;
+      i = j;
+      continue;
+    }
+
     if (shouldSkipKFin(line)) {
       i++;
       continue;
@@ -806,8 +925,55 @@ function parseKFinText(lines: string[]): CasParseResult {
           amount,
           units,
           nav: price,
-          balance
+          balance,
+          sub_type: deriveSubType(desc, t)
         });
+
+        // Look-ahead for STT & TDS
+        let j = i + 1;
+        while (j < n) {
+          const la = raw[j].trim();
+          if (!la) {
+            j++;
+            continue;
+          }
+          if (/\*\*\*\s*STT\s*Paid/i.test(la)) {
+            const nums = extractNumsKFin(la);
+            const val = nums.length > 0 ? nums[0] : null;
+            if (val !== null) {
+              curScheme.transactions[curScheme.transactions.length - 1].stt = val;
+            }
+            j++;
+            continue;
+          }
+          if (/\*\*\*\s*TDS\s*on\s*Above/i.test(la)) {
+            const nums = extractNumsKFin(la);
+            const val = nums.length > 0 ? nums[0] : null;
+            if (val !== null) {
+              curScheme.transactions[curScheme.transactions.length - 1].tds = val;
+            }
+            j++;
+            continue;
+          }
+          if (/\*\*\*/.test(la)) {
+            j++;
+            continue;
+          }
+          // Only break on genuine structure boundaries — folio header, scheme header,
+          // or a real transaction line (date prefix with 4+ numbers).
+          // Plain text continuation words (e.g. "STT") are skipped over.
+          RE_NUM_KFIN.lastIndex = 0;
+          if (
+            RE_FOLIO.test(la) ||
+            (RE_REGISTRAR.test(la) && !la.includes('Folio No')) ||
+            RE_CLOSING_KFIN.test(la) ||
+            (RE_DATE.test(la) && (la.match(RE_NUM_KFIN) || []).length >= 4)
+          ) {
+            break;
+          }
+          j++;
+        }
+        i = j - 1;
       }
     }
     i++;
@@ -842,6 +1008,43 @@ function parseKFinText(lines: string[]): CasParseResult {
 // ============================================================================
 // SECTION 4 — Public API
 // ============================================================================
+
+function parseExitLoadSchedule(raw: string): { schedule: Array<{ holdingDays: number; rate: number }> | null; complex: boolean } {
+  const trimmed = raw.trim();
+  if (/^(nil|0%|no exit load)$/i.test(trimmed)) {
+    return { schedule: [{ holdingDays: 0, rate: 0 }], complex: false };
+  }
+
+  const lowercase = trimmed.toLowerCase();
+  if (
+    lowercase.includes('swp') ||
+    lowercase.includes('w.e.f') ||
+    lowercase.includes('subscription date')
+  ) {
+    return { schedule: null, complex: true };
+  }
+
+  const pctMatches = trimmed.match(/\d+(?:\.\d+)?%/g) || [];
+  if (pctMatches.length > 1) {
+    return { schedule: null, complex: true };
+  }
+
+  const m = trimmed.match(/(\d+(?:\.\d+)?)\s*%\s*.*?\b(?:redeemed|exited|redemption|exit|within|allotment|for)\b.*?\b(\d+)\s*(month|day|year)s?\b/i);
+  if (m) {
+    const rate = parseFloat(m[1]) / 100;
+    const n = parseInt(m[2], 10);
+    const unit = m[3].toLowerCase();
+    let holdingDays = n;
+    if (unit.startsWith('month')) {
+      holdingDays = n * 30;
+    } else if (unit.startsWith('year')) {
+      holdingDays = n * 365;
+    }
+    return { schedule: [{ holdingDays, rate }], complex: false };
+  }
+
+  return { schedule: null, complex: true };
+}
 
 function tagMergerPairs(result: CasParseResult): void {
   interface TxnRef { isin: string; txn: CasTransaction; }

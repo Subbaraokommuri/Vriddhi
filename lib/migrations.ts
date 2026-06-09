@@ -388,6 +388,36 @@ export function runMigrations(db: Database.Database) {
     db.prepare("ALTER TABLE transactions ADD COLUMN buy_effective_cost REAL").run();
   }
 
+  const colsCheck_exitLoadRaw = (db.prepare("PRAGMA table_info(funds)").all() as any[]).map(r => r.name);
+  if (!colsCheck_exitLoadRaw.includes('exit_load_schedule_raw')) {
+    db.prepare("ALTER TABLE funds ADD COLUMN exit_load_schedule_raw TEXT DEFAULT NULL").run();
+  }
+
+  const colsCheck_exitLoadSchedule = (db.prepare("PRAGMA table_info(funds)").all() as any[]).map(r => r.name);
+  if (!colsCheck_exitLoadSchedule.includes('exit_load_schedule')) {
+    db.prepare("ALTER TABLE funds ADD COLUMN exit_load_schedule TEXT DEFAULT NULL").run();
+  }
+
+  const colsCheck_exitLoadComplex = (db.prepare("PRAGMA table_info(funds)").all() as any[]).map(r => r.name);
+  if (!colsCheck_exitLoadComplex.includes('exit_load_complex')) {
+    db.prepare("ALTER TABLE funds ADD COLUMN exit_load_complex INTEGER DEFAULT 0").run();
+  }
+
+  const colsCheck_stt = (db.prepare("PRAGMA table_info(transactions)").all() as any[]).map(r => r.name);
+  if (!colsCheck_stt.includes('stt')) {
+    db.prepare("ALTER TABLE transactions ADD COLUMN stt REAL DEFAULT NULL").run();
+  }
+
+  const colsCheck_tds = (db.prepare("PRAGMA table_info(transactions)").all() as any[]).map(r => r.name);
+  if (!colsCheck_tds.includes('tds')) {
+    db.prepare("ALTER TABLE transactions ADD COLUMN tds REAL DEFAULT NULL").run();
+  }
+
+  const colsCheck_sub_type = (db.prepare("PRAGMA table_info(transactions)").all() as any[]).map(r => r.name);
+  if (!colsCheck_sub_type.includes('sub_type')) {
+    db.prepare("ALTER TABLE transactions ADD COLUMN sub_type TEXT DEFAULT NULL").run();
+  }
+
   // Tag Management Tables
   db.exec(`
     CREATE TABLE IF NOT EXISTS tag_themes (

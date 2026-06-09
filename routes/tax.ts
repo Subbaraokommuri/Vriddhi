@@ -212,11 +212,11 @@ async function getCapitalGainsSummary(pan: string, fyInput?: string) {
   
   // Fetch all folios for this PAN
   const folios = db.prepare(`
-    SELECT f.id, f.folio_number, f.fund_id, fu.name as fund_name, fu.isin, fu.category, fu.asset_class 
+    SELECT f.id, f.folio_number, f.fund_id, fu.name as fund_name, fu.isin, fu.category, fu.asset_class, fu.exit_load_schedule, fu.exit_load_complex 
     FROM folios f 
     JOIN funds fu ON f.fund_id = fu.id 
     WHERE f.pan = ?
-  `).all(pan) as Array<{ id: string, folio_number: string, fund_id: string, fund_name: string, isin: string, category: string, asset_class: string }>;
+  `).all(pan) as Array<{ id: string, folio_number: string, fund_id: string, fund_name: string, isin: string, category: string, asset_class: string, exit_load_schedule: string | null, exit_load_complex: number }>;
   
   if (folios.length === 0) {
     return {
@@ -299,6 +299,10 @@ async function getCapitalGainsSummary(pan: string, fyInput?: string) {
       );
     }
 
+    const parsedSchedule = (!f.exit_load_complex && f.exit_load_schedule)
+      ? JSON.parse(f.exit_load_schedule) as Array<{ holdingDays: number; rate: number }>
+      : null;
+
     const result = computeCapitalGains(
       f.id,
       f.folio_number,
@@ -310,7 +314,8 @@ async function getCapitalGainsSummary(pan: string, fyInput?: string) {
       navOnDate,
       fyStart,
       fyEnd,
-      mergerSourceMap
+      mergerSourceMap,
+      parsedSchedule
     );
     
     // Skip if no sells in FY
@@ -964,11 +969,11 @@ async function computeAdvanceTaxData(
   const folios = db.prepare(`
     SELECT f.id, f.folio_number, f.fund_id,
            fu.name as fund_name, fu.simple_name, fu.clean_name,
-           fu.isin, fu.category, fu.asset_class 
+           fu.isin, fu.category, fu.asset_class, fu.exit_load_schedule, fu.exit_load_complex 
     FROM folios f 
     JOIN funds fu ON f.fund_id = fu.id 
     WHERE f.pan = ?
-  `).all(pan) as Array<{ id: string, folio_number: string, fund_id: string, fund_name: string, simple_name: string, clean_name: string, isin: string, category: string, asset_class: string }>;
+  `).all(pan) as Array<{ id: string, folio_number: string, fund_id: string, fund_name: string, simple_name: string, clean_name: string, isin: string, category: string, asset_class: string, exit_load_schedule: string | null, exit_load_complex: number }>;
 
   if (folios.length === 0) {
     const today = new Date();
@@ -1055,6 +1060,10 @@ async function computeAdvanceTaxData(
     for (const f of folios) {
       const txns = txnMap.get(f.id) || [];
       const mergerSourceMapForFolio = folioMergerSourceMaps.get(f.id);
+      const parsedSchedule = (!f.exit_load_complex && f.exit_load_schedule)
+        ? JSON.parse(f.exit_load_schedule) as Array<{ holdingDays: number; rate: number }>
+        : null;
+
       const result = computeCapitalGains(
         f.id,
         f.folio_number,
@@ -1066,7 +1075,8 @@ async function computeAdvanceTaxData(
         navOnDate,
         fyStart,
         cutoffDates[c], // different per run
-        mergerSourceMapForFolio // built once in STEP 4f, reused
+        mergerSourceMapForFolio, // built once in STEP 4f, reused
+        parsedSchedule
       );
       if (result.matchedLots.length > 0) {
         folioGainsPerCutoff.push(result);

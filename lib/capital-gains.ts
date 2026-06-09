@@ -32,6 +32,10 @@ export interface MatchedLot {
   estimatedTax: number | null;            // null for DEBT_SLAB
   grandfatheringApplied: boolean;
   fmvMissing: boolean;                    // true = pre-2018 lot but Jan-31-2018 NAV not available
+  officialSellNav?: number;
+  effectiveSellNav: number;
+  exitLoadAdjusted: boolean;
+  exitLoadUncertain?: boolean;
 }
 
 export interface FolioCapitalGains {
@@ -61,6 +65,17 @@ export interface PanCapitalGainsSummary {
   estimatedLTCGTax: number;               // computed here after exemption
   folios: FolioCapitalGains[];
   hasGrandfatheringFlags: boolean;
+  lossCarryForwardNote: string | null;
+}
+
+function addMonths(isoDate: string, months: number): string {
+  const d = new Date(isoDate + 'T00:00:00Z');
+  const day = d.getUTCDate();
+  const targetMonth = d.getUTCMonth() + months;
+  const year = d.getUTCFullYear() + Math.floor(targetMonth / 12);
+  const month = ((targetMonth % 12) + 12) % 12;
+  const lastDay = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+  return `${year}-${String(month + 1).padStart(2, '0')}-${String(Math.min(day, lastDay)).padStart(2, '0')}`;
 }
 
 /**
@@ -94,7 +109,8 @@ export function computeCapitalGains(
     units: number;
     amount: number;
     nav: number;
-  }> }>
+  }> }>,
+  exitLoadSchedule?: Array<{ holdingDays: number; rate: number }> | null
 ): FolioCapitalGains {
   const warnings: string[] = [];
   const taxLots: TaxLot[] = [];
@@ -185,12 +201,68 @@ export function computeCapitalGains(
         let unitsToSell = Math.abs(txn.units);
         const saleNav = txn.nav;
 
+        // VB-26: blend detection and exit-load NAV re-split
+        const officialNav = navOnDate(isin, sellDate);
+        let blendActive = false;
+        let loadFreeUnits = 0;
+        let loadedUnits = 0;
+        let residualNav: number | null = null;
+
+        if (officialNav !== null) {
+          const isBlend = Math.abs(txn.nav - officialNav) > CONFIG.TAX.BLEND_EPSILON * officialNav;
+          const multiNav = sortedTxns.some(
+            t => t !== txn &&
+                 t.transaction_type.toLowerCase() === 'sell' &&
+                 t.date === sellDate &&
+                 Math.abs((t.nav ?? 0) - txn.nav) > CONFIG.TAX.BLEND_EPSILON * txn.nav
+          );
+          const hasSchedule = exitLoadSchedule && exitLoadSchedule.length > 0;
+
+          if (isBlend && !multiNav && hasSchedule) {
+            const loadFreeDays = exitLoadSchedule![0].holdingDays;
+            let scanUnits = unitsToSell;
+            for (const lot of taxLots) {
+              if (scanUnits <= 0.00005) break;
+              if (lot.remainingUnits <= 0) continue;
+              const take = Math.min(scanUnits, lot.remainingUnits);
+              const lotHoldDays = Math.floor(
+                (new Date(sellDate).getTime() - new Date(lot.buyDate).getTime()) / 86400000
+              );
+              if (lotHoldDays >= loadFreeDays) loadFreeUnits += take;
+              else loadedUnits += take;
+              scanUnits -= take;
+            }
+            if (loadFreeUnits > 0.00005 && loadedUnits > 0.00005) {
+              residualNav = (txn.nav * unitsToSell - officialNav * loadFreeUnits) / loadedUnits;
+              if (residualNav > 0) blendActive = true;
+              else { loadFreeUnits = 0; loadedUnits = 0; residualNav = null; }
+            }
+          }
+        }
+
         // FIFO consumption
         for (const lot of taxLots) {
           if (unitsToSell <= 0) break;
           if (lot.remainingUnits <= 0) continue;
 
           const consumedFromLot = Math.min(unitsToSell, lot.remainingUnits);
+
+          // VB-26: per-lot effective sell NAV
+          let effectiveSellNav = saleNav;
+          let exitLoadAdjusted = false;
+          let exitLoadUncertain = false;
+
+          if (blendActive && residualNav !== null && officialNav !== null) {
+            const lotHoldDays = Math.floor(
+              (new Date(sellDate).getTime() - new Date(lot.buyDate).getTime()) / 86400000
+            );
+            effectiveSellNav = lotHoldDays >= exitLoadSchedule![0].holdingDays
+              ? officialNav
+              : residualNav;
+            exitLoadAdjusted = true;
+          } else if (officialNav !== null && Math.abs(txn.nav - officialNav) > CONFIG.TAX.BLEND_EPSILON * officialNav) {
+            exitLoadUncertain = true;
+          }
 
           if (lot.transaction_subtype === 'merger_in' && lot.merger_ratio && lot.source_fund_id) {
             // --- CASE A: source fund data available ---
@@ -221,6 +293,7 @@ export function computeCapitalGains(
               let remainingTrace = consumedFromLot / lot.merger_ratio;
 
               const adjustedSellNav = saleNav * lot.merger_ratio;
+              const adjustedEffectiveSellNav = effectiveSellNav * lot.merger_ratio;
 
               for (const srcTxn of sourceBuys) {
                 if (remainingTrace <= 0.00005) break;
@@ -245,7 +318,7 @@ export function computeCapitalGains(
                 const srcHoldingDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
                 const srcGainType: 'STCG' | 'LTCG' | 'DEBT_SLAB' = isDebtFund
                   ? 'DEBT_SLAB'
-                  : srcHoldingDays > CONFIG.TAX.LTCG_HOLDING_DAYS ? 'LTCG' : 'STCG';
+                  : sellDate >= addMonths(srcTxn.date, CONFIG.TAX.LTCG_HOLDING_MONTHS) ? 'LTCG' : 'STCG';
 
                 // Grandfathering using Fund A ISIN and adjustedSellNav
                 const srcIsGrandfathered = srcTxn.date <= CONFIG.TAX.GRANDFATHERING_DATE;
@@ -270,7 +343,7 @@ export function computeCapitalGains(
                   }
                 }
 
-                const srcGain = (adjustedSellNav - srcCostPerUnit) * take;
+                const srcGain = (adjustedEffectiveSellNav - srcCostPerUnit) * take;
 
                 // Tax rate and flags (same logic as existing engine)
                 const srcAcquiredFlag = srcTxn.date <= CONFIG.TAX.GRANDFATHERING_DATE ? 'BE' : 'AE';
@@ -313,6 +386,10 @@ export function computeCapitalGains(
                   fmvJan2018:           srcFmv,
                   taxRate:              srcTaxRate,
                   estimatedTax:         srcEstimatedTax,
+                  effectiveSellNav:     adjustedEffectiveSellNav,
+                  exitLoadAdjusted,
+                  exitLoadUncertain:    exitLoadUncertain || undefined,
+                  officialSellNav:      officialNav !== null ? officialNav * lot.merger_ratio : undefined,
                   grandfatheringApplied: srcGrandfatheringApplied,
                   fmvMissing:           srcFmvMissing
                 });
@@ -359,7 +436,7 @@ export function computeCapitalGains(
           if (isDebtFund) {
             gainType = 'DEBT_SLAB';
           } else {
-            gainType = holdingDays > CONFIG.TAX.LTCG_HOLDING_DAYS ? 'LTCG' : 'STCG';
+            gainType = sellDate >= addMonths(lot.buyDate, CONFIG.TAX.LTCG_HOLDING_MONTHS) ? 'LTCG' : 'STCG';
           }
 
           // Flags
@@ -381,7 +458,7 @@ export function computeCapitalGains(
             }
           }
 
-          const gain = (saleNav - costPerUnit) * consumedFromLot;
+          const gain = (effectiveSellNav - costPerUnit) * consumedFromLot;
           
           // Tax Rate
           const sellDateObj   = new Date(sellDate);
@@ -427,6 +504,10 @@ export function computeCapitalGains(
             fmvJan2018: lot.fmvJan2018,
             taxRate,
             estimatedTax,
+            effectiveSellNav,
+            exitLoadAdjusted,
+            exitLoadUncertain: exitLoadUncertain || undefined,
+            officialSellNav: officialNav ?? undefined,
             grandfatheringApplied,
             fmvMissing
           });
@@ -581,6 +662,19 @@ export function aggregatePanGains(
     _pan_taxableBE * CONFIG.TAX.EQUITY_STCG_RATE_OLD +
     _pan_taxableAE * CONFIG.TAX.EQUITY_STCG_RATE_NEW;
 
+  const stcgLossVal = totalSTCG < 0 ? Math.abs(totalSTCG) : 0;
+  const ltcgLossVal = totalLTCG < 0 ? Math.abs(totalLTCG) : 0;
+  let lossCarryForwardNote: string | null = null;
+  if (stcgLossVal > 0 || ltcgLossVal > 0) {
+    const parts: string[] = [];
+    if (stcgLossVal > 0) parts.push(`Net short-term capital loss of ₹${stcgLossVal.toFixed(2)}`);
+    if (ltcgLossVal > 0) parts.push(`Net long-term capital loss of ₹${ltcgLossVal.toFixed(2)}`);
+    lossCarryForwardNote = parts.join(' and ') +
+      ' this year. Capital losses may be carried forward for up to 8 assessment years' +
+      ' and set off against future gains (STCL offsets STCG and LTCG; LTCL offsets LTCG only).' +
+      ' File ITR on time to preserve the carry-forward. Confirm treatment with your CA before filing.';
+  }
+
   return {
     pan,
     investorName,
@@ -592,6 +686,7 @@ export function aggregatePanGains(
     estimatedSTCGTax: finalEstimatedSTCGTax,
     estimatedLTCGTax,
     folios: folioGains,
-    hasGrandfatheringFlags: folioGains.some(f => f.hasGrandfatheringFlags)
+    hasGrandfatheringFlags: folioGains.some(f => f.hasGrandfatheringFlags),
+    lossCarryForwardNote
   };
 }

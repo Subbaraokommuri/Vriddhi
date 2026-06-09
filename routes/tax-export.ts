@@ -189,7 +189,7 @@ async function computeCgData(pan: string, fy: string) {
   const folios = db.prepare(`
     SELECT f.id, f.folio_number, f.fund_id, fu.name as fund_name, fu.isin,
            fu.category, fu.asset_class, f.investor_name,
-           fu.simple_name, fu.clean_name
+           fu.simple_name, fu.clean_name, fu.exit_load_schedule, fu.exit_load_complex
     FROM folios f
     JOIN funds fu ON f.fund_id = fu.id
     WHERE f.pan = ?
@@ -204,6 +204,8 @@ async function computeCgData(pan: string, fy: string) {
     investor_name: string;
     simple_name: string | null;
     clean_name: string | null;
+    exit_load_schedule: string | null;
+    exit_load_complex: number;
   }>;
   
   if (folios.length === 0) {
@@ -296,6 +298,10 @@ async function computeCgData(pan: string, fy: string) {
       folioMergerSourceMaps.set(f.id, mergerSourceMap);
     }
 
+    const parsedSchedule = (!f.exit_load_complex && f.exit_load_schedule)
+      ? JSON.parse(f.exit_load_schedule) as Array<{ holdingDays: number; rate: number }>
+      : null;
+
     const result = computeCapitalGains(
       f.id,
       f.folio_number,
@@ -307,7 +313,8 @@ async function computeCgData(pan: string, fy: string) {
       navOnDate,
       fyStart,
       fyEnd,
-      mergerSourceMap
+      mergerSourceMap,
+      parsedSchedule
     );
     
     if (result.matchedLots.length > 0) {
@@ -427,6 +434,10 @@ async function computeAdvanceTaxQ(
         }
       }
 
+      const parsedSchedule = (!f.exit_load_complex && f.exit_load_schedule)
+        ? JSON.parse(f.exit_load_schedule) as Array<{ holdingDays: number; rate: number }>
+        : null;
+
       const result = computeCapitalGains(
         f.id,
         f.folio_number,
@@ -438,7 +449,8 @@ async function computeAdvanceTaxQ(
         navOnDate,
         fyStart,
         cutoffDate,
-        mergerSourceMap
+        mergerSourceMap,
+        parsedSchedule
       );
 
       if (result.matchedLots.length > 0) {
