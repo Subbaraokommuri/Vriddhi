@@ -574,7 +574,7 @@ export function TaxReport() {
       {/* CARD 1: Full-width tab bar */}
       <div className="bg-white p-2 rounded-2xl border border-slate-200 shadow-sm animate-fade-in">
         <div className="flex p-1 bg-slate-100 rounded-xl w-full">
-          {(['capital-gains', 'advance', 'unrealized', 'harvesting', 'simulator'] as TaxTab[]).map(tab => (
+          {(['capital-gains', 'advance'] as TaxTab[]).map(tab => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -584,10 +584,7 @@ export function TaxReport() {
                   : 'text-slate-500 hover:text-slate-700'
               }`}
             >
-              {tab === 'capital-gains' ? 'Capital Gains' : 
-               tab === 'advance' ? 'Advance Tax' :
-               tab === 'unrealized' ? 'Unrealized' :
-               tab === 'harvesting' ? 'Harvesting' : 'Simulator'}
+              {tab === 'capital-gains' ? 'Capital Gains' : 'Advance Tax'}
             </button>
           ))}
         </div>
