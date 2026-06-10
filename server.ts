@@ -6,6 +6,7 @@ import fs from 'fs';
 import { CONFIG } from './lib/config.ts';
 import { db, initDb } from './lib/db.ts';
 import { log } from './lib/logger.ts';
+import { runStartupTasks } from './lib/startup.ts';
 import { xirr, calcMirrorXirr } from './lib/xirr.ts';
 import fundsRouter from './routes/funds.ts';
 import transactionsRouter from './routes/transactions.ts';
@@ -22,6 +23,8 @@ import taxExportRouter from './routes/tax-export.ts';
 import relativePerformanceRouter from './routes/relative-performance.ts';
 
 initDb();
+runStartupTasks().catch(err =>
+  console.log('Startup tasks failed:', err));
 
 async function startServer() {
   const app = express();

@@ -363,6 +363,36 @@ router.post('/confirm', upload.single('file'), async (req, res) => {
         skipped_transactions
       );
     })();
+
+    // Auto-assign 'All MF' tag to all folios that do not already have it
+    try {
+      const themeRow = db.prepare(
+        `SELECT id FROM tag_themes WHERE name = 'Portfolio'`
+      ).get() as { id: string } | undefined;
+
+      if (!themeRow) {
+        log('import', 'WARN', 'cas-import', "Could not find 'Portfolio' theme. Skipping auto-assign.");
+      } else {
+        // Run a one-time cleanup for rows already inserted with NULL theme_id
+        db.prepare(
+          `UPDATE folio_tags SET theme_id = ?
+           WHERE tag = 'All MF' AND theme_id IS NULL`
+        ).run(themeRow.id);
+
+        const tagResult = db.prepare(`
+          INSERT OR IGNORE INTO folio_tags (folio_id, tag, theme_id)
+          SELECT id, 'All MF', ?
+          FROM folios
+          WHERE id NOT IN (
+            SELECT folio_id FROM folio_tags WHERE tag = 'All MF'
+          )
+        `).run(themeRow.id);
+
+        log('import', 'INFO', 'cas-import', `Auto-tagged ${tagResult.changes} folios with 'All MF'`);
+      }
+    } catch (tagErr: any) {
+      log('import', 'ERROR', 'cas-import', `Failed to auto-tag folios: ${tagErr.message || String(tagErr)}`);
+    }
     
     log('import', 'INFO', 'CAS-IMPORT',
       `COMPLETE import: new=${new_transactions}, ` +

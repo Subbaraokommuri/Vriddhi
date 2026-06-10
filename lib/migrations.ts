@@ -480,4 +480,15 @@ export function runMigrations(db: Database.Database) {
 
   db.prepare("DELETE FROM user_benchmarks WHERE benchmark_type = 'yahoo'").run();
   log('app', 'INFO', 'DB', 'Removed legacy yahoo benchmark rows');
+
+  db.prepare(`
+    INSERT OR IGNORE INTO user_benchmarks
+      (id, symbol, name, benchmark_type, is_active, source, category)
+    SELECT 'seed-nifty50tri', 'Nifty 50', 'Nifty 50 TRI',
+           'nifty_tri', 1, 'niftyindices', 'Index'
+    WHERE NOT EXISTS (
+      SELECT 1 FROM user_benchmarks WHERE symbol = 'Nifty 50'
+    );
+  `).run();
+  log('app', 'INFO', 'DB', 'Nifty 50 TRI seeded successfully');
 }
