@@ -56,7 +56,7 @@ export async function getDashboardPerformance(
       `&tag=${encodeURIComponent('All MF')}` +
       `&benchmark_symbol=${encodeURIComponent(benchmarkSymbol)}`
     );
-    return handleResponse<RelativePerformanceResult>(res);
+    return await handleResponse<RelativePerformanceResult>(res);
   } catch {
     return null;
   }
@@ -165,6 +165,48 @@ export async function importBenchmarkCsv(benchmarkId: string, file: File): Promi
     body: formData
   });
   return handleResponse<{ inserted: number; skipped: number; total: number }>(res);
+}
+
+export async function importBenchmarkCsvBatch(
+  benchmarkId: string,
+  files: File[]
+): Promise<{
+  totalFiles: number;
+  successCount: number;
+  failCount: number;
+  totalInserted: number;
+  totalSkipped: number;
+  failures: { filename: string; error: string }[];
+}> {
+  let totalInserted = 0;
+  let totalSkipped = 0;
+  let successCount = 0;
+  let failCount = 0;
+  const failures: { filename: string; error: string }[] = [];
+
+  for (const file of files) {
+    try {
+      const result = await importBenchmarkCsv(benchmarkId, file);
+      totalInserted += result.inserted;
+      totalSkipped += result.skipped;
+      successCount++;
+    } catch (error) {
+      failCount++;
+      failures.push({
+        filename: file.name,
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
+  }
+
+  return {
+    totalFiles: files.length,
+    successCount,
+    failCount,
+    totalInserted,
+    totalSkipped,
+    failures
+  };
 }
 
 export async function getBenchmarkDataSummary(id: string): Promise<{ oldest: string; latest: string; count: number } | null> {

@@ -30,3 +30,4 @@ test.xlsx
 *.xlsx
 exports/
 reports/
+.DS_Store

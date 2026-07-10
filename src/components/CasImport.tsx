@@ -14,6 +14,12 @@ import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
 import { refreshAmfiCodes, backfillNavHistory, downloadImportLog } from '../lib/api';
 
+declare global {
+  interface ImportMeta {
+    env: Record<string, any>;
+  }
+}
+
 type State = 'IDLE' | 'LOADING' | 'PREVIEW' | 'ERROR' | 'SUCCESS';
 
 interface CasImportProps {
@@ -21,6 +27,7 @@ interface CasImportProps {
 }
 
 export function CasImport({ onImportSuccess }: CasImportProps) {
+  const isDemo = import.meta.env.VITE_DEMO_MODE === 'true';
   const [state, setState] = useState<State>('IDLE');
   const [file, setFile] = useState<File | null>(null);
   const [password, setPassword] = useState('');
@@ -48,6 +55,16 @@ export function CasImport({ onImportSuccess }: CasImportProps) {
   const [dlError, setDlError] = useState<string | null>(null);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  if (isDemo) {
+    return (
+      <div className="max-w-4xl mx-auto py-16 text-center space-y-4">
+        <p className="text-slate-500 text-lg">
+          This is a demo portfolio. Install Vriddhi locally to import your own CAS.
+        </p>
+      </div>
+    );
+  }
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];

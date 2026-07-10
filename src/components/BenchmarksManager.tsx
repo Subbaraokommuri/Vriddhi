@@ -6,6 +6,7 @@ import {
   addUserBenchmark, 
   deleteUserBenchmark, 
   importBenchmarkCsv, 
+  importBenchmarkCsvBatch,
   getBenchmarkDataSummary, 
   fetchBenchmarkData,
   searchAmfiMetadata,
@@ -266,16 +267,27 @@ export function BenchmarksManager({
   };
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !selectedBenchmarkForUpload) return;
+    const files = e.target.files;
+    if (!files || files.length === 0 || !selectedBenchmarkForUpload) return;
+
+    const filesArray = Array.from(files) as File[];
 
     setUploadingId(selectedBenchmarkForUpload);
     setError(null);
     setSuccessMessage(null);
     try {
-      const result = await importBenchmarkCsv(selectedBenchmarkForUpload, file);
-      setSuccessMessage(`Imported ${result.inserted} rows (${result.skipped} skipped)`);
-      setTimeout(() => setSuccessMessage(null), 4000);
+      const result = await importBenchmarkCsvBatch(selectedBenchmarkForUpload, filesArray);
+      
+      if (result.successCount > 0) {
+        setSuccessMessage(`Imported ${result.successCount} files (${result.totalInserted} rows inserted, ${result.totalSkipped} skipped)`);
+        setTimeout(() => setSuccessMessage(null), 4000);
+      }
+      
+      if (result.failCount > 0) {
+        const failedNames = result.failures.map(f => f.filename).join(', ');
+        setError(`${result.failCount} file(s) failed: ${failedNames}`);
+      }
+
       await handleRefreshSummary(selectedBenchmarkForUpload);
       if (onRefresh) onRefresh();
     } catch (err) {
@@ -391,6 +403,7 @@ export function BenchmarksManager({
             ref={fileInputRef}
             onChange={handleFileChange}
             accept=".csv"
+            multiple
             className="hidden"
           />
           <button 
@@ -804,9 +817,9 @@ export function BenchmarksManager({
                       >
                         {summaries[b.id] ? `${summaries[b.id]?.count.toLocaleString()} rows` : 'No data yet'}
                       </span>
-                      {summaries[b.id] && summaries[b.id]!.latest && (
+                      {summaries[b.id] && summaries[b.id]!.latest && summaries[b.id]!.oldest && (
                         <span className="text-[10px]" style={{ color: 'var(--color-text-muted)' }}>
-                          up to {new Date(summaries[b.id]!.latest).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
+                          from {new Date(summaries[b.id]!.oldest).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })} to {new Date(summaries[b.id]!.latest).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
                         </span>
                       )}
                     </div>
@@ -823,17 +836,15 @@ export function BenchmarksManager({
                         {fetchingId === b.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
                       </button>
                       {/* Hidden CSV Import button per specifications */}
-                      {false && (
-                        <button
-                          onClick={() => handleImportClick(b.id)}
-                          disabled={uploadingId === b.id || fetchingId === b.id}
-                          className="p-1 px-2 rounded-lg hover:bg-slate-100 transition-colors disabled:opacity-50"
-                          style={{ color: 'var(--color-primary)' }}
-                          title="Import CSV"
-                        >
-                          {uploadingId === b.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
-                        </button>
-                      )}
+                      <button
+                        onClick={() => handleImportClick(b.id)}
+                        disabled={uploadingId === b.id || fetchingId === b.id}
+                        className="p-1 px-2 rounded-lg hover:bg-slate-100 transition-colors disabled:opacity-50"
+                        style={{ color: 'var(--color-primary)' }}
+                        title="Import CSV"
+                      >
+                        {uploadingId === b.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                      </button>
                       <button
                         onClick={() => handleDelete(b)}
                         className="p-1 px-2 rounded-lg text-rose-500 hover:bg-rose-50 transition-colors disabled:opacity-50"

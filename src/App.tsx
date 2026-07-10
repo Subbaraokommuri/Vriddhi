@@ -51,9 +51,16 @@ import {
   getDashboardStats
 } from './lib/api.ts';
 
+declare global {
+  interface ImportMeta {
+    env: Record<string, any>;
+  }
+}
+
 type Tab = 'dashboard' | 'fundsxirr' | 'transactions' | 'benchmarks' | 'logs' | 'import' | 'tags' | 'performance' | 'tax';
 
 export default function App() {
+  const isDemo = import.meta.env.VITE_DEMO_MODE === 'true';
   const [activeTab, setActiveTab] = useState<Tab>('dashboard');
   const [summary, setSummary] = useState<Summary | null>(null);
   const [folios, setFolios] = useState<Folio[]>([]);
@@ -137,7 +144,7 @@ export default function App() {
     { id: 'tax', label: 'Income Tax', icon: Receipt },
     { id: 'logs', label: 'Logs', icon: FileText },
     { id: 'import', label: 'Import CAS PDF', icon: Upload },
-  ];
+  ].filter(item => !(isDemo && item.id === 'import'));
 
   return (
     <div className="flex h-screen bg-slate-50 text-slate-900 font-sans">

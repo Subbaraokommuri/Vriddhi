@@ -7,6 +7,19 @@ import { log } from '../lib/logger.ts';
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
+function parseNiftyDate(dateStr: string): string | null {
+  if (!dateStr) return null;
+  const match = dateStr.match(/^(\d{2}) (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) (\d{4})$/);
+  if (!match) return null;
+  const [, day, monthStr, year] = match;
+  const months: Record<string, string> = {
+    Jan: '01', Feb: '02', Mar: '03', Apr: '04', May: '05', Jun: '06',
+    Jul: '07', Aug: '08', Sep: '09', Oct: '10', Nov: '11', Dec: '12'
+  };
+  const month = months[monthStr];
+  return `${year}-${month}-${day}`;
+}
+
 router.post('/import-csv', upload.single('file'), async (req, res) => {
   const { benchmarkId } = req.body;
   const file = req.file;
@@ -19,13 +32,15 @@ router.post('/import-csv', upload.single('file'), async (req, res) => {
     return res.status(400).json({ error: 'No benchmark ID provided' });
   }
 
+  const filename = file.originalname;
+
   try {
     const benchmark = db.prepare('SELECT symbol FROM user_benchmarks WHERE id = ?').get(benchmarkId) as { symbol: string } | undefined;
     if (!benchmark) {
       return res.status(404).json({ error: 'Benchmark not found' });
     }
 
-    log('benchmark', 'INFO', 'IMPORT', `Starting CSV import for benchmark ${benchmarkId} (${benchmark.symbol})`);
+    log('benchmark', 'INFO', 'IMPORT', `[${filename}] Starting CSV import for benchmark ${benchmarkId} (${benchmark.symbol})`);
 
     const content = file.buffer.toString();
     const records = parse(content, {
@@ -53,23 +68,22 @@ router.post('/import-csv', upload.single('file'), async (req, res) => {
 
           if (!dateStr || !valueStr) {
             skipped++;
-            log('benchmark', 'INFO', 'IMPORT', `Skipping row: missing date or value. Row: ${JSON.stringify(row)}`);
+            log('benchmark', 'INFO', 'IMPORT', `[${filename}] Skipping row: missing date or value. Row: ${JSON.stringify(row)}`);
             continue;
           }
 
-          const dateObj = new Date(dateStr);
-          if (isNaN(dateObj.getTime())) {
+          const isoDate = parseNiftyDate(dateStr);
+          if (!isoDate) {
             skipped++;
-            log('benchmark', 'INFO', 'IMPORT', `Skipping row: invalid date "${dateStr}". Row: ${JSON.stringify(row)}`);
+            log('benchmark', 'INFO', 'IMPORT', `[${filename}] Skipping row: invalid date "${dateStr}". Row: ${JSON.stringify(row)}`);
             continue;
           }
 
-          const isoDate = dateObj.toISOString().split('T')[0];
           const value = parseFloat(valueStr.replace(/,/g, ''));
 
           if (isNaN(value)) {
             skipped++;
-            log('benchmark', 'INFO', 'IMPORT', `Skipping row: invalid value "${valueStr}". Row: ${JSON.stringify(row)}`);
+            log('benchmark', 'INFO', 'IMPORT', `[${filename}] Skipping row: invalid value "${valueStr}". Row: ${JSON.stringify(row)}`);
             continue;
           }
 
@@ -82,18 +96,18 @@ router.post('/import-csv', upload.single('file'), async (req, res) => {
           }
         } catch (e) {
           skipped++;
-          log('benchmark', 'ERROR', 'IMPORT', `Error processing row: ${String(e)}. Row: ${JSON.stringify(row)}`);
+          log('benchmark', 'ERROR', 'IMPORT', `[${filename}] Error processing row: ${String(e)}. Row: ${JSON.stringify(row)}`);
         }
       }
     });
 
     transaction(dataRows);
 
-    log('benchmark', 'INFO', 'IMPORT', `CSV import complete for ${benchmark.symbol}. Total: ${dataRows.length}, Inserted: ${inserted}, Skipped: ${skipped}`);
+    log('benchmark', 'INFO', 'IMPORT', `[${filename}] CSV import complete for ${benchmark.symbol}. Total: ${dataRows.length}, Inserted: ${inserted}, Skipped: ${skipped}`);
     res.json({ inserted, skipped, total: dataRows.length });
 
   } catch (err) {
-    log('benchmark', 'ERROR', 'IMPORT', `Failed to import benchmark CSV: ${String(err)}`);
+    log('benchmark', 'ERROR', 'IMPORT', `[${filename}] Failed to import benchmark CSV: ${String(err)}`);
     res.status(500).json({ error: err instanceof Error ? err.message : 'Internal server error' });
   }
 });
