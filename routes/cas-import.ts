@@ -236,6 +236,25 @@ router.post('/confirm', upload.single('file'), async (req, res) => {
           // STEP B — Upsert folio
           let dbFolio = db.prepare("SELECT id FROM folios WHERE folio_number = ? AND fund_id = ?")
             .get(folio.folio_full, fund_id) as any;
+
+          // Fallback: some CAS files print a folio with its "/NN" suffix and others
+          // without (e.g. "1847444/54" vs "1847444"). Match on base number + fund + PAN;
+          // reuse only when exactly one folio matches, otherwise create a new folio.
+          if (!dbFolio) {
+            const folioBase = (n: string) => String(n || '').split('/')[0].trim();
+            const base = folioBase(folio.folio_full);
+            const candidates = (db.prepare(
+              "SELECT id, folio_number FROM folios WHERE fund_id = ? AND pan = ?"
+            ).all(fund_id, folio.pan) as any[]).filter(c => folioBase(c.folio_number) === base);
+            if (candidates.length === 1) {
+              dbFolio = candidates[0];
+              log('import', 'INFO', 'cas-import',
+                `folio ${folio.folio_full} matched existing folio ${candidates[0].folio_number} by base number`);
+            } else if (candidates.length > 1) {
+              log('import', 'WARN', 'cas-import',
+                `folio ${folio.folio_full} is ambiguous (matches ${candidates.map(c => c.folio_number).join(', ')}) — creating a new folio`);
+            }
+          }
           let folio_id: string;
 
           const resolvedName = (folio.investor_name && folio.investor_name.trim())

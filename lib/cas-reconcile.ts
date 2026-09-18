@@ -1,5 +1,6 @@
 import * as fs from 'fs';
 import { CasParseResult, CasFolio, CasScheme } from './cas-parser';
+import { CONFIG } from './config.ts';
 
 // --- Types ---
 
@@ -203,7 +204,14 @@ function chkZeroNav(data: CasParseResult): CheckFailure[] {
   return f;
 }
 
+/** True when the CAS period starts after the full-history window (incremental statement). */
+function isPartialPeriod(data: CasParseResult): boolean {
+  const year = parseInt((data.cas_period?.from || '').split('-').pop() || '', 10);
+  return Number.isFinite(year) && year > CONFIG.CAS.FULL_HISTORY_MAX_START_YEAR;
+}
+
 function chkCost(data: CasParseResult): { failures: CheckFailure[], notes: CostNote[] } {
+  const partial = isPartialPeriod(data);
   const failures: CheckFailure[] = [];
   const notes: CostNote[] = [];
   for (const fo of data.folios) {
@@ -232,7 +240,8 @@ function chkCost(data: CasParseResult): { failures: CheckFailure[], notes: CostN
         diff
       };
 
-      if (cat === 'investigate') {
+      // Partial period: stated cost covers pre-period history, so a mismatch is expected.
+      if (cat === 'investigate' && !partial) {
         failures.push({
           ...entry,
           detail: `net=${net.toLocaleString('en-IN', { minimumFractionDigits: 2 })} stated=${stated.toLocaleString('en-IN', { minimumFractionDigits: 2 })} diff=${diff.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`

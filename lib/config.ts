@@ -16,6 +16,14 @@ export const CONFIG = {
   // Logging
   LOG_DIR: 'logs',
   
+  // CAS import
+  CAS: {
+    // A CAS whose period starts after this year is an incremental/partial statement.
+    // Full-history CAS files start 01-Jan-2000 or 2001; stated cost then covers
+    // history the file's transactions don't, so the cost cross-check can't be trusted.
+    FULL_HISTORY_MAX_START_YEAR: 2005,
+  },
+
   // XIRR Parameters
   XIRR: {
     MAX_ITERATIONS: 100,
