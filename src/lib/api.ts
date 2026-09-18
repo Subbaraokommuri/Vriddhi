@@ -243,9 +243,21 @@ export async function importCas(csvData: string): Promise<{ added: number; skipp
   return handleResponse<{ added: number; skipped: number; errors: number }>(res);
 }
 
+/** @deprecated superseded by syncNavData() — kept working, frozen, do not modify */
 export async function updateNavs(): Promise<{ updated: number; errors?: { fundId: string; name: string; error: string }[] }> {
   const res = await fetch('/api/fetch-nav', { method: 'POST' });
   return handleResponse<{ updated: number; errors?: { fundId: string; name: string; error: string }[] }>(res);
+}
+
+export async function syncNavData(): Promise<{
+  amfi: { updated: number; notFound: number; failed: any[] };
+  backfill: { full_backfill: number; incremental: number; up_to_date: number; failed: any[] };
+}> {
+  const res = await fetch('/api/nav/sync', { method: 'POST' });
+  return handleResponse<{
+    amfi: { updated: number; notFound: number; failed: any[] };
+    backfill: { full_backfill: number; incremental: number; up_to_date: number; failed: any[] };
+  }>(res);
 }
 
 export async function refreshNavAndBenchmarks(
@@ -260,7 +272,7 @@ export async function refreshNavAndBenchmarks(
   let navError: string | null = null;
 
   try {
-    navResult = await updateNavs();
+    navResult = await syncNavData();
   } catch (err: any) {
     navError = err.message || 'NAV update failed';
   }
@@ -280,11 +292,13 @@ export async function refreshNavAndBenchmarks(
   return { navResult, navError, benchmarkResults, benchmarkErrors };
 }
 
+/** @deprecated superseded by syncNavData() — kept working, frozen, do not modify */
 export async function refreshAmfiCodes(): Promise<{ updated: number; notFound: number; failedCount: number }> {
   const res = await fetch('/api/nav/refresh-amfi-codes', { method: 'POST' });
   return handleResponse<{ updated: number; notFound: number; failedCount: number }>(res);
 }
 
+/** @deprecated superseded by syncNavData() — kept working, frozen, do not modify */
 export async function backfillNavHistory(): Promise<{ full_backfill: number; incremental: number; up_to_date: number; failed: any[] }> {
   const res = await fetch('/api/nav/backfill', { method: 'POST' });
   return handleResponse<{ full_backfill: number; incremental: number; up_to_date: number; failed: any[] }>(res);

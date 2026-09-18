@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(curl -s -A \"Mozilla/5.0 FolioTracker/1.0\" 'https://portal.amfiindia.com/spages/NAVAll.txt')",
+      "Bash(awk -F';' 'NF>=6 && $1 ~ /^[0-9]+$/ {print NF; print $0; exit}')",
+      "Bash(npx tsc *)",
+      "Bash(tail -n 80 /tmp/vriddhi-dev.log)",
+      "Read(//private/tmp/**)",
+      "Bash(lsof -i :3000 -sTCP:LISTEN -P)",
+      "Bash(ssh -T -o BatchMode=yes git@github.com)",
+      "Bash(git ls-remote *)",
+      "Bash(ssh-add -l)",
+      "Read(//Users/subbarao/.ssh/**)",
+      "Bash(ssh-keygen -lf ~/.ssh/id_ed25519.pub)",
+      "Bash(ssh-add -l 2>&1; ssh -T -o BatchMode=yes git@github.com 2>&1 | head -3; ls ~/.ssh)",
+      "Bash(git fetch *)",
+      "Bash(git add *)",
+      "Bash(grep -Ei 'env|\\\\.db$|\\\\.csv$|\\\\.xlsx$')"
+    ]
+  }
+}

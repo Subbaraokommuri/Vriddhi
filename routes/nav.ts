@@ -19,60 +19,45 @@ function deriveSimpleName(cleanName: string): string {
   return s;
 }
 
-const MONTH_MAP: Record<string, string> = {
-  Jan: '01', Feb: '02', Mar: '03', Apr: '04', May: '05', Jun: '06',
-  Jul: '07', Aug: '08', Sep: '09', Oct: '10', Nov: '11', Dec: '12'
-};
-
 /**
- * Shared function to refresh AMFI codes and latest NAV from NAVAll.txt
+ * Shared function to refresh the ISIN -> AMFI scheme-code map from NAVAll.txt.
+ * Only reads SchemeCode/ISINGrowth/ISINReinvest (parts[0..2]) — these are
+ * stable regardless of AMFI's trailing column layout (NAV/Date/Plan/Option
+ * have shifted before and will again; per-fund NAV/history comes from
+ * MFAPI via runNavBackfill() instead, never from this parse).
  */
 export async function refreshAmfiCodes() {
   let updated = 0;
   let notFound = 0;
   const failed: { name: string; isin: string; reason: string }[] = [];
   const isinMap = new Map<string, any>();
-  let isFallback = false;
 
   try {
     // Primary Source: portal.amfiindia.com
     const response = await fetch('https://portal.amfiindia.com/spages/NAVAll.txt', {
       headers: { 'User-Agent': 'Mozilla/5.0 FolioTracker/1.0' }
     });
-    
+
     if (!response.ok) {
       throw new Error(`AMFI fetch failed: ${response.statusText}`);
     }
-    
+
     log('nav', 'INFO', 'NAV', 'Source: NAVAll.txt (portal.amfiindia.com)');
     const text = await response.text();
     const lines = text.split('\n');
-    
+
     for (const line of lines) {
       const parts = line.trim().split(';');
-      // Format: SchemeCode;ISINGrowth;ISINReinvest;SchemeName;NAV;Date
-      if (parts.length >= 6) {
+      // Format: SchemeCode;ISINGrowth;ISINReinvest;... (trailing columns vary by era, unused here)
+      if (parts.length >= 3) {
         const schemeCode = parts[0];
         const isinGrowth = parts[1];
         const isinReinvest = parts[2];
-        const schemeName = parts[3];
-        const nav = parseFloat(parts[4]);
-        const navDateRaw = parts[5];
 
-        if (schemeCode && navDateRaw && !isNaN(nav)) {
-          // Convert DD-MMM-YYYY to YYYY-MM-DD
-          const dateParts = navDateRaw.split('-');
-          if (dateParts.length === 3) {
-            const day = dateParts[0].padStart(2, '0');
-            const month = MONTH_MAP[dateParts[1]];
-            const year = dateParts[2];
-            if (month) {
-              const isoDate = `${year}-${month}-${day}`;
-              const data = { schemeCode, nav, navDate: isoDate, schemeName };
-              if (isinGrowth && isinGrowth !== '-') isinMap.set(isinGrowth, data);
-              if (isinReinvest && isinReinvest !== '-') isinMap.set(isinReinvest, data);
-            }
-          }
+        if (schemeCode && (isinGrowth || isinReinvest)) {
+          const data = { schemeCode };
+          if (isinGrowth && isinGrowth !== '-') isinMap.set(isinGrowth, data);
+          if (isinReinvest && isinReinvest !== '-') isinMap.set(isinReinvest, data);
         }
       }
     }
@@ -89,8 +74,7 @@ export async function refreshAmfiCodes() {
       
       log('nav', 'WARN', 'NAV', 'Source: MFAPI fallback (no NAV data)');
       const data = await response.json() as any[];
-      isFallback = true;
-      
+
       for (const item of data) {
         const schemeCode = item.schemeCode;
         const isinGrowth = item.isinGrowth;
@@ -117,13 +101,7 @@ export async function refreshAmfiCodes() {
       const match = isinMap.get(fund.isin);
       if (match) {
         db.prepare('UPDATE funds SET amfi_code = ? WHERE id = ?').run(match.schemeCode, fund.id);
-        
-        if (!isFallback && match.nav !== undefined && match.navDate) {
-          db.prepare('INSERT OR REPLACE INTO nav_history (isin, nav_date, nav) VALUES (?, ?, ?)').run(fund.isin, match.navDate, match.nav);
-          log('nav', 'INFO', 'NAV', `Updated ${fund.name} (${fund.isin}): amfi_code=${match.schemeCode} nav=${match.nav} date=${match.navDate}`);
-        } else {
-          log('nav', 'INFO', 'NAV', `Updated ${fund.name} (${fund.isin}): amfi_code=${match.schemeCode} (No NAV update)`);
-        }
+        log('nav', 'INFO', 'NAV', `Updated ${fund.name} (${fund.isin}): amfi_code=${match.schemeCode}`);
         updated++;
       } else {
         log('nav', 'WARN', 'NAV', `ISIN not found in NAVAll.txt: ${fund.isin} (${fund.name})`);
@@ -140,6 +118,7 @@ export async function refreshAmfiCodes() {
   return { updated, notFound, failed };
 }
 
+/** @deprecated superseded by POST /api/nav/sync — kept working, frozen, do not modify */
 router.post('/nav/refresh-amfi-codes', async (req, res) => {
   try {
     const result = await refreshAmfiCodes();
@@ -153,6 +132,7 @@ router.post('/nav/refresh-amfi-codes', async (req, res) => {
   }
 });
 
+/** @deprecated superseded by POST /api/nav/sync — kept working, frozen, do not modify */
 router.post('/fetch-nav', async (req, res) => {
   log('nav', 'INFO', 'NAV', 'Starting NAV update via NAVAll.txt');
   try {
@@ -170,7 +150,11 @@ router.post('/fetch-nav', async (req, res) => {
   }
 });
 
-router.post('/nav/backfill', async (req, res) => {
+/**
+ * Incremental NAV history + metadata sync via MFAPI, per fund with an amfi_code.
+ * Skips any fund whose last NAV is <=1 day old and already has clean_name/simple_name.
+ */
+export async function runNavBackfill() {
   const funds = db.prepare(`
     SELECT f.id, f.name, f.isin, f.amfi_code, f.nav_history_fetched,
            f.clean_name, f.simple_name,
@@ -310,14 +294,53 @@ router.post('/nav/backfill', async (req, res) => {
   }
 
   log('nav', 'INFO', 'BACKFILL', `COMPLETE backfill: ${full_backfill} full, ${incremental} incremental, ${up_to_date} up-to-date, ${failed.length} errors`);
-  res.json({ full_backfill, incremental, up_to_date, failed });
+  return { full_backfill, incremental, up_to_date, failed };
+}
+
+router.post('/nav/backfill', async (req, res) => {
+  try {
+    const result = await runNavBackfill();
+    res.json(result);
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    res.status(503).json({ error: reason });
+  }
 });
 
 /**
- * OPERATION 3 — POST /nav/backfill (when built) → logs/nav-backfill.log
- * // START: INFO "Starting NAV history backfill: {N} funds"
- * // PER FUND: INFO "Backfilled {fund_name}: {N} days of history"
- * // END: INFO "COMPLETE nav-backfill: {N} funds, {K} errors"
+ * Unified NAV sync: refreshes the ISIN -> amfi_code map only for funds that
+ * don't have one yet (new funds from a CAS import), then runs the
+ * incremental MFAPI backfill for everything — this is what fills today's
+ * NAV, history, and metadata in one pass. Backs both the "Update NAVs"
+ * button (FundsXirr.tsx) and "Sync Fund Data" (CasImport.tsx), plus the
+ * auto-sync fired after a successful CAS import.
  */
+export async function syncNavData() {
+  const missing = db.prepare(`
+    SELECT COUNT(*) as c FROM funds WHERE isin IS NOT NULL AND (amfi_code IS NULL OR amfi_code = '')
+  `).get() as { c: number };
+
+  let amfi: { updated: number; notFound: number; failed: { name: string; isin: string; reason: string }[] } =
+    { updated: 0, notFound: 0, failed: [] };
+
+  if (missing.c > 0) {
+    log('nav', 'INFO', 'SYNC', `${missing.c} fund(s) missing amfi_code — refreshing ISIN map from AMFI`);
+    amfi = await refreshAmfiCodes();
+  }
+
+  const backfill = await runNavBackfill();
+  return { amfi, backfill };
+}
+
+router.post('/nav/sync', async (req, res) => {
+  try {
+    const result = await syncNavData();
+    res.json(result);
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    log('nav', 'ERROR', 'SYNC', `nav/sync failed: ${reason}`);
+    res.status(503).json({ error: 'Failed to sync NAV data' });
+  }
+});
 
 export default router;

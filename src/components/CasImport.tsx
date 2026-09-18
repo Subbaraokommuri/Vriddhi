@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
-import { refreshAmfiCodes, backfillNavHistory, downloadImportLog } from '../lib/api';
+import { syncNavData, downloadImportLog } from '../lib/api';
 
 declare global {
   interface ImportMeta {
@@ -159,6 +159,7 @@ export function CasImport({ onImportSuccess }: CasImportProps) {
       setImportResult(result);
       setState('SUCCESS');
       if (onImportSuccess) onImportSuccess();
+      handleSyncFundData();
     } catch (err: any) {
       setError(err.message);
       setState('ERROR');
@@ -169,18 +170,14 @@ export function CasImport({ onImportSuccess }: CasImportProps) {
     setMaintenanceError(null);
     setSyncResult(null);
     setSyncing(true);
-    setSyncStep("Step 1/2: Refreshing AMFI codes…");
+    setSyncStep("Syncing NAV data…");
     try {
-      const amfiResult = await refreshAmfiCodes();
-      
-      setSyncStep("Step 2/2: Fetching NAV history (2–3 min)…");
-      const navResult = await backfillNavHistory();
-      
+      const result = await syncNavData();
       setSyncResult({
-        amfiUpdated: amfiResult.updated,
-        fullBackfill: navResult.full_backfill,
-        incremental: navResult.incremental,
-        upToDate: navResult.up_to_date,
+        amfiUpdated: result.amfi.updated,
+        fullBackfill: result.backfill.full_backfill,
+        incremental: result.backfill.incremental,
+        upToDate: result.backfill.up_to_date,
       });
       if (onImportSuccess) onImportSuccess();
     } catch (error: any) {
