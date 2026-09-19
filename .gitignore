@@ -35,4 +35,5 @@ reports/
 # Private project docs — never uploaded (master docs + working notes; contain PANs / tax figures)
 CLAUDE.md
 CONTEXT-V11.md
+.claude/rules/
 docs/
