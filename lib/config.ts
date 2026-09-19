@@ -48,9 +48,12 @@ export const CONFIG = {
     EQUITY_LTCG_RATE_OLD:       0.10,    // sells before Jul 23 2024
     EQUITY_LTCG_RATE_NEW:       0.125,   // sells on/after Jul 23 2024
 
-    // LTCG exemptions — two separate Schedule 112A pots, never combined
-    EQUITY_LTCG_EXEMPTION_OLD:  100000,  // ₹1L for pre-Jul-23-2024 sells
-    EQUITY_LTCG_EXEMPTION_NEW:  125000,  // ₹1.25L for Jul-23-2024+ sells
+    // LTCG exemption (Section 112A) — ONE annual limit per financial year, shared by
+    // both rate buckets. It depends on the FY, not the sale date (Finance (No.2) Act 2024:
+    // ₹1.25L applies to the whole of FY2024-25 onwards). Use getLtcgExemption().
+    EQUITY_LTCG_EXEMPTION_LEGACY:  100000,       // ₹1L — FY2018-19 to FY2023-24
+    EQUITY_LTCG_EXEMPTION_CURRENT: 125000,       // ₹1.25L — FY2024-25 onwards
+    EQUITY_LTCG_EXEMPTION_CURRENT_FROM: '2024-04-01', // first FY start date on the ₹1.25L limit
 
     // STCG rates (Section 111A)
     EQUITY_STCG_RATE_OLD:       0.15,    // sells before Jul 23 2024

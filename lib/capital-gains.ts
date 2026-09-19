@@ -58,8 +58,9 @@ export interface PanCapitalGainsSummary {
   investorName: string;
   totalSTCG: number;
   totalLTCG: number;
-  ltcgExemptionUsed: number;              // Math.min(totalLTCG, CONFIG.TAX.EQUITY_LTCG_EXEMPTION)
-  ltcgTaxable: number;                    // Math.max(0, totalLTCG - CONFIG.TAX.EQUITY_LTCG_EXEMPTION)
+  ltcgExemptionLimit: number;             // annual limit for this FY — getLtcgExemption()
+  ltcgExemptionUsed: number;              // single annual limit (getLtcgExemption) applied to taxable LTCG after STCL set-off
+  ltcgTaxable: number;                    // taxable LTCG after set-off and exemption
   totalDebtGain: number;
   estimatedSTCGTax: number;
   estimatedLTCGTax: number;               // computed here after exemption
@@ -583,10 +584,39 @@ export function computeCapitalGains(
 /**
  * Aggregates results across all folios for a PAN.
  */
+/**
+ * Section 112A LTCG exemption limit for the financial year containing `fyStartDate`
+ * (pass the FY start, or any date inside the FY). One limit per FY — never per sale date.
+ */
+export function getLtcgExemption(fyStartDate: string): number {
+  return fyStartDate >= CONFIG.TAX.EQUITY_LTCG_EXEMPTION_CURRENT_FROM
+    ? CONFIG.TAX.EQUITY_LTCG_EXEMPTION_CURRENT
+    : CONFIG.TAX.EQUITY_LTCG_EXEMPTION_LEGACY;
+}
+
+/**
+ * Splits the single annual exemption between the two rate buckets.
+ * Assumption (statute is silent on order): set against the 12.5% (AE) bucket first,
+ * remainder against the 10% (BE) bucket — the taxpayer-favourable order. Confirm with CA.
+ */
+export function allocateLtcgExemption(
+  beAfterSetoff: number,
+  aeAfterSetoff: number,
+  limit: number
+): { exemptionBE: number; exemptionAE: number } {
+  const ae = Math.max(0, aeAfterSetoff || 0);
+  const be = Math.max(0, beAfterSetoff || 0);
+  const lim = Math.max(0, limit || 0);
+  const exemptionAE = Math.min(ae, lim);
+  const exemptionBE = Math.min(be, lim - exemptionAE);
+  return { exemptionBE, exemptionAE };
+}
+
 export function aggregatePanGains(
   pan: string,
   investorName: string,
-  folioGains: FolioCapitalGains[]
+  folioGains: FolioCapitalGains[],
+  fyStartDate: string
 ): PanCapitalGainsSummary {
   let totalSTCG = 0;
   let totalLTCG = 0;
@@ -624,11 +654,9 @@ export function aggregatePanGains(
   const remaining_loss  = Math.max(0, stcgLoss - Math.max(0, taxableLtcg_AE));
   const be_after_setoff = Math.max(0, taxableLtcg_BE - remaining_loss);
 
-  // Two separate Schedule 112A pots — exemptions never combined
-  const exemption_BE = be_after_setoff > 0
-    ? Math.min(be_after_setoff, CONFIG.TAX.EQUITY_LTCG_EXEMPTION_OLD) : 0;
-  const exemption_AE = ae_after_setoff > 0
-    ? Math.min(ae_after_setoff, CONFIG.TAX.EQUITY_LTCG_EXEMPTION_NEW) : 0;
+  // One annual Schedule 112A exemption shared by both rate buckets (AE first)
+  const { exemptionBE: exemption_BE, exemptionAE: exemption_AE } =
+    allocateLtcgExemption(be_after_setoff, ae_after_setoff, getLtcgExemption(fyStartDate));
 
   const finalTaxable_BE = Math.max(0, be_after_setoff - exemption_BE);
   const finalTaxable_AE = Math.max(0, ae_after_setoff - exemption_AE);
@@ -680,6 +708,7 @@ export function aggregatePanGains(
     investorName,
     totalSTCG,
     totalLTCG,
+    ltcgExemptionLimit: getLtcgExemption(fyStartDate),
     ltcgExemptionUsed,
     ltcgTaxable,
     totalDebtGain,

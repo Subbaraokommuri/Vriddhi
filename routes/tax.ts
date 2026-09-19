@@ -2,6 +2,8 @@ import { Router, Request, Response } from 'express';
 import { 
   computeCapitalGains, 
   aggregatePanGains, 
+  getLtcgExemption,
+  allocateLtcgExemption,
   FolioCapitalGains, 
   PanCapitalGainsSummary,
   MatchedLot
@@ -16,6 +18,7 @@ const MODULE = 'TAX';
 /**
  * Helper: navOnDate(isin, targetDate)
  * Queries nav_history for the closest available NAV on or before targetDate
+ * DUPLICATE (debt VB-27): identical copy lives in routes/tax-export.ts — change both together until moved to lib/tax-utils.ts.
  */
 function navOnDate(isin: string, targetDate: string): number | null {
   try {
@@ -34,6 +37,7 @@ function navOnDate(isin: string, targetDate: string): number | null {
 /**
  * Helper: getFyBounds(fy)
  * Parses fy param like '2025-26' into fyStart='2025-04-01' and fyEnd='2026-03-31'
+ * DUPLICATE (debt VB-27): identical copy lives in routes/tax-export.ts — change both together until moved to lib/tax-utils.ts.
  */
 function getFyBounds(fy: string): { fyStart: string, fyEnd: string } {
   if (!/^\d{4}-\d{2}$/.test(fy)) {
@@ -53,6 +57,7 @@ function getFyBounds(fy: string): { fyStart: string, fyEnd: string } {
 /**
  * Helper: getDefaultFy()
  * Returns just-completed FY as 'YYYY-YY' string.
+ * DUPLICATE (debt VB-27): identical copy lives in routes/tax-export.ts — change both together until moved to lib/tax-utils.ts.
  */
 function getDefaultFy(): string {
   const now = new Date();
@@ -73,6 +78,7 @@ function getDefaultFy(): string {
 /**
  * Helper: getCurrentFy()
  * Returns the current active Financial Year as a YYYY-YY string.
+ * DUPLICATE (debt VB-27): identical copy lives in routes/tax-export.ts — change both together until moved to lib/tax-utils.ts.
  */
 function getCurrentFy(): string {
   const today = new Date();
@@ -124,6 +130,10 @@ interface AdvanceTaxInstallment {
   isCurrentInstallment: boolean;
 }
 
+/**
+ * buildInstallmentsFromSummaries
+ * DUPLICATE (debt VB-27): identical copy lives in routes/tax-export.ts — change both together until moved to lib/tax-utils.ts.
+ */
 function buildInstallmentsFromSummaries(
   summaries: PanCapitalGainsSummary[],  // array of 4, index 0=Q1 ... 3=Q4
   cutoffDates: string[],                // ['YYYY-06-15','YYYY-09-15','YYYY-12-15','YYYY-03-31']
@@ -225,6 +235,7 @@ async function getCapitalGainsSummary(pan: string, fyInput?: string) {
       investorName: investor.name,
       totalSTCG: 0,
       totalLTCG: 0,
+      ltcgExemptionLimit: getLtcgExemption(fyStart),
       ltcgExemptionUsed: 0,
       ltcgTaxable: 0,
       totalDebtGain: 0,
@@ -325,7 +336,7 @@ async function getCapitalGainsSummary(pan: string, fyInput?: string) {
     }
   }
 
-  const summary = aggregatePanGains(pan, investor.name, folioGains);
+  const summary = aggregatePanGains(pan, investor.name, folioGains, fyStart);
 
   // Compute BE/AE LTCG split for exemption bar display (BUG-TAX-02 + BUG-TAX-05)
   let _ltcgBE = 0;
@@ -343,10 +354,8 @@ async function getCapitalGainsSummary(pan: string, fyInput?: string) {
   const _aeAfterSetoff = Math.max(0, _ltcgAE - _stcgLoss);
   const _remainingLoss = Math.max(0, _stcgLoss - Math.max(0, _ltcgAE));
   const _beAfterSetoff = Math.max(0, _ltcgBE - _remainingLoss);
-  const ltcgExemptionUsedBE = _beAfterSetoff > 0
-    ? Math.min(_beAfterSetoff, CONFIG.TAX.EQUITY_LTCG_EXEMPTION_OLD) : 0;
-  const ltcgExemptionUsedAE = _aeAfterSetoff > 0
-    ? Math.min(_aeAfterSetoff, CONFIG.TAX.EQUITY_LTCG_EXEMPTION_NEW) : 0;
+  const { exemptionBE: ltcgExemptionUsedBE, exemptionAE: ltcgExemptionUsedAE } =
+    allocateLtcgExemption(_beAfterSetoff, _aeAfterSetoff, getLtcgExemption(fyStart));
 
   // Proportionally allocate LTCG Tax
   if (summary.totalLTCG > 0) {
@@ -584,11 +593,10 @@ router.get('/capital-gains-audit-csv', async (req, res) => {
     const be_after_setoff  = Math.max(0, taxableLtcg_BE - remaining_loss);
     const stcgLossApplied  = Math.min(stcgLoss, Math.max(0, taxableLtcg_AE + taxableLtcg_BE));
 
-    // Exemptions (two separate pots — never combined)
-    const exemption_BE = be_after_setoff > 0
-      ? Math.min(be_after_setoff, CONFIG.TAX.EQUITY_LTCG_EXEMPTION_OLD) : 0;
-    const exemption_AE = ae_after_setoff > 0
-      ? Math.min(ae_after_setoff, CONFIG.TAX.EQUITY_LTCG_EXEMPTION_NEW) : 0;
+    // One annual exemption shared by both rate buckets (AE first) — same as aggregatePanGains()
+    const ltcgExemptionLimit = summary.ltcgExemptionLimit;
+    const { exemptionBE: exemption_BE, exemptionAE: exemption_AE } =
+      allocateLtcgExemption(be_after_setoff, ae_after_setoff, ltcgExemptionLimit);
 
     const finalTaxable_BE  = Math.max(0, be_after_setoff - exemption_BE);
     const finalTaxable_AE  = Math.max(0, ae_after_setoff - exemption_AE);
@@ -629,8 +637,9 @@ router.get('/capital-gains-audit-csv', async (req, res) => {
       ["STCG Loss Set-off Applied", stcgLossApplied.toFixed(2)],
       ["LTCG BE After Set-off",  be_after_setoff.toFixed(2)],
       ["LTCG AE After Set-off",  ae_after_setoff.toFixed(2)],
-      ["LTCG BE Exemption Used (Rs 1,00,000 pot)", exemption_BE.toFixed(2)],
-      ["LTCG AE Exemption Used (Rs 1,25,000 pot)", exemption_AE.toFixed(2)],
+      ["LTCG Annual Exemption Limit (single, both rate buckets)", ltcgExemptionLimit.toFixed(2)],
+      ["LTCG BE Exemption Used (allocated after AE)", exemption_BE.toFixed(2)],
+      ["LTCG AE Exemption Used (allocated first)", exemption_AE.toFixed(2)],
       ["Final Taxable LTCG BE",  finalTaxable_BE.toFixed(2)],
       ["Final Taxable LTCG AE",  finalTaxable_AE.toFixed(2)],
       ["Final LTCG Tax",         finalLTCGTax.toFixed(2)],
@@ -734,7 +743,7 @@ router.get('/unrealized', async (req, res) => {
       folioGains.push(result);
     }
 
-    const summary = aggregatePanGains(pan, investor.name, folioGains);
+    const summary = aggregatePanGains(pan, investor.name, folioGains, today);
     res.json({ asOfDate: today, ...summary });
   } catch (error: any) {
     log('app', 'ERROR', MODULE, `Error in unrealized: ${error.message}`);
@@ -783,7 +792,7 @@ router.get('/harvesting', async (req, res) => {
         txns.push({ date: today, transaction_type: 'sell', units: -f.stated_balance, amount: -(f.stated_balance * nav), nav });
         gains.push(computeCapitalGains(f.id, f.folio_number, f.fund_name, f.isin, f.category, f.asset_class || '', txns, navOnDate, '1900-01-01', today));
       }
-      return aggregatePanGains(pan, investor.name, gains);
+      return aggregatePanGains(pan, investor.name, gains, today);
     })();
 
     // 2. Get Realized for current FY
@@ -791,9 +800,7 @@ router.get('/harvesting', async (req, res) => {
 
     const today = new Date().toISOString().split('T')[0];
     const isNewRegime = today >= CONFIG.TAX.EQUITY_RATE_CHANGE_DATE;
-    const applicableExemption = isNewRegime
-      ? CONFIG.TAX.EQUITY_LTCG_EXEMPTION_NEW
-      : CONFIG.TAX.EQUITY_LTCG_EXEMPTION_OLD;
+    const applicableExemption = getLtcgExemption(getFyBounds(realisedSummary.fy).fyStart);
     const applicableStcgRate = isNewRegime
       ? CONFIG.TAX.EQUITY_STCG_RATE_NEW
       : CONFIG.TAX.EQUITY_STCG_RATE_OLD;
@@ -880,7 +887,7 @@ router.get('/simulate', async (req, res) => {
     const result = computeCapitalGains(folio.id, folio.folio_number, folio.fund_name, folio.isin, folio.category, folio.asset_class || '', txns, navOnDate, '1900-01-01', today);
     
     // Summary just for this folio for LTCG tax calculation
-    const summary = aggregatePanGains(folio.pan, 'Simulation', [result]);
+    const summary = aggregatePanGains(folio.pan, 'Simulation', [result], today);
 
     res.json({
       folioId: folio.id,
@@ -1083,7 +1090,7 @@ async function computeAdvanceTaxData(
         folioGainsPerCutoff.push(result);
       }
     }
-    summaries.push(aggregatePanGains(pan, investor.name, folioGainsPerCutoff));
+    summaries.push(aggregatePanGains(pan, investor.name, folioGainsPerCutoff, fyStart));
   }
 
   // STEP 4h — Build quarterRedemptions per quarter:
@@ -1317,7 +1324,7 @@ router.get('/advance-tax/export', async (req, res) => {
     sheet1.addRow([]);
     sheet1.addRow(['Tax Rates', 'STCG: BE 15% (pre-Jul 23 2024) / AE 20% (Jul 23 2024+)']);
     sheet1.addRow(['LTCG Rates', 'BE 10% (pre-Jul 23 2024) / AE 12.5% (Jul 23 2024+)']);
-    sheet1.addRow(['LTCG Exemption', 'BE pot ₹1,00,000 / AE pot ₹1,25,000 (never combined)']);
+    sheet1.addRow(['LTCG Exemption', 'Single annual limit (₹1,00,000 up to FY2023-24, ₹1,25,000 from FY2024-25), set against the 12.5% bucket first']);
     sheet1.addRow(['Grandfathering', 'FMV as on Jan 31 2018 used as cost basis for pre-2018 lots']);
     sheet1.addRow(['234C Basis', '3% of shortfall for Q1–Q3; 1% of shortfall for Q4']);
     sheet1.addRow(['Data Note', 'Paid amounts and self-assessment date are user-entered. All other values are computed from transaction data.']);

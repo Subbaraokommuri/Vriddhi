@@ -2,6 +2,8 @@ import { Router } from 'express';
 import { 
   computeCapitalGains, 
   aggregatePanGains, 
+  getLtcgExemption,
+  allocateLtcgExemption,
   FolioCapitalGains, 
   PanCapitalGainsSummary, 
   MatchedLot 
@@ -43,6 +45,7 @@ interface AdvanceTaxInstallment {
 /**
  * Helper: navOnDate(isin, targetDate)
  * Queries nav_history for the closest available NAV on or before targetDate
+ * DUPLICATE (debt VB-27): identical copy lives in routes/tax.ts — change both together until moved to lib/tax-utils.ts.
  */
 function navOnDate(isin: string, targetDate: string): number | null {
   try {
@@ -61,6 +64,7 @@ function navOnDate(isin: string, targetDate: string): number | null {
 /**
  * Helper: getFyBounds(fy)
  * Parses fy param like '2025-26' into fyStart='2025-04-01' and fyEnd='2026-03-31'
+ * DUPLICATE (debt VB-27): identical copy lives in routes/tax.ts — change both together until moved to lib/tax-utils.ts.
  */
 function getFyBounds(fy: string): { fyStart: string, fyEnd: string } {
   if (!/^\d{4}-\d{2}$/.test(fy)) {
@@ -80,6 +84,7 @@ function getFyBounds(fy: string): { fyStart: string, fyEnd: string } {
 /**
  * Helper: getDefaultFy()
  * Returns just-completed FY as 'YYYY-YY' string.
+ * DUPLICATE (debt VB-27): identical copy lives in routes/tax.ts — change both together until moved to lib/tax-utils.ts.
  */
 function getDefaultFy(): string {
   const now = new Date();
@@ -100,6 +105,7 @@ function getDefaultFy(): string {
 /**
  * Helper: getCurrentFy()
  * Returns the current active Financial Year as a YYYY-YY string.
+ * DUPLICATE (debt VB-27): identical copy lives in routes/tax.ts — change both together until moved to lib/tax-utils.ts.
  */
 function getCurrentFy(): string {
   const today = new Date();
@@ -113,6 +119,7 @@ function getCurrentFy(): string {
 
 /**
  * buildInstallmentsFromSummaries
+ * DUPLICATE (debt VB-27): identical copy lives in routes/tax.ts — change both together until moved to lib/tax-utils.ts.
  */
 function buildInstallmentsFromSummaries(
   summaries: PanCapitalGainsSummary[],  // array of 4, index 0=Q1 ... 3=Q4
@@ -323,7 +330,7 @@ async function computeCgData(pan: string, fy: string) {
     }
   }
 
-  const summary = aggregatePanGains(pan, investor.name, folioGains);
+  const summary = aggregatePanGains(pan, investor.name, folioGains, fyStart);
 
   // Compute BE/AE LTCG split
   let _ltcgBE = 0;
@@ -341,10 +348,8 @@ async function computeCgData(pan: string, fy: string) {
   const _aeAfterSetoff = Math.max(0, _ltcgAE - _stcgLoss);
   const _remainingLoss = Math.max(0, _stcgLoss - Math.max(0, _ltcgAE));
   const _beAfterSetoff = Math.max(0, _ltcgBE - _remainingLoss);
-  const ltcgExemptionUsedBE = _beAfterSetoff > 0
-    ? Math.min(_beAfterSetoff, CONFIG.TAX.EQUITY_LTCG_EXEMPTION_OLD) : 0;
-  const ltcgExemptionUsedAE = _aeAfterSetoff > 0
-    ? Math.min(_aeAfterSetoff, CONFIG.TAX.EQUITY_LTCG_EXEMPTION_NEW) : 0;
+  const { exemptionBE: ltcgExemptionUsedBE, exemptionAE: ltcgExemptionUsedAE } =
+    allocateLtcgExemption(_beAfterSetoff, _aeAfterSetoff, getLtcgExemption(fyStart));
 
   // Proportionally allocate LTCG Tax
   if (summary.totalLTCG > 0) {
@@ -459,7 +464,7 @@ async function computeAdvanceTaxQ(
       }
     }
 
-    const summary = aggregatePanGains(pan, investorName, folioGains);
+    const summary = aggregatePanGains(pan, investorName, folioGains, fyStart);
     summaries.push(summary);
   }
 
@@ -540,13 +545,10 @@ router.get('/capital-gains/excel', async (req, res) => {
     const rLTCGGross = sheet1.addRow(['Gross LTCG (₹)', cgData.summary.totalLTCG]);
     rLTCGGross.getCell(2).numFmt = '#,##0.00';
 
-    if (cgData.ltcgExemptionUsedBE > 0) {
-      const rExBE = sheet1.addRow(['BE Pot Exemption Used (₹)', cgData.ltcgExemptionUsedBE]);
-      rExBE.getCell(2).numFmt = '#,##0.00';
-    }
-    if (cgData.ltcgExemptionUsedAE > 0) {
-      const rExAE = sheet1.addRow(['AE Pot Exemption Used (₹)', cgData.ltcgExemptionUsedAE]);
-      rExAE.getCell(2).numFmt = '#,##0.00';
+    const exemptionUsed = cgData.ltcgExemptionUsedBE + cgData.ltcgExemptionUsedAE;
+    if (exemptionUsed > 0) {
+      const rEx = sheet1.addRow(['LTCG Exemption Used (₹)', exemptionUsed]);
+      rEx.getCell(2).numFmt = '#,##0.00';
     }
 
     const rLTCGTaxable = sheet1.addRow(['Taxable LTCG (₹)', cgData.summary.ltcgTaxable]);
@@ -1274,13 +1276,9 @@ function generateItrHtml(data: {
   <div class="grid-2col">
     <div class="grid-label">Gross LTCG</div>
     <div class="grid-value" style="font-weight: bold;">₹${renderAmount(data.totalLTCG)}${data.totalLTCG < 0 ? ' <span class="negative">(loss)</span>' : ''}</div>
-    ${data.ltcgExemptionUsedBE > 0 ? `
-    <div class="grid-label">BE Pot Exemption Used (₹1,00,000 limit)</div>
-    <div class="grid-value">₹${formatINR(data.ltcgExemptionUsedBE)}</div>
-    ` : ''}
-    ${data.ltcgExemptionUsedAE > 0 ? `
-    <div class="grid-label">AE Pot Exemption Used (₹1,25,000 limit)</div>
-    <div class="grid-value">₹${formatINR(data.ltcgExemptionUsedAE)}</div>
+    ${(data.ltcgExemptionUsedBE + data.ltcgExemptionUsedAE) > 0 ? `
+    <div class="grid-label">LTCG Exemption Used</div>
+    <div class="grid-value">₹${formatINR(data.ltcgExemptionUsedBE + data.ltcgExemptionUsedAE)}</div>
     ` : ''}
     <div class="grid-label">Taxable LTCG</div>
     <div class="grid-value" style="font-weight: bold;">₹${formatINR(data.ltcgTaxable)}</div>

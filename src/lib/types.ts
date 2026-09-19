@@ -294,6 +294,7 @@ export interface PanCapitalGainsSummary {
   investorName: string;
   totalSTCG: number;
   totalLTCG: number;
+  ltcgExemptionLimit: number;
   ltcgExemptionUsed: number;
   ltcgTaxable: number;
   totalDebtGain: number;

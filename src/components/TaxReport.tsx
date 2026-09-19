@@ -782,75 +782,24 @@ export function TaxReport() {
                       <span className="text-xs text-slate-400 font-normal">(Sec 112A)</span>
                     </div>
 
-                    {/* BE pot — shown when there is BE LTCG, or when there is no LTCG at all (default) */}
-                    {cgData.ltcgAE === 0 && (
-                      <div className="space-y-2">
-                        {cgData.ltcgBE > 0 && cgData.ltcgAE > 0 && (
-                          <p className="text-xs font-medium text-slate-500">BE pot (pre Jul 23 2024 · 10%)</p>
-                        )}
-                        <div className="flex items-center justify-between text-sm font-medium">
-                          <span className="text-primary">{formatCurrency(cgData.ltcgExemptionUsedBE)}</span>
-                          <span className="text-slate-400"> of {formatCurrency(100000)} used</span>
-                        </div>
-                        <div className="h-2.5 bg-slate-100 rounded-full overflow-hidden">
-                          <div
-                            className="h-full bg-primary transition-all duration-1000 ease-out"
-                            style={{ width: `${Math.min(100, (cgData.ltcgExemptionUsedBE / 100000) * 100)}%` }}
-                          />
-                        </div>
+                    {/* One annual limit shared by both rate buckets (Sec 112A) */}
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between text-sm font-medium">
+                        <span className="text-primary">{formatCurrency(cgData.ltcgExemptionUsedBE + cgData.ltcgExemptionUsedAE)}</span>
+                        <span className="text-slate-400"> of {formatCurrency(cgData.ltcgExemptionLimit)} used</span>
                       </div>
-                    )}
-
-                    {/* AE pot — shown when there is AE LTCG */}
-                    {cgData.ltcgAE > 0 && (
-                      <div className="space-y-2">
-                        {cgData.ltcgBE > 0 && (
-                          <p className="text-xs font-medium text-slate-500">AE pot (Jul 23 2024 onwards · 12.5%)</p>
-                        )}
-                        <div className="flex items-center justify-between text-sm font-medium">
-                          <span className="text-primary">{formatCurrency(cgData.ltcgExemptionUsedAE)}</span>
-                          <span className="text-slate-400"> of {formatCurrency(125000)} used</span>
-                        </div>
-                        <div className="h-2.5 bg-slate-100 rounded-full overflow-hidden">
-                          <div
-                            className="h-full bg-primary transition-all duration-1000 ease-out"
-                            style={{ width: `${Math.min(100, (cgData.ltcgExemptionUsedAE / 125000) * 100)}%` }}
-                          />
-                        </div>
+                      <div className="h-2.5 bg-slate-100 rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-primary transition-all duration-1000 ease-out"
+                          style={{ width: `${Math.min(100, cgData.ltcgExemptionLimit > 0 ? ((cgData.ltcgExemptionUsedBE + cgData.ltcgExemptionUsedAE) / cgData.ltcgExemptionLimit) * 100 : 0)}%` }}
+                        />
                       </div>
-                    )}
-
-                    {/* Split: show both pots when both are active */}
-                    {cgData.ltcgBE > 0 && cgData.ltcgAE > 0 && (
-                      <>
-                        <div className="space-y-2">
-                          <p className="text-xs font-medium text-slate-500">BE pot (pre Jul 23 2024 · 10%)</p>
-                          <div className="flex items-center justify-between text-sm font-medium">
-                            <span className="text-primary">{formatCurrency(cgData.ltcgExemptionUsedBE)}</span>
-                            <span className="text-slate-400"> of {formatCurrency(100000)} used</span>
-                          </div>
-                          <div className="h-2.5 bg-slate-100 rounded-full overflow-hidden">
-                            <div
-                              className="h-full bg-primary transition-all duration-1000 ease-out"
-                              style={{ width: `${Math.min(100, (cgData.ltcgExemptionUsedBE / 100000) * 100)}%` }}
-                            />
-                          </div>
-                        </div>
-                        <div className="space-y-2">
-                          <p className="text-xs font-medium text-slate-500">AE pot (Jul 23 2024 onwards · 12.5%)</p>
-                          <div className="flex items-center justify-between text-sm font-medium">
-                            <span className="text-primary">{formatCurrency(cgData.ltcgExemptionUsedAE)}</span>
-                            <span className="text-slate-400"> of {formatCurrency(125000)} used</span>
-                          </div>
-                          <div className="h-2.5 bg-slate-100 rounded-full overflow-hidden">
-                            <div
-                              className="h-full bg-primary transition-all duration-1000 ease-out"
-                              style={{ width: `${Math.min(100, (cgData.ltcgExemptionUsedAE / 125000) * 100)}%` }}
-                            />
-                          </div>
-                        </div>
-                      </>
-                    )}
+                      {cgData.ltcgBE > 0 && cgData.ltcgAE > 0 && (
+                        <p className="text-xs text-slate-400">
+                          Set against the 12.5% (post Jul 23 2024) gains first, then the 10% gains — confirm with your CA.
+                        </p>
+                      )}
+                    </div>
 
                     {/* Rate note — BUG-TAX-05 fixed */}
                     {cgData.ltcgTaxable > 0 && (
@@ -1178,13 +1127,13 @@ export function TaxReport() {
                       </div>
                       <p className="text-sm font-medium">
                         <span className="text-primary">{formatCurrency(unrealizedData.ltcgExemptionUsed)}</span>
-                        <span className="text-slate-400"> of {formatCurrency(125000)} simulated</span>
+                        <span className="text-slate-400"> of {formatCurrency(unrealizedData.ltcgExemptionLimit)} simulated</span>
                       </p>
                     </div>
                     <div className="h-2.5 bg-slate-100 rounded-full overflow-hidden">
                       <div 
                         className="h-full bg-primary transition-all duration-1000 ease-out"
-                        style={{ width: `${Math.min(100, (unrealizedData.ltcgExemptionUsed / 125000) * 100)}%` }}
+                        style={{ width: `${Math.min(100, (unrealizedData.ltcgExemptionLimit > 0 ? unrealizedData.ltcgExemptionUsed / unrealizedData.ltcgExemptionLimit : 0) * 100)}%` }}
                       />
                     </div>
                   </div>
@@ -1291,7 +1240,7 @@ export function TaxReport() {
                       <span className="text-xl">📈</span>
                       <div>
                         <h4 className="font-semibold text-slate-900">Book Tax-Free Gains</h4>
-                        <p className="text-xs text-slate-500">These folios have unrealised LTCG within your remaining ₹1.25L exemption.</p>
+                        <p className="text-xs text-slate-500">These folios have unrealised LTCG within your remaining LTCG exemption.</p>
                       </div>
                     </div>
                     
@@ -1401,7 +1350,7 @@ export function TaxReport() {
                     >
                       <option value="">Choose a fund folio...</option>
                       {folios.filter(f => f.currentUnits > 0).map(f => (
-                        <option key={f.id} value={f.id}>{f.fundName} — {f.folioNumber}</option>
+                        <option key={f.id} value={f.id}>{(f as any).fundName} — {(f as any).folioNumber}</option>
                       ))}
                     </select>
                   </div>
