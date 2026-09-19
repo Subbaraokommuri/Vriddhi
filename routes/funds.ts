@@ -227,6 +227,17 @@ router.delete('/tags/themes/:id', (req, res) => {
   }
 });
 
+router.get('/tags/themes/:id/tags', (req, res) => {
+  try {
+    const { id } = req.params;
+    const rows = db.prepare('SELECT tag FROM theme_tags WHERE theme_id = ? ORDER BY tag ASC').all(id) as { tag: string }[];
+    res.json(rows.map(r => r.tag));
+  } catch (error) {
+    log('app', 'ERROR', 'TAGS', `Failed to get theme tags: ${String(error)}`);
+    res.status(500).json({ error: 'Failed to get theme tags' });
+  }
+});
+
 router.post('/tags/themes/:id/tags', (req, res) => {
   try {
     const { id } = req.params;
@@ -621,6 +632,17 @@ async function buildGroupedFunds(): Promise<any[]> {
     }
   }
 
+  // STEP 3b — Bulk-fetch all folio tags in one query:
+  const allTags = db.prepare(`
+    SELECT folio_id, tag FROM folio_tags ORDER BY folio_id
+  `).all() as { folio_id: string; tag: string }[];
+
+  const tagMap = new Map<string, string[]>();
+  for (const t of allTags) {
+    if (!tagMap.has(t.folio_id)) tagMap.set(t.folio_id, []);
+    tagMap.get(t.folio_id)!.push(t.tag);
+  }
+
   // STEP 4 — Build per-folio transaction cashflows (do NOT add terminal cashflows here):
   const folioCashflowsMap = new Map<string, Array<{ date: Date; amount: number }>>();
   for (const folio of folios) {
@@ -695,7 +717,7 @@ async function buildGroupedFunds(): Promise<any[]> {
       gainPercent,
       xirr: xirrValue,
       xirrWarning,
-      tags: [],
+      tags: tagMap.get(folio.folioId) ?? [],
       isActive
     };
   });
