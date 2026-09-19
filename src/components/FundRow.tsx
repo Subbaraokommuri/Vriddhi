@@ -55,7 +55,7 @@ export const FundRow: React.FC<FundRowProps> = ({
       isSubRow && "bg-slate-50/40 border-t border-slate-200/50",
       !folio.isActive && "opacity-50"
     )}>
-      <td className={cn("px-6 py-4", isSubRow && "pl-12")}>
+      <td className={cn("px-4 py-4 sticky left-0 z-10", isSubRow ? "pl-12 bg-slate-50" : "bg-white")}>
         <div className="flex flex-col gap-1">
           <p 
             className="font-semibold text-sm text-slate-800 truncate max-w-[280px]" 
@@ -82,7 +82,7 @@ export const FundRow: React.FC<FundRowProps> = ({
           />
         </div>
       </td>
-      <td className="px-6 py-4 text-right tabular-nums">
+      <td className="px-4 py-4 text-right tabular-nums">
         <div className="flex flex-col items-end">
           <span className={cn(
             "text-sm font-medium",
@@ -97,22 +97,22 @@ export const FundRow: React.FC<FundRowProps> = ({
           )}
         </div>
       </td>
-      <td className="px-6 py-4 text-right tabular-nums text-sm font-medium text-slate-600">
+      <td className="px-4 py-4 text-right tabular-nums text-sm font-medium text-slate-600">
         {folio.units.toFixed(3)}
       </td>
-      <td className="px-6 py-4 text-right tabular-nums text-sm font-medium text-slate-600">
+      <td className="px-4 py-4 text-right tabular-nums text-sm font-medium text-slate-600">
         {formatCurrency(folio.investedAmount)}
       </td>
-      <td className="px-6 py-4 text-right tabular-nums text-sm font-bold text-slate-800">
+      <td className="px-4 py-4 text-right tabular-nums text-sm font-bold text-slate-800">
         {formatCurrency(folio.currentValue)}
       </td>
-      <td className={cn("px-6 py-4 text-right tabular-nums text-sm font-bold", gainColor)}>
+      <td className={cn("px-4 py-4 text-right tabular-nums text-sm font-bold", gainColor)}>
         {formatCurrency(folio.gainAmount)}
       </td>
-      <td className={cn("px-6 py-4 text-right tabular-nums text-sm font-bold", gainColor)}>
+      <td className={cn("px-4 py-4 text-right tabular-nums text-sm font-bold", gainColor)}>
         {folio.gainPercent !== null ? formatPercent(folio.gainPercent / 100) : '—'}
       </td>
-      <td className={cn("px-6 py-4 text-right tabular-nums text-sm font-bold", xirrColor)}>
+      <td className={cn("px-4 py-4 text-right tabular-nums text-sm font-bold", xirrColor)}>
         <div className="flex items-center justify-end gap-1">
           {folio.xirr !== null ? formatPercent(folio.xirr) : '—'}
           {folio.xirrWarning && (
@@ -122,7 +122,7 @@ export const FundRow: React.FC<FundRowProps> = ({
       </td>
       {isBenchmarkActive && (
         <>
-          <td className="px-6 py-4 text-right tabular-nums text-sm font-bold">
+          <td className="px-4 py-4 text-right tabular-nums text-sm font-bold">
             {benchmarkLoading && !benchmarkResult ? (
               <span className="text-slate-400 animate-pulse">…</span>
             ) : benchmarkResult ? (
@@ -138,7 +138,7 @@ export const FundRow: React.FC<FundRowProps> = ({
               <span className="text-slate-400 font-normal">—</span>
             )}
           </td>
-          <td className={cn("px-6 py-4 text-right tabular-nums text-sm font-bold", alphaColor)}>
+          <td className={cn("px-4 py-4 text-right tabular-nums text-sm font-bold", alphaColor)}>
             {benchmarkLoading && !benchmarkResult ? (
               <span className="text-slate-400 animate-pulse">…</span>
             ) : benchmarkResult ? (

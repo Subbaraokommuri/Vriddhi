@@ -460,6 +460,18 @@ export async function getAdvanceTaxEstimate(
   return res.json();
 }
 
+export async function getGroupsXirr(
+  groups: { fundId: string; folioIds: string[] }[]
+): Promise<{ fundId: string; xirr: number | null; xirrWarning: boolean }[]> {
+  const res = await fetch('/api/funds/groups-xirr', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ groups })
+  });
+  const data = await handleResponse<{ groups: { fundId: string; xirr: number | null; xirrWarning: boolean }[] }>(res);
+  return data.groups;
+}
+
 export async function getOverallXirr(folioIds: string[]): Promise<OverallXirrResult> {
   const res = await fetch('/api/funds/overall-xirr', {
     method: 'POST',

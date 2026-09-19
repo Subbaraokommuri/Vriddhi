@@ -61,7 +61,7 @@ export const FundGroupRow: React.FC<FundGroupRowProps> = ({
         className="transition-colors border-b border-slate-200 bg-slate-50/70 font-medium cursor-pointer hover:bg-slate-100/80"
         onClick={onToggle}
       >
-        <td className="px-6 py-4">
+        <td className="px-4 py-4 sticky left-0 z-10 bg-slate-50">
           <div className="flex items-start gap-2">
             <button
               type="button"
@@ -80,34 +80,34 @@ export const FundGroupRow: React.FC<FundGroupRowProps> = ({
                   {group.simple_name || group.clean_name || group.fundName}
                 </span>
                 <span className="text-xs font-medium text-gray-400 shrink-0">
-                  (Folios: {group.folioCount})
+                  (Folios: {visibleFolios.length})
                 </span>
               </div>
             </div>
           </div>
         </td>
         <td className={cn(
-          "px-6 py-4 text-right tabular-nums text-sm font-medium",
+          "px-4 py-4 text-right tabular-nums text-sm font-medium",
           isNavStale(group.folios[0]?.navDate) ? "text-red-500" : "text-slate-600"
         )}>
           {group.folios[0]?.nav ? formatCurrency(group.folios[0].nav) : '—'}
         </td>
-        <td className="px-6 py-4 text-right tabular-nums text-sm font-medium text-slate-600">
+        <td className="px-4 py-4 text-right tabular-nums text-sm font-medium text-slate-600">
           {group.totalUnits.toFixed(2)}
         </td>
-        <td className="px-6 py-4 text-right tabular-nums text-sm font-medium text-slate-600">
+        <td className="px-4 py-4 text-right tabular-nums text-sm font-medium text-slate-600">
           {formatCurrency(group.totalInvested)}
         </td>
-        <td className="px-6 py-4 text-right tabular-nums text-sm font-bold text-slate-800">
+        <td className="px-4 py-4 text-right tabular-nums text-sm font-bold text-slate-800">
           {formatCurrency(group.totalCurrentValue)}
         </td>
-        <td className={cn("px-6 py-4 text-right tabular-nums text-sm font-bold", gainColor)}>
+        <td className={cn("px-4 py-4 text-right tabular-nums text-sm font-bold", gainColor)}>
           {formatCurrency(group.gainAmount)}
         </td>
-        <td className={cn("px-6 py-4 text-right tabular-nums text-sm font-bold", gainColor)}>
+        <td className={cn("px-4 py-4 text-right tabular-nums text-sm font-bold", gainColor)}>
           {formatPercent(group.gainPercent / 100)}
         </td>
-        <td className={cn("px-6 py-4 text-right tabular-nums text-sm font-bold", xirrColor)}>
+        <td className={cn("px-4 py-4 text-right tabular-nums text-sm font-bold", xirrColor)}>
           <div className="flex items-center justify-end gap-1">
             {group.groupXirr === null ? '--' : formatPercent(group.groupXirr)}
             {group.groupXirrWarning && (
@@ -117,7 +117,7 @@ export const FundGroupRow: React.FC<FundGroupRowProps> = ({
         </td>
         {isBenchmarkActive && (
           <>
-            <td className="px-6 py-4 text-right tabular-nums text-sm font-bold">
+            <td className="px-4 py-4 text-right tabular-nums text-sm font-bold">
               {benchmarkLoading && !benchmarkResult ? (
                 <span className="text-slate-400 animate-pulse">…</span>
               ) : benchmarkResult ? (
@@ -133,7 +133,7 @@ export const FundGroupRow: React.FC<FundGroupRowProps> = ({
                 <span className="text-slate-400 font-normal">—</span>
               )}
             </td>
-            <td className={cn("px-6 py-4 text-right tabular-nums text-sm font-bold", alphaColor)}>
+            <td className={cn("px-4 py-4 text-right tabular-nums text-sm font-bold", alphaColor)}>
               {benchmarkLoading && !benchmarkResult ? (
                 <span className="text-slate-400 animate-pulse">…</span>
               ) : benchmarkResult ? (

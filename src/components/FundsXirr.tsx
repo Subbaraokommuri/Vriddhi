@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { getFundsXirrGrouped, FolioXirrFilters, downloadFundsGroupedCsv, getFoliosBenchmarkXirr, getThemeTags, getOverallXirr, syncNavData } from '../lib/api';
+import { getFundsXirrGrouped, FolioXirrFilters, downloadFundsGroupedCsv, getFoliosBenchmarkXirr, getThemeTags, getOverallXirr, getGroupsXirr, syncNavData } from '../lib/api';
 import { FundGroupXirr, FolioXirr, FolioBenchmarkXirrResult, GroupBenchmarkXirrResult, OverallXirrResult, OverallBenchmarkXirrResult } from '../lib/types';
 import { FundsFilterBar } from './FundsFilterBar';
 import { FundGroupRow } from './FundGroupRow';
@@ -98,7 +98,7 @@ export function FundsXirr({ themes, onNavsUpdated, benchmarks }: FundsXirrProps)
   };
 
   const filteredGroups = useMemo(() => {
-    const result: Array<{ group: FundGroupXirr; visibleFolios: FolioXirr[] }> = [];
+    const result: Array<{ group: FundGroupXirr; visibleFolios: FolioXirr[]; isNarrowed: boolean }> = [];
 
     for (const group of groups) {
       // a. Start: let candidateFolios = [...group.folios]
@@ -177,7 +177,32 @@ export function FundsXirr({ themes, onNavsUpdated, benchmarks }: FundsXirrProps)
       }
 
       // f. If group passes all filters: push { group, visibleFolios: candidateFolios }
-      result.push({ group, visibleFolios: candidateFolios });
+      // When filters hide some of this fund's folios, show totals for the visible folios only.
+      // groupXirr can't be derived client-side — it is filled in from the groups-xirr endpoint.
+      const isNarrowed = candidateFolios.length !== group.folios.length;
+      if (!isNarrowed) {
+        result.push({ group, visibleFolios: candidateFolios, isNarrowed });
+        continue;
+      }
+      const totalUnits = candidateFolios.reduce((sum, f) => sum + (f.units || 0), 0);
+      const totalInvested = candidateFolios.reduce((sum, f) => sum + (f.investedAmount || 0), 0);
+      const totalCurrentValue = candidateFolios.reduce((sum, f) => sum + (f.currentValue || 0), 0);
+      const gainAmount = totalCurrentValue - totalInvested;
+      result.push({
+        group: {
+          ...group,
+          totalUnits,
+          totalInvested,
+          totalCurrentValue,
+          gainAmount,
+          gainPercent: totalInvested > 0 ? (gainAmount / totalInvested) * 100 : 0,
+          groupXirr: null,
+          groupXirrWarning: false,
+          folioCount: candidateFolios.length
+        },
+        visibleFolios: candidateFolios,
+        isNarrowed
+      });
     }
 
     return result;
@@ -259,8 +284,44 @@ export function FundsXirr({ themes, onNavsUpdated, benchmarks }: FundsXirrProps)
     }
   }, [filteredGroups]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // XIRR for funds whose folio set is narrowed by the current filters
+  const [narrowedGroupXirr, setNarrowedGroupXirr] = useState<Map<string, { xirr: number | null; xirrWarning: boolean }>>(new Map());
+  const [narrowedGroupXirrError, setNarrowedGroupXirrError] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    const narrowed = filteredGroups.filter(item => item.isNarrowed);
+    setNarrowedGroupXirr(new Map());
+    setNarrowedGroupXirrError(false);
+    if (narrowed.length === 0) return;
+
+    getGroupsXirr(narrowed.map(item => ({
+      fundId: item.group.fundId,
+      folioIds: item.visibleFolios.map(f => f.folioId)
+    })))
+      .then(results => {
+        if (active) setNarrowedGroupXirr(new Map(results.map(r => [r.fundId, r])));
+      })
+      .catch(() => {
+        if (active) setNarrowedGroupXirrError(true);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [filteredGroups]);
+
+  const displayGroups = useMemo(() => filteredGroups.map(item => {
+    if (!item.isNarrowed) return item;
+    const r = narrowedGroupXirr.get(item.group.fundId);
+    return {
+      ...item,
+      group: { ...item.group, groupXirr: r?.xirr ?? null, groupXirrWarning: r?.xirrWarning ?? false }
+    };
+  }), [filteredGroups, narrowedGroupXirr]);
+
   const sortedGroups = useMemo(() => {
-    const sorted = [...filteredGroups].sort((a, b) => {
+    const sorted = [...displayGroups].sort((a, b) => {
       let aVal: any;
       let bVal: any;
 
@@ -328,7 +389,7 @@ export function FundsXirr({ themes, onNavsUpdated, benchmarks }: FundsXirrProps)
       return 0;
     });
     return sorted;
-  }, [filteredGroups, sortCol, sortDir, groupBenchmarkXirrMap]);
+  }, [displayGroups, sortCol, sortDir, groupBenchmarkXirrMap]);
 
   const fundHouses = useMemo(() => 
     [...new Set(groups.map(g => g.fundHouse).filter(Boolean))].sort(), 
@@ -421,6 +482,12 @@ export function FundsXirr({ themes, onNavsUpdated, benchmarks }: FundsXirrProps)
           <span className="text-sm text-slate-400 font-normal">
             {filteredGroups.length} funds ({totalVisibleFolios} folios)
           </span>
+          {narrowedGroupXirrError && (
+            <span className="flex items-center gap-1.5 text-xs text-amber-600 font-medium">
+              <AlertCircle className="w-3.5 h-3.5" />
+              Couldn't recalculate XIRR for filtered funds
+            </span>
+          )}
           {benchmarkLoading && (
             <span className="flex items-center gap-1.5 text-xs text-slate-500 font-medium">
               <span className="w-3 h-3 border-2 border-[#01696f] border-t-transparent rounded-full animate-spin" />
@@ -558,11 +625,11 @@ export function FundsXirr({ themes, onNavsUpdated, benchmarks }: FundsXirrProps)
       )}
 
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
+        <div className="overflow-auto max-h-[calc(100vh-10rem)]">
           <table className="w-full text-left border-collapse">
             <thead className="bg-slate-50 border-b border-slate-200">
               <tr>
-                <HeaderCell label="FUND NAME & FOLIO" sortKey="fundName" currentSort={sortCol} dir={sortDir} onSort={handleSort} />
+                <HeaderCell label="FUND NAME & FOLIO" sortKey="fundName" currentSort={sortCol} dir={sortDir} onSort={handleSort} stickyLeft />
                 <HeaderCell label="NAV" sortKey="nav" currentSort={sortCol} dir={sortDir} onSort={handleSort} align="right" />
                 <HeaderCell label="UNITS" sortKey="units" currentSort={sortCol} dir={sortDir} onSort={handleSort} align="right" />
                 <HeaderCell label="INVESTED" sortKey="investedAmount" currentSort={sortCol} dir={sortDir} onSort={handleSort} align="right" />
@@ -609,29 +676,29 @@ export function FundsXirr({ themes, onNavsUpdated, benchmarks }: FundsXirrProps)
                     />
                   ))}
                   {/* Summary Footer Row */}
-                  <tr className="bg-slate-50 dark:bg-slate-800/50 border-t-2 border-slate-300 dark:border-slate-600 font-semibold text-slate-900 dark:text-slate-100">
-                    <td className="px-6 py-4 text-sm font-semibold">
+                  <tr className="bg-slate-50 dark:bg-slate-800/50 font-semibold text-slate-900 dark:text-slate-100">
+                    <td className="sticky left-0 bottom-0 z-30 bg-slate-50 shadow-[0_-2px_0_0_#cbd5e1] px-4 py-4 text-sm font-semibold">
                       Portfolio Total
                     </td>
-                    <td className="px-6 py-4 text-right text-sm text-slate-400 font-normal">
+                    <td className="sticky bottom-0 z-20 bg-slate-50 shadow-[0_-2px_0_0_#cbd5e1] px-4 py-4 text-right text-sm text-slate-400 font-normal">
                       —
                     </td>
-                    <td className="px-6 py-4 text-right text-sm text-slate-400 font-normal">
+                    <td className="sticky bottom-0 z-20 bg-slate-50 shadow-[0_-2px_0_0_#cbd5e1] px-4 py-4 text-right text-sm text-slate-400 font-normal">
                       —
                     </td>
-                    <td className="px-6 py-4 text-right tabular-nums text-sm font-semibold text-slate-600 dark:text-slate-300">
+                    <td className="sticky bottom-0 z-20 bg-slate-50 shadow-[0_-2px_0_0_#cbd5e1] px-4 py-4 text-right tabular-nums text-sm font-semibold text-slate-600 dark:text-slate-300">
                       {formatCurrency(totals.totalInvested)}
                     </td>
-                    <td className="px-6 py-4 text-right tabular-nums text-sm font-semibold text-slate-900 dark:text-slate-100">
+                    <td className="sticky bottom-0 z-20 bg-slate-50 shadow-[0_-2px_0_0_#cbd5e1] px-4 py-4 text-right tabular-nums text-sm font-semibold text-slate-900 dark:text-slate-100">
                       {formatCurrency(totals.totalCurrentValue)}
                     </td>
-                    <td className={cn("px-6 py-4 text-right tabular-nums text-sm font-bold", totals.totalGainAmount >= 0 ? "text-emerald-600" : "text-rose-600")}>
+                    <td className={cn("sticky bottom-0 z-20 bg-slate-50 shadow-[0_-2px_0_0_#cbd5e1] px-4 py-4 text-right tabular-nums text-sm font-bold", totals.totalGainAmount >= 0 ? "text-emerald-600" : "text-rose-600")}>
                       {formatCurrency(totals.totalGainAmount)}
                     </td>
-                    <td className={cn("px-6 py-4 text-right tabular-nums text-sm font-bold", totals.totalGainPercent !== null && totals.totalGainPercent >= 0 ? "text-emerald-600" : "text-rose-600")}>
+                    <td className={cn("sticky bottom-0 z-20 bg-slate-50 shadow-[0_-2px_0_0_#cbd5e1] px-4 py-4 text-right tabular-nums text-sm font-bold", totals.totalGainPercent !== null && totals.totalGainPercent >= 0 ? "text-emerald-600" : "text-rose-600")}>
                       {totals.totalGainPercent === null ? "—" : formatPercent(totals.totalGainPercent)}
                     </td>
-                    <td className={cn("px-6 py-4 text-right tabular-nums text-sm font-bold")}>
+                    <td className={cn("sticky bottom-0 z-20 bg-slate-50 shadow-[0_-2px_0_0_#cbd5e1] px-4 py-4 text-right tabular-nums text-sm font-bold")}>
                       {overallXirrLoading ? (
                         <span className="text-slate-400 animate-pulse">…</span>
                       ) : overallXirr && overallXirr.xirr !== null ? (
@@ -649,7 +716,7 @@ export function FundsXirr({ themes, onNavsUpdated, benchmarks }: FundsXirrProps)
                     </td>
                     {selectedBenchmarkSymbol && (
                       <>
-                        <td className="px-6 py-4 text-right tabular-nums text-sm font-semibold">
+                        <td className="sticky bottom-0 z-20 bg-slate-50 shadow-[0_-2px_0_0_#cbd5e1] px-4 py-4 text-right tabular-nums text-sm font-semibold">
                           {benchmarkLoading ? (
                             <span className="text-slate-400 animate-pulse">…</span>
                           ) : overallBenchmarkResult && overallBenchmarkResult.benchmarkXirr !== null ? (
@@ -665,7 +732,7 @@ export function FundsXirr({ themes, onNavsUpdated, benchmarks }: FundsXirrProps)
                             <span className="text-slate-400 font-normal">—</span>
                           )}
                         </td>
-                        <td className="px-6 py-4 text-right tabular-nums text-sm font-semibold">
+                        <td className="sticky bottom-0 z-20 bg-slate-50 shadow-[0_-2px_0_0_#cbd5e1] px-4 py-4 text-right tabular-nums text-sm font-semibold">
                           {benchmarkLoading ? (
                             <span className="text-slate-400 animate-pulse">…</span>
                           ) : overallBenchmarkResult && overallBenchmarkResult.alpha !== null ? (
@@ -704,14 +771,16 @@ interface HeaderCellProps {
   dir: 'asc' | 'desc';
   onSort: (key: SortKey) => void;
   align?: 'left' | 'right';
+  stickyLeft?: boolean;
 }
 
-function HeaderCell({ label, sortKey, currentSort, dir, onSort, align = 'left' }: HeaderCellProps) {
+function HeaderCell({ label, sortKey, currentSort, dir, onSort, align = 'left', stickyLeft = false }: HeaderCellProps) {
   const active = currentSort === sortKey;
   return (
     <th 
       className={cn(
-        "px-6 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-wider cursor-pointer hover:bg-slate-100/50 transition-colors",
+        "px-4 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-wider cursor-pointer bg-slate-50 hover:bg-slate-100 transition-colors sticky top-0",
+        stickyLeft ? "left-0 z-30" : "z-20",
         align === 'right' && "text-right"
       )}
       onClick={() => onSort(sortKey)}

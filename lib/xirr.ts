@@ -70,6 +70,34 @@ function finalize(value: number): XirrResult {
 }
 
 /**
+ * XIRR of a set of transaction cashflows plus one terminal (current value)
+ * cashflow dated today. Returns null when there are fewer than 2 cashflows,
+ * the span is under 30 days, or the solver fails. Pure function.
+ */
+export function calcXirrWithTerminal(
+  cashflows: { date: Date; amount: number }[],
+  terminalValue: number
+): { value: number | null; warning: boolean } {
+  const all = [...(cashflows ?? [])];
+  if (terminalValue > 0) all.push({ date: new Date(), amount: terminalValue });
+  if (all.length < 2) return { value: null, warning: false };
+
+  all.sort((a, b) => a.date.getTime() - b.date.getTime());
+  const spanDays = (all[all.length - 1].date.getTime() - all[0].date.getTime()) / (1000 * 60 * 60 * 24);
+  if (spanDays < 30) return { value: null, warning: false };
+
+  try {
+    const res = xirr(all);
+    if (res && typeof res.value === 'number' && isFinite(res.value)) {
+      return { value: res.value, warning: res.value > 1.0 || res.value < -0.5 };
+    }
+  } catch {
+    // solver failed to converge
+  }
+  return { value: null, warning: false };
+}
+
+/**
  * Calculates XIRR for a "mirror" portfolio using benchmark prices
  * Pure function: caller must provide benchmark data
  */

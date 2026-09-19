@@ -2,7 +2,7 @@ import express from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { db } from '../lib/db.ts';
 import { log } from '../lib/logger.ts';
-import { xirr, calcMirrorXirr } from '../lib/xirr.ts';
+import { xirr, calcMirrorXirr, calcXirrWithTerminal } from '../lib/xirr.ts';
 import { CONFIG } from '../lib/config.ts';
 
 const router = express.Router();
@@ -729,17 +729,32 @@ router.post('/folios-benchmark-xirr', async (req, res) => {
     }
 
     // STEP 4 — Fetch benchmark price history for benchmarkSymbol:
-    const dbBenchmarkPrices = db.prepare(`
-      SELECT price_date, value
-      FROM benchmark_history
-      WHERE index_name = ?
-      ORDER BY price_date ASC
-    `).all(benchmarkSymbol) as any[];
+    // Index benchmarks (nifty_tri) live in benchmark_history keyed by symbol; MF benchmarks
+    // (mf_nav) use the fund's NAV history in nav_history keyed by the benchmark's amfi_code.
+    const benchmarkMeta = db.prepare(
+      'SELECT benchmark_type, amfi_code FROM user_benchmarks WHERE symbol = ?'
+    ).get(benchmarkSymbol) as { benchmark_type: string; amfi_code: string | null } | undefined;
 
-    const benchmarkPrices = dbBenchmarkPrices.map(bp => ({
-      date: bp.price_date,
-      close: bp.value ?? 0
-    }));
+    let benchmarkPrices: { date: string; close: number }[];
+    if (benchmarkMeta?.benchmark_type === 'mf_nav') {
+      const rows = benchmarkMeta.amfi_code
+        ? db.prepare(`
+            SELECT nav_date AS price_date, nav AS value
+            FROM nav_history
+            WHERE isin = ?
+            ORDER BY nav_date ASC
+          `).all(benchmarkMeta.amfi_code) as any[]
+        : [];
+      benchmarkPrices = rows.map(bp => ({ date: bp.price_date, close: bp.value ?? 0 }));
+    } else {
+      const rows = db.prepare(`
+        SELECT price_date, value
+        FROM benchmark_history
+        WHERE index_name = ?
+        ORDER BY price_date ASC
+      `).all(benchmarkSymbol) as any[];
+      benchmarkPrices = rows.map(bp => ({ date: bp.price_date, close: bp.value ?? 0 }));
+    }
 
     if (benchmarkPrices.length === 0) {
       return res.status(404).json({
@@ -1083,6 +1098,65 @@ router.post('/folios-benchmark-xirr', async (req, res) => {
   } catch (err) {
     log('app', 'ERROR', 'BENCHMARK_XIRR', `Benchmark XIRR failed: ${err}`);
     res.status(500).json({ error: 'Benchmark XIRR calculation failed' });
+  }
+});
+
+router.post('/funds/groups-xirr', (req, res) => {
+  try {
+    const groups = req.body?.groups;
+    if (!Array.isArray(groups)) {
+      return res.status(400).json({ error: 'groups must be an array of { fundId, folioIds }' });
+    }
+
+    const allIds = [...new Set<string>(
+      groups.flatMap((g: any) => (Array.isArray(g?.folioIds) ? g.folioIds : []))
+    )];
+    if (allIds.length === 0) {
+      return res.json({ groups: [] });
+    }
+    const placeholders = allIds.map(() => '?').join(',');
+
+    const txns = db.prepare(`
+      SELECT folio_id, date, amount FROM transactions WHERE folio_id IN (${placeholders})
+    `).all(...allIds) as { folio_id: string; date: string; amount: number }[];
+    const txnMap = new Map<string, Array<{ date: Date; amount: number }>>();
+    for (const t of txns) {
+      if (!txnMap.has(t.folio_id)) txnMap.set(t.folio_id, []);
+      txnMap.get(t.folio_id)!.push({ date: new Date(t.date), amount: -(t.amount) });
+    }
+
+    // Current value per folio: stated_balance x latest NAV (same rule as buildGroupedFunds)
+    const valueRows = db.prepare(`
+      SELECT fo.id AS folioId, fo.stated_balance AS units, n.nav
+      FROM folios fo
+      JOIN funds fu ON fo.fund_id = fu.id
+      LEFT JOIN (
+        SELECT nh.isin, nh.nav FROM nav_history nh
+        INNER JOIN (SELECT isin, MAX(nav_date) AS max_date FROM nav_history GROUP BY isin) l
+          ON nh.isin = l.isin AND nh.nav_date = l.max_date
+      ) n ON fu.isin = n.isin
+      WHERE fo.id IN (${placeholders})
+    `).all(...allIds) as { folioId: string; units: number | null; nav: number | null }[];
+    const valueMap = new Map<string, number>();
+    for (const r of valueRows) valueMap.set(r.folioId, (r.units ?? 0) * (r.nav ?? 0));
+
+    const results = groups.map((g: any) => {
+      const ids: string[] = Array.isArray(g?.folioIds) ? g.folioIds : [];
+      let cashflows: Array<{ date: Date; amount: number }> = [];
+      let currentValue = 0;
+      for (const id of ids) {
+        cashflows = cashflows.concat(txnMap.get(id) ?? []);
+        currentValue += valueMap.get(id) ?? 0;
+      }
+      const r = calcXirrWithTerminal(cashflows, currentValue);
+      return { fundId: g?.fundId, xirr: r.value, xirrWarning: r.warning };
+    });
+
+    res.json({ groups: results });
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
+    log('app', 'ERROR', 'groups-xirr', `Failed to compute group XIRRs: ${msg}`);
+    res.status(500).json({ error: 'Failed to compute group XIRRs' });
   }
 });
 
