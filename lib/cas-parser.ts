@@ -2,6 +2,7 @@ import { execFileSync } from 'child_process';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import { sanitizeFolio } from './utils.ts';
 
 // ============================================================================
 // SECTION 1 — Types & interfaces
@@ -106,32 +107,14 @@ function toIso(s: string): string {
     Jan: '01', Feb: '02', Mar: '03', Apr: '04', May: '05', Jun: '06',
     Jul: '07', Aug: '08', Sep: '09', Oct: '10', Nov: '11', Dec: '12'
   };
-  const m = s.trim().match(/^(\d{2})-([A-Z][a-z]{2})-(\d{4})$/);
+  const m = s.trim().match(/^(\d{2})-([A-Za-z]{3})-(\d{4})$/);
   if (m) {
     const [, day, month, year] = m;
-    return `${year}-${months[month]}-${day}`;
+    // Case-insensitive month (e.g. "01-JAN-2024"); unknown month falls through to the raw string
+    const mm = months[month.charAt(0).toUpperCase() + month.slice(1).toLowerCase()];
+    if (mm) return `${year}-${mm}-${day}`;
   }
   return s.trim();
-}
-
-function fixFolio(raw: string): string {
-  raw = raw.replace(/\s+/g, "");
-  const parts = raw.split("/");
-  const fixed = parts.map(p => {
-    try {
-      if (p.toLowerCase().includes("e")) {
-        return Math.round(parseFloat(p)).toString();
-      }
-    } catch { }
-    return p;
-  });
-  let result = fixed.join("/");
-  // CAMS appends "/0" for folios with no sub-account; KFin omits it.
-  // This must be in fixFolio() so BOTH parsers produce the same folio key.
-  if (result.endsWith("/0")) {
-    result = result.slice(0, -2);
-  }
-  return result;
 }
 
 function detectPlan(name: string): "Direct" | "Regular" | "Unknown" {
@@ -351,7 +334,7 @@ function parseCamsText(lines: string[]): CasParseResult {
     const mf = line.match(RE_FOLIO);
     if (mf) {
       finishFolio();
-      const folioFull = fixFolio(mf[1]);
+      const folioFull = sanitizeFolio(mf[1]);
       const pan = mf[2];
       const kycM = line.match(RE_KYC);
       const kycOk = !!(kycM && kycM[1].toUpperCase() === "OK");
@@ -778,7 +761,7 @@ function parseKFinText(lines: string[]): CasParseResult {
     const mf = line.match(RE_FOLIO);
     if (mf) {
       finishFolio();
-      const folioFull = fixFolio(mf[1]);
+      const folioFull = sanitizeFolio(mf[1]);
       const pan = mf[2];
       const kycM = line.match(RE_KYC);
       const kycOk = !!(kycM && kycM[1].toUpperCase() === "OK");

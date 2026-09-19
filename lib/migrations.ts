@@ -174,8 +174,9 @@ export function runMigrations(db: Database.Database) {
           db.exec(`DROP TABLE ${tableName}_old`);
         })();
       }
-    } catch (e) {
-      // Skip errors if table doesn't exist or other issues
+    } catch (e: any) {
+      // Table may not exist yet on a fresh DB; log so a half-failed rebuild is not silent
+      log('app', 'WARN', 'DB', `Folio TEXT migration skipped for ${tableName}: ${e?.message ?? e}`);
     }
   }
 
@@ -204,14 +205,23 @@ export function runMigrations(db: Database.Database) {
       new_transactions     INTEGER DEFAULT 0,
       skipped_transactions INTEGER DEFAULT 0
     );
+  `);
 
-    DELETE FROM transactions
-    WHERE rowid NOT IN (
-      SELECT MIN(rowid)
-      FROM transactions
-      GROUP BY folio_id, date, transaction_type, units, nav, balance_units
-    );
-
+  // Dupes must be gone before the unique index — dedup runs once, not every boot
+  // (the unique index blocks new duplicates afterwards)
+  const txnDeduped = db.prepare("SELECT value FROM settings WHERE key = 'txn_dedup_done'").get();
+  if (!txnDeduped) {
+    db.exec(`
+      DELETE FROM transactions
+      WHERE rowid NOT IN (
+        SELECT MIN(rowid)
+        FROM transactions
+        GROUP BY folio_id, date, transaction_type, units, nav, balance_units
+      );
+    `);
+    db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('txn_dedup_done', '1')").run();
+  }
+  db.exec(`
     CREATE UNIQUE INDEX IF NOT EXISTS idx_txn_dedup
     ON transactions(folio_id, date, transaction_type, units, nav, balance_units);
   `);
