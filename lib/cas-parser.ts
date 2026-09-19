@@ -1110,9 +1110,14 @@ function tagMergerPairs(result: CasParseResult): void {
   }
 }
 
+export const NOT_A_CAS_MESSAGE = "This doesn't look like a CAMS or KFintech mutual fund CAS statement.";
+
 export function parseCasText(lines: string[]): CasParseResult {
   const source = detectSource(lines);
   const result = source === 'KFINTECH' ? parseKFinText(lines) : parseCamsText(lines);
+  if (!result.folios || result.folios.length === 0) {
+    throw new Error(NOT_A_CAS_MESSAGE);
+  }
   tagMergerPairs(result);
   return result;
 }

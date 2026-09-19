@@ -54,7 +54,7 @@ router.get('/folios', (req, res) => {
         folioXirr = xirr(cashflows).value;
       }
     } catch (e) {
-      console.warn(`XIRR calculation failed for folio ${folio.id}:`, e);
+      log('app', 'WARN', 'folios-xirr', `XIRR failed for folio ${folio.id}: ${e}`);
     }
 
     return {

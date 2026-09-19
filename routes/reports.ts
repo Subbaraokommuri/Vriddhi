@@ -55,7 +55,7 @@ router.get('/summary', (req, res) => {
       overallXirr = xirr(allCashflows).value;
     }
   } catch (e) {
-    console.warn('Overall XIRR calculation failed:', e);
+    log('app', 'WARN', 'summary', `Overall XIRR failed: ${e}`);
   }
 
   const now = new Date();

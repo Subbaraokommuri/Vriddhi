@@ -1,12 +1,7 @@
 import express from 'express';
 import { createServer as createViteServer } from 'vite';
 import path from 'path';
-import Database from 'better-sqlite3';
-import fs from 'fs';
-import { CONFIG } from './lib/config.ts';
-import { db, initDb } from './lib/db.ts';
-import { log } from './lib/logger.ts';
-import { xirr, calcMirrorXirr } from './lib/xirr.ts';
+import { initDb } from './lib/db.ts';
 import fundsRouter from './routes/funds.ts';
 import transactionsRouter from './routes/transactions.ts';
 import navRouter from './routes/nav.ts';

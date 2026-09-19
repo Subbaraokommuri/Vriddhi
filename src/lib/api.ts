@@ -219,6 +219,35 @@ export async function getBenchmarkDataSummary(id: string): Promise<{ oldest: str
   return handleResponse<{ oldest: string; latest: string; count: number } | null>(res);
 }
 
+export async function previewCas(
+  file: File,
+  password: string
+): Promise<{ html: string; stats: any; ok: boolean; warningCount: number }> {
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('password', password);
+  const res = await fetch('/api/cas/preview', { method: 'POST', body: formData });
+  return handleResponse(res);
+}
+
+export async function confirmCas(
+  file: File,
+  password: string
+): Promise<{
+  message: string;
+  new_transactions: number;
+  skipped_transactions: number;
+  zero_unit_transactions: number;
+  schemes_updated: number;
+  import_id: string;
+}> {
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('password', password);
+  const res = await fetch('/api/cas/confirm', { method: 'POST', body: formData });
+  return handleResponse(res);
+}
+
 export async function syncNavData(): Promise<{
   amfi: { updated: number; notFound: number; failed: any[] };
   backfill: { full_backfill: number; incremental: number; up_to_date: number; failed: any[] };

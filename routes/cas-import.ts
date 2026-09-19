@@ -5,7 +5,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import { db } from '../lib/db.ts';
-import { parseCasPdf } from '../lib/cas-parser.ts';
+import { parseCasPdf, NOT_A_CAS_MESSAGE } from '../lib/cas-parser.ts';
 import { generateHtml } from '../lib/cas-reconcile-html.ts';
 import { runChecks } from '../lib/cas-reconcile.ts';
 import { log } from '../lib/logger.ts';
@@ -75,6 +75,9 @@ router.post('/preview', upload.single('file'), async (req, res) => {
     if (msg.toLowerCase().includes("incorrect password")) {
       return res.status(401).json({ error: "Wrong password. Please try again." });
     }
+    if (msg === NOT_A_CAS_MESSAGE) {
+      return res.status(400).json({ error: msg });
+    }
     
     if (msg.toLowerCase().includes("pdftotext not found") || msg.toLowerCase().includes("pdftotext: not found")) {
       return res.status(500).json({ error: "pdftotext not found. Run: brew install poppler" });
@@ -87,7 +90,7 @@ router.post('/preview', upload.single('file'), async (req, res) => {
       try {
         fs.unlinkSync(tempPath);
       } catch (e) {
-        console.error("Failed to delete temp file:", tempPath, e);
+        log('import', 'WARN', 'CAS-PREVIEW', `Temp file cleanup failed: ${tempPath}: ${e}`);
       }
     }
   }
@@ -198,7 +201,11 @@ router.post('/confirm', upload.single('file'), async (req, res) => {
           schemes_updated++;
 
           // STEP A — Upsert fund
-          let fund = db.prepare("SELECT id FROM funds WHERE isin = ?").get(scheme.isin) as any;
+          // Blank ISIN (e.g. wound-up funds): match on raw CAS name among blank-ISIN rows,
+          // otherwise `isin = ''` would conflate different funds (VB-22).
+          let fund = (scheme.isin
+            ? db.prepare("SELECT id FROM funds WHERE isin = ?").get(scheme.isin)
+            : db.prepare("SELECT id FROM funds WHERE (isin IS NULL OR isin = '') AND name = ?").get(scheme.fund_name)) as any;
           let fund_id: string;
 
           if (!fund) {
@@ -434,6 +441,9 @@ router.post('/confirm', upload.single('file'), async (req, res) => {
     log('import', 'ERROR', 'CAS-IMPORT', `Import failed: ${msg}`);
     if (msg.toLowerCase().includes("incorrect password")) {
       return res.status(401).json({ error: "Wrong password. Please try again." });
+    }
+    if (msg === NOT_A_CAS_MESSAGE) {
+      return res.status(400).json({ error: msg });
     }
     if (msg.toLowerCase().includes("pdftotext not found") || msg.toLowerCase().includes("pdftotext: not found")) {
       return res.status(500).json({ error: "pdftotext not found. Run: brew install poppler" });

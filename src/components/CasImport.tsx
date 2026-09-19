@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
-import { syncNavData, downloadImportLog } from '../lib/api';
+import { syncNavData, downloadImportLog, previewCas, confirmCas } from '../lib/api';
 
 declare global {
   interface ImportMeta {
@@ -103,22 +103,8 @@ export function CasImport({ onImportSuccess }: CasImportProps) {
     setState('LOADING');
     setError(null);
 
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('password', password);
-
     try {
-      const response = await fetch('/api/cas/preview', {
-        method: 'POST',
-        body: formData,
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to parse CAS PDF');
-      }
-
+      const data = await previewCas(file, password);
       setPreviewData(data);
       setState('PREVIEW');
     } catch (err: any) {
@@ -140,22 +126,8 @@ export function CasImport({ onImportSuccess }: CasImportProps) {
     setState('LOADING');
     setError(null);
 
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('password', password);
-
     try {
-      const response = await fetch('/api/cas/confirm', {
-        method: 'POST',
-        body: formData,
-      });
-
-      const result = await response.json();
-
-      if (!response.ok) {
-        throw new Error(result.error || 'Import failed');
-      }
-
+      const result = await confirmCas(file, password);
       setImportResult(result);
       setState('SUCCESS');
       if (onImportSuccess) onImportSuccess();
