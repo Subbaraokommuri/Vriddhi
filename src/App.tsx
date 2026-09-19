@@ -157,7 +157,6 @@ export default function App() {
       <main className="flex-1 overflow-y-auto">
         <Header 
           activeTab={activeTab} 
-          folios={folios}
         />
 
         <div className={`p-8 mx-auto ${activeTab === 'fundsxirr' ? 'max-w-screen-2xl' : 'max-w-7xl'}`}>

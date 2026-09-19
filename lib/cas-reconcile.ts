@@ -1,4 +1,3 @@
-import * as fs from 'fs';
 import { CasParseResult, CasFolio, CasScheme } from './cas-parser';
 import { CONFIG } from './config.ts';
 
@@ -329,12 +328,4 @@ export function summarise(data: CasParseResult): PortfolioSummary {
     actCost: parseFloat(actCost.toFixed(2)),
     actMval: parseFloat(actMval.toFixed(2))
   };
-}
-
-import { generateHtml } from './cas-reconcile-html';
-export { generateHtml };
-
-export function reconcileCas(data: CasParseResult, outPath: string): void {
-  const html = generateHtml(data);
-  fs.writeFileSync(outPath, html, 'utf-8');
 }

@@ -1,14 +1,11 @@
 import React from 'react';
-import { Folio } from '../lib/types';
 
 interface HeaderProps {
   activeTab: string;
-  folios: Folio[];
 }
 
 export function Header({ 
-  activeTab, 
-  folios
+  activeTab
 }: HeaderProps) {
   const displayTabName =
     activeTab === 'fundsxirr' ? 'Funds & Folios' :

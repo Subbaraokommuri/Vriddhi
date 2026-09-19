@@ -1,6 +1,6 @@
 import express from 'express';
 import { db } from '../lib/db.ts';
-import { appendLog, log } from '../lib/logger.ts';
+import { log } from '../lib/logger.ts';
 
 const router = express.Router();
 
@@ -202,7 +202,7 @@ router.get('/transactions', (req, res) => {
     const txns = db.prepare(query).all(...params);
     res.json(txns);
   } catch (err: any) {
-    appendLog('app.log', 'ERROR', `transactions: ${err.message}`);
+    log('app', 'ERROR', 'TRANSACTIONS', err.message);
     res.status(500).json({ error: 'Failed to load transactions' });
   }
 });
@@ -218,7 +218,7 @@ router.get('/transactions/funds-list', (req, res) => {
     `).all();
     res.json({ funds: fundsList });
   } catch (err: any) {
-    appendLog('app.log', 'ERROR', `transactions-funds-list: ${err.message}`);
+    log('app', 'ERROR', 'TRANSACTIONS', `funds-list: ${err.message}`);
     res.status(500).json({ error: 'Failed to load funds list' });
   }
 });

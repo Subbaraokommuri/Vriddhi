@@ -8,5 +8,5 @@ export function initDb() {
   runMigrations(db);
 }
 
-export { log, appendLog } from './logger.ts';
+export { log } from './logger.ts';
 export { sanitizeFolio } from './utils.ts';

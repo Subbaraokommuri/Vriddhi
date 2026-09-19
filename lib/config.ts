@@ -70,16 +70,6 @@ export const CONFIG = {
     STAMP_DUTY_RATE:        0.00005,       // 0.005% deducted before unit allotment
   },
   
-  // ETF proxies track TRI (dividends reinvested in NAV). Marginal ~0.1% expense ratio drag is acceptable.
-  // PRI indices (^NSEI, ^BSESN) do not include dividends — use ETF proxies for fund comparison.
-  DEFAULT_BENCHMARKS: [
-    { symbol: '^NSEI',         name: 'Nifty 50 (PRI)',                  source: 'manual', category: 'broad_market', color: '#01696f' },
-    { symbol: '^BSESN',        name: 'Sensex (PRI)',                     source: 'manual', category: 'broad_market', color: '#01696f' },
-    { symbol: 'NIFTYBEES.NS',  name: 'Nifty 50 TRI (ETF proxy)',        source: 'manual', category: 'broad_market', color: '#4f98a3' },
-    { symbol: 'JUNIORBEES.NS', name: 'Nifty Next 50 TRI (ETF proxy)',   source: 'manual', category: 'mid_cap',      color: '#da7101' },
-    { symbol: 'MAFANG.NS',     name: 'Nifty Midcap 150 (ETF proxy)',    source: 'manual', category: 'mid_cap',      color: '#d19900' },
-  ],
-
   NIFTY_TRI_CATALOGUE: [
     // Broad Based
     { symbol: 'Nifty 50', name: 'Nifty 50 TRI', category: 'Broad Based', description: 'Tracks the performance of the 50 largest and most liquid Indian companies.' },

@@ -8,7 +8,6 @@ import {
   InvestmentTrendPoint,
   DashboardStats,
   TransactionFilters,
-  FolioXirr,
   FundGroupXirr,
   PanCapitalGainsSummary,
   UnrealizedGainsSummary,
@@ -377,22 +376,6 @@ export interface FolioXirrFilters {
   search?: string;
   pan?: string;
   investorName?: string;
-}
-
-export async function getFoliosXirr(filters?: FolioXirrFilters): Promise<FolioXirr[]> {
-  const params = new URLSearchParams();
-  if (filters?.activeOnly) params.set('activeOnly', '1');
-  if (filters?.fundHouse) params.set('fundHouse', filters.fundHouse);
-  if (filters?.category) params.set('category', filters.category);
-  if (filters?.plan) params.set('plan', filters.plan);
-  if (filters?.fundOption) params.set('fundOption', filters.fundOption);
-  if (filters?.tag) params.set('tag', filters.tag);
-  if (filters?.search) params.set('search', filters.search);
-  const query = params.toString();
-  const res = await fetch(`/api/folios-xirr${query ? '?' + query : ''}`);
-  if (!res.ok) throw new Error('Failed to fetch folios XIRR data');
-  const data = await res.json();
-  return data.folios;
 }
 
 export async function getFundsXirrGrouped(): Promise<FundGroupXirr[]> {

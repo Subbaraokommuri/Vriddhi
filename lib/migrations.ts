@@ -1,5 +1,4 @@
 import Database from 'better-sqlite3';
-import { v4 as uuidv4 } from 'uuid';
 import path from 'path';
 import fs from 'fs';
 import { CONFIG } from './config.ts';
@@ -54,13 +53,6 @@ export function runMigrations(db: Database.Database) {
       value TEXT
     );
   `);
-
-  // Pre-populate user_benchmarks
-  const count = db.prepare('SELECT COUNT(*) as count FROM user_benchmarks').get() as any;
-  if (count.count === 0) {
-    const insert = db.prepare('INSERT INTO user_benchmarks (id, symbol, name, source, category, color) VALUES (?, ?, ?, ?, ?, ?)');
-    CONFIG.DEFAULT_BENCHMARKS.forEach(d => insert.run(uuidv4(), d.symbol, d.name, d.source, d.category, d.color));
-  }
 
   // NEW MIGRATIONS
   db.exec(`
@@ -370,25 +362,6 @@ export function runMigrations(db: Database.Database) {
     db.exec("ALTER TABLE user_benchmarks ADD COLUMN amfi_code TEXT");
   }
 
-  // One-time fix: replace broken Yahoo symbols with verified ones
-  const symbolFixes: [string, string][] = [
-    ['NIFTYTR1.NS',       'NIFTYBEES.NS'],
-    ['NIFTYNXT50.NS',     'JUNIORBEES.NS'],
-    ['NIFTYMIDCAP150.NS', 'MAFANG.NS'],
-    ['NIFTYSMLCAP250.NS', 'NIFTYBEES.NS'],   // no proxy — map to Nifty 50 TRI
-    ['NIFTY_LOW_VOL30.NS','NIFTYBEES.NS'],   // no proxy — map to Nifty 50 TRI
-    ['NIFTYALPHA50.NS',   'NIFTYBEES.NS'],   // no proxy — map to Nifty 50 TRI
-  ];
-  const updateSym = db.prepare('UPDATE user_benchmarks SET symbol = ? WHERE symbol = ?');
-  for (const [oldSym, newSym] of symbolFixes) {
-    updateSym.run(newSym, oldSym);
-  }
-  // Also update names for the ones being remapped
-  db.prepare("UPDATE user_benchmarks SET name = 'Nifty 50 TRI (ETF proxy)'        WHERE symbol = 'NIFTYBEES.NS'  AND name NOT LIKE '%(ETF proxy)%'").run();
-  db.prepare("UPDATE user_benchmarks SET name = 'Nifty Next 50 TRI (ETF proxy)'   WHERE symbol = 'JUNIORBEES.NS' AND name NOT LIKE '%(ETF proxy)%'").run();
-  db.prepare("UPDATE user_benchmarks SET name = 'Nifty Midcap 150 (ETF proxy)'    WHERE symbol = 'MAFANG.NS'     AND name NOT LIKE '%(ETF proxy)%'").run();
-  log('app', 'INFO', 'DB', 'Benchmark symbol migration complete');
-
   // Seed: Portfolio theme + All MF tag
   db.prepare(`
     INSERT OR IGNORE INTO tag_themes (id, name, sort_order)
@@ -399,8 +372,13 @@ export function runMigrations(db: Database.Database) {
     VALUES ('seed-portfolio-theme', 'All MF')
   `).run();
 
-  db.prepare("DELETE FROM user_benchmarks WHERE benchmark_type = 'yahoo'").run();
-  log('app', 'INFO', 'DB', 'Removed legacy yahoo benchmark rows');
+  // One-time purge of retired Yahoo Finance benchmark rows
+  const yahooPurged = db.prepare("SELECT value FROM settings WHERE key = 'yahoo_benchmarks_purged'").get();
+  if (!yahooPurged) {
+    db.prepare("DELETE FROM user_benchmarks WHERE benchmark_type = 'yahoo'").run();
+    db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('yahoo_benchmarks_purged', '1')").run();
+    log('app', 'INFO', 'DB', 'Removed legacy yahoo benchmark rows');
+  }
 
   db.prepare(`
     INSERT OR IGNORE INTO user_benchmarks
