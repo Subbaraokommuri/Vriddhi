@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { getFundsXirrGrouped, FolioXirrFilters, downloadFundsGroupedCsv, getFoliosBenchmarkXirr, getThemeTags, getOverallXirr, refreshNavAndBenchmarks } from '../lib/api';
+import { getFundsXirrGrouped, FolioXirrFilters, downloadFundsGroupedCsv, getFoliosBenchmarkXirr, getThemeTags, getOverallXirr, syncNavData } from '../lib/api';
 import { FundGroupXirr, FolioXirr, FolioBenchmarkXirrResult, GroupBenchmarkXirrResult, OverallXirrResult, OverallBenchmarkXirrResult } from '../lib/types';
 import { FundsFilterBar } from './FundsFilterBar';
 import { FundGroupRow } from './FundGroupRow';
@@ -71,26 +71,15 @@ export function FundsXirr({ themes, onNavsUpdated, benchmarks }: FundsXirrProps)
   }, []);
 
   const handleRefreshData = async () => {
-    const activeBenchmarkIds = (benchmarks || [])
-      .filter((b: any) => b.is_active)
-      .map((b: any) => b.id);
     setRefreshing(true);
     setRefreshMessage(null);
     try {
-      const result = await refreshNavAndBenchmarks(activeBenchmarkIds);
-      const benchOk = result.benchmarkResults.length;
-      const benchFail = result.benchmarkErrors.length;
-      const total = benchOk + benchFail;
-      let msg = result.navError ? `NAV update failed. ${result.navError}` : 'NAVs updated.';
-      if (total > 0) {
-        msg += ` ${benchOk}/${total} benchmark${total !== 1 ? 's' : ''} refreshed.`;
-        if (benchFail > 0) msg += ` (${benchFail} failed)`;
-      }
-      setRefreshMessage(msg);
+      await syncNavData();
+      setRefreshMessage('NAVs updated.');
       setTimeout(() => setRefreshMessage(null), 5000);
       if (onNavsUpdated) onNavsUpdated();
     } catch (err: any) {
-      setRefreshMessage('Refresh failed: ' + (err.message || String(err)));
+      setRefreshMessage('NAV update failed. ' + (err.message || String(err)));
     } finally {
       setRefreshing(false);
     }

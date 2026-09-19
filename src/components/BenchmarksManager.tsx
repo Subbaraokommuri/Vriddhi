@@ -8,7 +8,6 @@ import {
   importBenchmarkCsv, 
   importBenchmarkCsvBatch,
   getBenchmarkDataSummary, 
-  fetchBenchmarkData,
   searchAmfiMetadata,
   refreshAmfiMetadata,
   getAmfiMetadataStatus,
@@ -51,13 +50,12 @@ export function BenchmarksManager({
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [summaries, setSummaries] = useState<Record<string, BenchmarkSummary | null>>({});
   const [uploadingId, setUploadingId] = useState<string | null>(null);
-  const [fetchingId, setFetchingId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [selectedBenchmarkForUpload, setSelectedBenchmarkForUpload] = useState<string | null>(null);
 
   // Add Panel State
   const [showAddForm, setShowAddForm] = useState(false);
-  const [activeTab, setActiveTab] = useState<'nifty_tri' | 'mf_nav' | 'manual'>('nifty_tri');
+  const [activeTab, setActiveTab] = useState<'nifty_tri' | 'mf_nav'>('nifty_tri');
   const [activeNiftySubTab, setActiveNiftySubTab] = useState<string>('Broad Based');
   const [mfSearchQuery, setMfSearchQuery] = useState('');
   const [mfSearchResults, setMfSearchResults] = useState<{ amfi_code: string; name: string; fundHouse: string }[]>([]);
@@ -73,11 +71,6 @@ export function BenchmarksManager({
   const [optionFilter, setOptionFilter] = useState<'all' | 'growth' | 'idcw'>('all');
   const [fundHouseFilter, setFundHouseFilter] = useState<string>('all');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
-
-  // Manual Form State
-  const [newSymbol, setNewSymbol] = useState('');
-  const [newName, setNewName] = useState('');
-  const [addLoading, setAddLoading] = useState(false);
 
   // Sync prop benchmarks to local state
   useEffect(() => {
@@ -158,36 +151,6 @@ export function BenchmarksManager({
       setSummaries(prev => ({ ...prev, [id]: summary }));
     } catch (err) {
       console.error('Failed to refresh summary:', err);
-    }
-  };
-
-  const handleManualAdd = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newSymbol || !newName) return;
-    
-    setAddLoading(true);
-    setError(null);
-    setSuccessMessage(null);
-    try {
-      await addUserBenchmark({
-        symbol: newSymbol.toUpperCase().trim(),
-        name: newName,
-        source: 'manual',
-        category: 'custom',
-        color: '#01696f',
-        benchmark_type: 'yahoo'
-      });
-      setNewSymbol('');
-      setNewName('');
-      setShowAddForm(false);
-      setSuccessMessage(`Successfully added ${newName}`);
-      setTimeout(() => setSuccessMessage(null), 3000);
-      await loadData();
-      onBenchmarkAdded?.();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to add benchmark');
-    } finally {
-      setAddLoading(false);
     }
   };
 
@@ -296,23 +259,6 @@ export function BenchmarksManager({
       setUploadingId(null);
       setSelectedBenchmarkForUpload(null);
       if (e.target) e.target.value = '';
-    }
-  };
-
-  const handleAutoFetch = async (benchmarkId: string) => {
-    setFetchingId(benchmarkId);
-    setError(null);
-    setSuccessMessage(null);
-    try {
-      const result = await fetchBenchmarkData(benchmarkId);
-      setSuccessMessage(`Fetched ${result.inserted} new rows`);
-      setTimeout(() => setSuccessMessage(null), 4000);
-      await handleRefreshSummary(benchmarkId);
-      if (onRefresh) onRefresh();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to fetch benchmark data');
-    } finally {
-      setFetchingId(null);
     }
   };
 
@@ -706,49 +652,6 @@ export function BenchmarksManager({
                 </div>
               </div>
             )}
-
-            {false && activeTab === 'manual' && (
-              <form onSubmit={handleManualAdd} className="max-w-xl mx-auto space-y-6 py-4">
-                <div className="space-y-4">
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold uppercase text-gray-500">Display Name</label>
-                    <input
-                      type="text"
-                      placeholder="e.g. My Custom Benchmark"
-                      value={newName}
-                      onChange={(e) => setNewName(e.target.value)}
-                      className="w-full px-4 py-3 text-sm border rounded-xl bg-white focus:outline-none focus:ring-2"
-                      style={{ borderColor: 'var(--color-border)', focusRingColor: 'var(--color-primary)' }}
-                      required
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold uppercase text-gray-500">Index Symbol</label>
-                    <input
-                      type="text"
-                      placeholder="e.g. NIFTY 50"
-                      value={newSymbol}
-                      onChange={(e) => setNewSymbol(e.target.value)}
-                      className="w-full px-4 py-3 text-sm font-mono border rounded-xl bg-white focus:outline-none focus:ring-2"
-                      style={{ borderColor: 'var(--color-border)', focusRingColor: 'var(--color-primary)' }}
-                      required
-                    />
-                    <p className="text-[10px] text-gray-400">
-                      Exact name from source — e.g. ^NSEI for Yahoo Finance or NIFTY 50 for Nifty Indices.
-                    </p>
-                  </div>
-                </div>
-                <button
-                  type="submit"
-                  disabled={addLoading || !newSymbol || !newName}
-                  className="w-full py-4 rounded-xl text-white font-bold transition-all hover:brightness-110 active:brightness-90 disabled:opacity-50 flex items-center justify-center gap-2"
-                  style={{ backgroundColor: 'var(--color-primary)' }}
-                >
-                  {addLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Plus className="w-5 h-5" />}
-                  Add Custom Benchmark
-                </button>
-              </form>
-            )}
           </div>
         </div>
       )}
@@ -827,18 +730,8 @@ export function BenchmarksManager({
                   <td className="px-6 py-4 text-right">
                     <div className="flex items-center justify-end gap-2">
                       <button
-                        onClick={() => handleAutoFetch(b.id)}
-                        disabled={fetchingId === b.id || uploadingId === b.id}
-                        className="p-1 px-2 rounded-lg hover:bg-slate-100 transition-colors disabled:opacity-50"
-                        style={{ color: 'var(--color-primary)' }}
-                        title="Auto-Fetch from Source"
-                      >
-                        {fetchingId === b.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-                      </button>
-                      {/* Hidden CSV Import button per specifications */}
-                      <button
                         onClick={() => handleImportClick(b.id)}
-                        disabled={uploadingId === b.id || fetchingId === b.id}
+                        disabled={uploadingId === b.id}
                         className="p-1 px-2 rounded-lg hover:bg-slate-100 transition-colors disabled:opacity-50"
                         style={{ color: 'var(--color-primary)' }}
                         title="Import CSV"

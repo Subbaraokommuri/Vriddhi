@@ -201,11 +201,6 @@ export async function getBenchmarkDataSummary(id: string): Promise<{ oldest: str
   return handleResponse<{ oldest: string; latest: string; count: number } | null>(res);
 }
 
-export async function fetchBenchmarkData(id: string): Promise<{ inserted: number; total: number }> {
-  const res = await fetch(`/api/benchmarks/${id}/fetch`, { method: 'POST' });
-  return handleResponse<{ inserted: number; total: number }>(res);
-}
-
 export async function syncNavData(): Promise<{
   amfi: { updated: number; notFound: number; failed: any[] };
   backfill: { full_backfill: number; incremental: number; up_to_date: number; failed: any[] };
@@ -215,38 +210,6 @@ export async function syncNavData(): Promise<{
     amfi: { updated: number; notFound: number; failed: any[] };
     backfill: { full_backfill: number; incremental: number; up_to_date: number; failed: any[] };
   }>(res);
-}
-
-export async function refreshNavAndBenchmarks(
-  activeBenchmarkIds: string[]
-): Promise<{
-  navResult: any;
-  navError: string | null;
-  benchmarkResults: { id: string; inserted: number }[];
-  benchmarkErrors: { id: string; error: string }[];
-}> {
-  let navResult: any = null;
-  let navError: string | null = null;
-
-  try {
-    navResult = await syncNavData();
-  } catch (err: any) {
-    navError = err.message || 'NAV update failed';
-  }
-
-  const benchmarkResults: { id: string; inserted: number }[] = [];
-  const benchmarkErrors: { id: string; error: string }[] = [];
-
-  for (const id of activeBenchmarkIds) {
-    try {
-      const result = await fetchBenchmarkData(id);
-      benchmarkResults.push({ id, inserted: result.inserted ?? 0 });
-    } catch (err: any) {
-      benchmarkErrors.push({ id, error: err.message || 'Fetch failed' });
-    }
-  }
-
-  return { navResult, navError, benchmarkResults, benchmarkErrors };
 }
 
 export async function fetchLogs(type: string, date: string): Promise<string> {

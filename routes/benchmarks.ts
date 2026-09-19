@@ -4,7 +4,6 @@ import fs from 'fs';
 import path from 'path';
 import { db } from '../lib/db.ts';
 import { log } from '../lib/logger.ts';
-import { fetchFullNiftyTRIHistory } from '../lib/benchmarks.ts';
 import { ACTIVE_AMC_LIST } from '../lib/config.ts';
 
 const router = express.Router();
@@ -206,47 +205,6 @@ router.get('/benchmarks/:id/data-summary', (req, res) => {
   }
 
   res.json(summary.count > 0 ? summary : null);
-});
-
-router.post('/benchmarks/:id/fetch', async (req, res) => {
-  const { id } = req.params;
-  try {
-    const benchmark = db.prepare('SELECT symbol, name, benchmark_type FROM user_benchmarks WHERE id = ?').get(id) as { symbol: string; name: string; benchmark_type: string } | undefined;
-    
-    if (!benchmark) {
-      return res.status(404).json({ error: 'Benchmark not found' });
-    }
-
-    if (benchmark.benchmark_type !== 'nifty_tri') {
-      return res.status(400).json({
-        error: `Fetch not supported for benchmark_type '${benchmark.benchmark_type}'`
-      });
-    }
-
-    log('benchmark', 'INFO', 'FETCH', `Starting automatic fetch for ${benchmark.name} (${benchmark.symbol})`);
-
-    const data = await fetchFullNiftyTRIHistory(benchmark.symbol);
-    
-    const insert = db.prepare('INSERT OR IGNORE INTO benchmark_history (index_name, price_date, value) VALUES (?, ?, ?)');
-    let inserted = 0;
-
-    const transaction = db.transaction((rows: Array<{date: string, value: number}>) => {
-      for (const row of rows) {
-        const result = insert.run(benchmark.symbol, row.date, row.value);
-        if (result.changes > 0) {
-          inserted++;
-        }
-      }
-    });
-
-    transaction(data);
-
-    log('benchmark', 'INFO', 'FETCH', `Fetched ${data.length} rows for ${benchmark.symbol}, inserted ${inserted} new records`);
-    res.json({ inserted, total: data.length });
-  } catch (err) {
-    log('benchmark', 'ERROR', 'FETCH', `Failed to fetch benchmark data: ${String(err)}`);
-    res.status(500).json({ error: err instanceof Error ? err.message : 'Internal server error' });
-  }
 });
 
 export default router;
