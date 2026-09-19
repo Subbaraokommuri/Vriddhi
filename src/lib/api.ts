@@ -234,15 +234,6 @@ export async function fetchPortfolioGrowth(benchmarkSymbol: string): Promise<any
   return handleResponse<any[]>(res);
 }
 
-export async function importCas(csvData: string): Promise<{ added: number; skipped: number; errors: number }> {
-  const res = await fetch('/api/import-cas', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ csvData }),
-  });
-  return handleResponse<{ added: number; skipped: number; errors: number }>(res);
-}
-
 /** @deprecated superseded by syncNavData() — kept working, frozen, do not modify */
 export async function updateNavs(): Promise<{ updated: number; errors?: { fundId: string; name: string; error: string }[] }> {
   const res = await fetch('/api/fetch-nav', { method: 'POST' });

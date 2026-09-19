@@ -1,4 +1,4 @@
-import { execSync } from 'child_process';
+import { execFileSync } from 'child_process';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -1119,9 +1119,10 @@ export function parseCasText(lines: string[]): CasParseResult {
 
 export function parseCasPdf(pdfPath: string, password?: string): CasParseResult {
   const tmp = path.join(os.tmpdir(), `cas-${Date.now()}.txt`);
-  const pwArgs = password ? `-upw "${password}" -opw "${password}"` : '';
+  const pwArgs = password ? ['-upw', password, '-opw', password] : [];
   try {
-    execSync(`pdftotext -layout ${pwArgs} "${pdfPath}" "${tmp}"`);
+    // execFileSync: no shell, so password/path can't be interpreted as commands
+    execFileSync('pdftotext', ['-layout', ...pwArgs, pdfPath, tmp]);
     const text = fs.readFileSync(tmp, 'utf-8');
     const lines = text.split('\n');
     return parseCasText(lines);
