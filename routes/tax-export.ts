@@ -239,9 +239,10 @@ async function computeCgData(pan: string, fy: string) {
   // Bulk fetch all transactions
   const allTxns = db.prepare(`
     SELECT t.date, t.transaction_type, t.units, t.amount, t.nav, t.folio_id,
-           t.transaction_subtype, t.merger_ratio, t.source_fund_id, t.buy_effective_cost
-    FROM transactions t 
-    WHERE t.folio_id IN (SELECT id FROM folios WHERE pan = ?) 
+           t.transaction_subtype, t.merger_ratio, t.source_fund_id, t.buy_effective_cost,
+           t.description
+    FROM transactions t
+    WHERE t.folio_id IN (SELECT id FROM folios WHERE pan = ?)
     ORDER BY t.date ASC
   `).all(pan) as any[];
 

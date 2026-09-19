@@ -119,11 +119,13 @@ export function calcMirrorXirr(
           closest = p;
         }
       }
+      // Mirror the buy branch: skip the sell entirely when no benchmark price is
+      // in tolerance, otherwise the mirror gets an inflow without a unit reduction.
       if (closest) {
         const unitsToSell = Math.abs(cf.amount) / closest.close;
         totalBenchmarkUnits = Math.max(0, totalBenchmarkUnits - unitsToSell);
+        mirrorCashflows.push({ date: cf.date, amount: Math.abs(cf.amount) });
       }
-      mirrorCashflows.push({ date: cf.date, amount: Math.abs(cf.amount) });
     }
   }
 

@@ -70,10 +70,11 @@ function calc234BInterest(
   const ninetyPct = assessed * 0.9;
   if (totalPaid >= ninetyPct) return { applicable: false, shortfall: 0, interest: 0 };
   const shortfall = assessed - totalPaid;
-  const april1 = new Date(`${fyEndYear}-04-01`);
+  // 234B: 1% per calendar month or part of a month, counted from 1 April
   const saDate = new Date(selfAssessmentDate);
-  const diffMs = saDate.getTime() - april1.getTime();
-  const months = Math.max(1, Math.ceil(diffMs / (1000 * 60 * 60 * 24 * 30)));
+  const months = Math.max(1,
+    (saDate.getUTCFullYear() - fyEndYear) * 12 + (saDate.getUTCMonth() - 3) + 1
+  );
   return {
     applicable: true,
     shortfall,

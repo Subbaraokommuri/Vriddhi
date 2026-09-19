@@ -242,9 +242,10 @@ async function getCapitalGainsSummary(pan: string, fyInput?: string) {
   // Bulk fetch all transactions
   const allTxns = db.prepare(`
     SELECT t.date, t.transaction_type, t.units, t.amount, t.nav, t.folio_id,
-           t.transaction_subtype, t.merger_ratio, t.source_fund_id, t.buy_effective_cost
-    FROM transactions t 
-    WHERE t.folio_id IN (SELECT id FROM folios WHERE pan = ?) 
+           t.transaction_subtype, t.merger_ratio, t.source_fund_id, t.buy_effective_cost,
+           t.description
+    FROM transactions t
+    WHERE t.folio_id IN (SELECT id FROM folios WHERE pan = ?)
     ORDER BY t.date ASC
   `).all(pan) as any[];
 
@@ -1291,11 +1292,11 @@ router.get('/advance-tax/export', async (req, res) => {
 
     if (showInterest && applicable234B) {
       shortfall234B = fullYearTax - totalPaid;
-      const april1 = new Date(`${fyEndYear}-04-01`);
+      // 234B: 1% per calendar month or part of a month, counted from 1 April
       const saDateObj = new Date(saDate);
-      months234B = Math.max(1, Math.ceil(
-        (saDateObj.getTime() - april1.getTime()) / (1000 * 60 * 60 * 24 * 30)
-      ));
+      months234B = Math.max(1,
+        (saDateObj.getUTCFullYear() - fyEndYear) * 12 + (saDateObj.getUTCMonth() - 3) + 1
+      );
       interest234B = Math.round(shortfall234B * 0.01 * months234B * 100) / 100;
     }
 
