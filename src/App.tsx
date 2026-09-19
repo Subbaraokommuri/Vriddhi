@@ -72,6 +72,7 @@ export default function App() {
   const [dashboardPerf, setDashboardPerf] = useState<RelativePerformanceResult | null>(null);
   const [dashboardStats, setDashboardStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   // Performance Selection State (Lifted for persistence)
   const [perfThemeId, setPerfThemeId] = useState<string>('');
@@ -80,6 +81,7 @@ export default function App() {
 
   const fetchData = async () => {
     setLoading(true);
+    setLoadError(null);
     try {
       const [summaryRes, foliosRes, transactionsRes, benchmarksRes, tagThemesRes, unassignedTagsRes, trendRes, statsRes] = await Promise.all([
         fetchSummary(),
@@ -111,11 +113,11 @@ export default function App() {
           setDashboardPerf(null);
         }
       } catch (err) {
-        console.error('Error fetching dashboard performance:', err);
         setDashboardPerf(null);
+        setLoadError('Could not load the dashboard benchmark comparison.');
       }
     } catch (error) {
-      console.error('Error fetching data:', error);
+      setLoadError(error instanceof Error ? error.message : 'Failed to load data from the server.');
     } finally {
       setLoading(false);
     }
@@ -126,7 +128,7 @@ export default function App() {
       const data = await getUserBenchmarks();
       setUserBenchmarks(data);
     } catch (error) {
-      console.error('Error refreshing benchmarks:', error);
+      setLoadError(error instanceof Error ? error.message : 'Failed to refresh benchmarks.');
     }
   }, []);
 
@@ -160,6 +162,17 @@ export default function App() {
         />
 
         <div className={`p-8 mx-auto ${activeTab === 'fundsxirr' ? 'max-w-screen-2xl' : 'max-w-7xl'}`}>
+          {loadError && (
+            <div className="mb-6 bg-rose-50 border border-rose-200 p-4 rounded-2xl flex items-center justify-between gap-4">
+              <p className="text-rose-700 font-bold text-sm">{loadError}</p>
+              <button
+                onClick={fetchData}
+                className="px-4 py-2 bg-rose-600 text-white font-bold rounded-xl hover:bg-rose-700 transition-colors text-sm"
+              >
+                Retry
+              </button>
+            </div>
+          )}
           <AnimatePresence mode="wait">
             <motion.div
               key={activeTab}

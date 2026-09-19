@@ -14,15 +14,17 @@ export function FolioTagChips({ folioId, themes, onUpdate }: FolioTagChipsProps)
   const [showAdd, setShowAdd] = useState(false);
   const [loading, setLoading] = useState(false);
   const [query, setQuery] = useState('');
+  const [tagsError, setTagsError] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   const fetchTags = async () => {
     try {
       const data = await getFolioTags(folioId);
       setTags(data);
+      setTagsError(false);
       if (onUpdate) onUpdate();
     } catch (e) {
-      console.error('Failed to fetch folio tags', e);
+      setTagsError(true);
     }
   };
 
@@ -75,6 +77,9 @@ export function FolioTagChips({ folioId, themes, onUpdate }: FolioTagChipsProps)
 
   return (
     <div className="flex flex-wrap items-center gap-1.5 mt-2">
+      {tagsError && (
+        <span className="text-[10px] text-rose-600">Could not load tags</span>
+      )}
       {tags.map((t) => (
         <span
           key={t.tag}
@@ -123,26 +128,26 @@ export function FolioTagChips({ folioId, themes, onUpdate }: FolioTagChipsProps)
             
             {showAdd && (
               <div 
-                className="absolute top-full left-0 mt-1 w-48 max-h-60 overflow-y-auto bg-white border rounded shadow-lg z-50 p-1"
+                className="absolute top-full left-0 mt-1 w-48 max-h-60 overflow-y-auto bg-surface border rounded shadow-lg z-50 p-1"
                 style={{ borderColor: 'var(--color-border)' }}
               >
                 {filteredThemes.length === 0 ? (
-                  <div className="p-2 text-[10px] text-gray-500 italic">No tags found</div>
+                  <div className="p-2 text-[10px] text-text-muted italic">No tags found</div>
                 ) : (
                   filteredThemes.map(theme => (
                     <div key={theme.id} className="mb-2">
-                      <div className="px-2 py-1 text-[9px] font-bold uppercase tracking-wider text-gray-400">
+                      <div className="px-2 py-1 text-[9px] font-bold uppercase tracking-wider text-text-muted">
                         {theme.name}
                       </div>
                       {theme.tags.map(tag => (
                         <button
                           key={tag}
-                          className="w-full text-left px-2 py-1.5 text-[11px] hover:bg-slate-100 rounded flex items-center justify-between"
+                          className="w-full text-left px-2 py-1.5 text-[11px] hover:bg-surface-hover rounded flex items-center justify-between"
                           onClick={() => handleAssign(theme.id, tag)}
                           disabled={loading}
                         >
                           {tag}
-                          <ChevronRight size={10} className="text-gray-300" />
+                          <ChevronRight size={10} className="text-text-muted" />
                         </button>
                       ))}
                     </div>

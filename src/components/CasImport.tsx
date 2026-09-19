@@ -153,7 +153,6 @@ export function CasImport({ onImportSuccess }: CasImportProps) {
       });
       if (onImportSuccess) onImportSuccess();
     } catch (error: any) {
-      console.error('Failed to sync fund data:', error);
       setMaintenanceError(error.message || String(error));
     } finally {
       setSyncing(false);

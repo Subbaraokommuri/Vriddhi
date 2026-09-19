@@ -18,6 +18,7 @@ import {
   AdvanceTaxEstimate,
   OverallXirrResult,
   BulkBenchmarkImportResult,
+  NiftyTRIEntry,
   MfBenchmarkRefreshResult
 } from './types.ts';
 
@@ -100,6 +101,11 @@ export async function fetchBenchmarks(): Promise<any[]> {
 }
 
 export const getUserBenchmarks = fetchBenchmarks;
+
+export async function fetchNiftyCatalogue(): Promise<NiftyTRIEntry[]> {
+  const res = await fetch('/api/benchmarks/catalogue');
+  return handleResponse<NiftyTRIEntry[]>(res);
+}
 
 export async function addUserBenchmark(data: { 
   symbol: string; 

@@ -33,6 +33,7 @@ export function FundsXirr({ themes, onNavsUpdated, benchmarks }: FundsXirrProps)
   const [benchmarkXirrMap, setBenchmarkXirrMap] = useState<Map<string, FolioBenchmarkXirrResult>>(new Map());
   const [groupBenchmarkXirrMap, setGroupBenchmarkXirrMap] = useState<Map<string, GroupBenchmarkXirrResult>>(new Map());
   const [benchmarkLoading, setBenchmarkLoading] = useState<boolean>(false);
+  const [tagsError, setTagsError] = useState<string | null>(null);
   const [benchmarkError, setBenchmarkError] = useState<string | null>(null);
   const [overallBenchmarkResult, setOverallBenchmarkResult] = useState<OverallBenchmarkXirrResult | null>(null);
 
@@ -42,13 +43,15 @@ export function FundsXirr({ themes, onNavsUpdated, benchmarks }: FundsXirrProps)
 
   useEffect(() => {
     if (filters.themeId) {
+      setTagsError(null);
       getThemeTags(filters.themeId)
         .then(tags => setAvailableTags(tags))
         .catch(err => {
-          console.error("Failed to load theme tags", err);
           setAvailableTags([]);
+          setTagsError(err instanceof Error ? err.message : 'Failed to load tags for this theme');
         });
     } else {
+      setTagsError(null);
       setAvailableTags([]);
     }
   }, [filters.themeId]);
@@ -535,6 +538,13 @@ export function FundsXirr({ themes, onNavsUpdated, benchmarks }: FundsXirrProps)
           )}
         </div>
       </div>
+
+      {tagsError && (
+        <div className="bg-rose-50 border border-rose-200 p-3 rounded-2xl flex items-center gap-3">
+          <AlertCircle className="w-5 h-5 text-rose-600" />
+          <p className="text-rose-700 text-sm font-semibold">{tagsError}</p>
+        </div>
+      )}
 
       {error && (
         <div className="bg-rose-50 border border-rose-200 p-6 rounded-2xl flex items-center justify-between">

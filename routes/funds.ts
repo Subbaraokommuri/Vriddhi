@@ -121,6 +121,9 @@ router.put('/tags/themes/:id', (req, res) => {
 router.delete('/tags/themes/:id', (req, res) => {
   try {
     const { id } = req.params;
+    if (id === 'seed-portfolio-theme') {
+      return res.status(403).json({ error: 'The built-in Portfolio theme cannot be deleted' });
+    }
     db.transaction(() => {
       db.prepare('UPDATE folio_tags SET theme_id = NULL WHERE theme_id = ?').run(id);
       db.prepare('DELETE FROM theme_tags WHERE theme_id = ?').run(id);

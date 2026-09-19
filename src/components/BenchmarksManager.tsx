@@ -10,11 +10,11 @@ import {
   importBenchmarkCsvFiles,
   getBenchmarkDataSummary, 
   searchAmfiMetadata,
+  fetchNiftyCatalogue,
   refreshAmfiMetadata,
   getAmfiMetadataStatus,
   getAmfiFundHouses
 } from '../lib/api';
-import { CONFIG } from '../../lib/config.ts';
 import { NiftyTRIEntry, UserBenchmark, BulkBenchmarkImportResult } from '../lib/types.ts';
 import { BenchmarkTopUp } from './BenchmarkTopUp';
 import { buildTriDownloadScript } from '../lib/benchmark-script';
@@ -64,6 +64,7 @@ export function BenchmarksManager({
   const [showAddForm, setShowAddForm] = useState(false);
   const [activeTab, setActiveTab] = useState<'nifty_tri' | 'mf_nav'>('nifty_tri');
   const [activeNiftySubTab, setActiveNiftySubTab] = useState<string>('Broad Based');
+  const [niftyCatalogue, setNiftyCatalogue] = useState<NiftyTRIEntry[]>([]);
   const [mfSearchQuery, setMfSearchQuery] = useState('');
   const [mfSearchResults, setMfSearchResults] = useState<{ amfi_code: string; name: string; fundHouse: string }[]>([]);
   const [isSearching, setIsSearching] = useState(false);
@@ -112,6 +113,12 @@ export function BenchmarksManager({
     loadData();
   }, []);
 
+  useEffect(() => {
+    fetchNiftyCatalogue()
+      .then(setNiftyCatalogue)
+      .catch(err => setError(err instanceof Error ? err.message : 'Failed to load the Nifty index catalogue'));
+  }, []);
+
   // MF Search Debounce
   useEffect(() => {
     if (activeTab !== 'mf_nav') return;
@@ -122,11 +129,12 @@ export function BenchmarksManager({
 
     const timer = setTimeout(async () => {
       setIsSearching(true);
+      setError(null);
       try {
         const { results } = await searchAmfiMetadata(mfSearchQuery);
         setMfSearchResults(results);
       } catch (err) {
-        console.error('MF search failed:', err);
+        setError(err instanceof Error ? err.message : 'MF search failed');
       } finally {
         setIsSearching(false);
       }
@@ -157,7 +165,7 @@ export function BenchmarksManager({
       const summary = await getBenchmarkDataSummary(id);
       setSummaries(prev => ({ ...prev, [id]: summary }));
     } catch (err) {
-      console.error('Failed to refresh summary:', err);
+      setError(err instanceof Error ? err.message : 'Failed to refresh benchmark summary');
     }
   };
 
@@ -314,8 +322,8 @@ export function BenchmarksManager({
   ), [userBenchmarks, summaries]);
 
   const filteredCatalogue = useMemo(() => {
-    return CONFIG.NIFTY_TRI_CATALOGUE.filter(entry => entry.category === activeNiftySubTab);
-  }, [activeNiftySubTab]);
+    return niftyCatalogue.filter(entry => entry.category === activeNiftySubTab);
+  }, [niftyCatalogue, activeNiftySubTab]);
 
   const fundHouses = useMemo(() => {
     return ['all', ...allFundHouses];

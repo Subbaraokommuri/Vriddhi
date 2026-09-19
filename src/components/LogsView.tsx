@@ -24,7 +24,6 @@ export function LogsView() {
       const text = await fetchLogs(type, date);
       setContent(text);
     } catch (e) {
-      console.error('Failed to fetch logs:', e);
       setContent(`No logs found for ${type} on ${date}`);
       setError(e instanceof Error ? e.message : 'Log file not found');
     } finally {

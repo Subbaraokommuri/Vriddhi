@@ -7,6 +7,7 @@ import transactionsRouter from './routes/transactions.ts';
 import navRouter from './routes/nav.ts';
 import benchmarksRouter from './routes/benchmarks.ts';
 import benchmarkImportRouter from './routes/benchmark-import.ts';
+import benchmarkCatalogueRouter from './routes/benchmark-catalogue.ts';
 import reportsRouter from './routes/reports.ts';
 import logsRouter from './routes/logs.ts';
 import casRouter from './routes/cas-import.ts';
@@ -24,6 +25,7 @@ async function startServer() {
   app.use('/api', navRouter);
   app.use('/api', benchmarksRouter);
   app.use('/api/benchmarks', benchmarkImportRouter);
+  app.use('/api/benchmarks', benchmarkCatalogueRouter);
   app.use('/api', reportsRouter);
   app.use('/api', logsRouter);
   app.use('/api', relativePerformanceRouter);

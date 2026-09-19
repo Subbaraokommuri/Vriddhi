@@ -55,7 +55,7 @@ export const FundRow: React.FC<FundRowProps> = ({
       isSubRow && "bg-slate-50/40 border-t border-slate-200/50",
       !folio.isActive && "opacity-50"
     )}>
-      <td className={cn("px-4 py-4 sticky left-0 z-10", isSubRow ? "pl-12 bg-slate-50" : "bg-white")}>
+      <td className={cn("px-4 py-4 sticky left-0 z-10 focus-within:z-20", isSubRow ? "pl-12 bg-slate-50" : "bg-white")}>
         <div className="flex flex-col gap-1">
           <p 
             className="font-semibold text-sm text-slate-800 truncate max-w-[280px]" 
