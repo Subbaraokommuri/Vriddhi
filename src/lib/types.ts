@@ -391,4 +391,26 @@ export interface OverallXirrResult {
   folioCount: number;
 }
 
+export interface BulkBenchmarkImportFile {
+  filename: string;
+  indexName: string | null;
+  benchmarkSymbol: string | null;
+  created: boolean;
+  inserted: number;
+  alreadyPresent: number;
+  unreadable: number;
+  error?: string;
+}
 
+export interface BulkBenchmarkImportResult {
+  files: BulkBenchmarkImportFile[];
+  totals: { files: number; failed: number; created: number; inserted: number };
+}
+
+export interface MfBenchmarkRefreshResult {
+  total: number;
+  updated: number;
+  upToDate: number;
+  rowsAdded: number;
+  failed: { name: string; reason: string }[];
+}

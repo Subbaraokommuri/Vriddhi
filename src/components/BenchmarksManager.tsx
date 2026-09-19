@@ -7,6 +7,7 @@ import {
   deleteUserBenchmark, 
   importBenchmarkCsv, 
   importBenchmarkCsvBatch,
+  importBenchmarkCsvFiles,
   getBenchmarkDataSummary, 
   searchAmfiMetadata,
   refreshAmfiMetadata,
@@ -14,7 +15,10 @@ import {
   getAmfiFundHouses
 } from '../lib/api';
 import { CONFIG } from '../../lib/config.ts';
-import { NiftyTRIEntry, UserBenchmark } from '../lib/types.ts';
+import { NiftyTRIEntry, UserBenchmark, BulkBenchmarkImportResult } from '../lib/types.ts';
+import { BenchmarkTopUp } from './BenchmarkTopUp';
+import { buildTriDownloadScript } from '../lib/benchmark-script';
+import { findStaleBenchmarks } from '../lib/benchmark-status';
 
 interface BenchmarkSummary {
   oldest: string;
@@ -51,6 +55,9 @@ export function BenchmarksManager({
   const [summaries, setSummaries] = useState<Record<string, BenchmarkSummary | null>>({});
   const [uploadingId, setUploadingId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const bulkInputRef = useRef<HTMLInputElement>(null);
+  const [bulkImporting, setBulkImporting] = useState(false);
+  const [bulkResult, setBulkResult] = useState<BulkBenchmarkImportResult | null>(null);
   const [selectedBenchmarkForUpload, setSelectedBenchmarkForUpload] = useState<string | null>(null);
 
   // Add Panel State
@@ -262,6 +269,28 @@ export function BenchmarksManager({
     }
   };
 
+  const handleBulkFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    setBulkImporting(true);
+    setError(null);
+    setSuccessMessage(null);
+    setBulkResult(null);
+    try {
+      const result = await importBenchmarkCsvFiles(Array.from(files) as File[]);
+      setBulkResult(result);
+      await loadData();
+      if (result.totals.created > 0) onBenchmarkAdded?.();
+      if (onRefresh) onRefresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to import CSV files');
+    } finally {
+      setBulkImporting(false);
+      if (e.target) e.target.value = '';
+    }
+  };
+
   const handleDelete = async (benchmark: UserBenchmark) => {
     if (!window.confirm(`Are you sure you want to delete "${benchmark.name}"?`)) return;
 
@@ -273,6 +302,16 @@ export function BenchmarksManager({
       setError(err instanceof Error ? err.message : 'Failed to delete benchmark');
     }
   };
+
+  const triTargets = useMemo(() => userBenchmarks
+    .filter(b => b.benchmark_type === 'nifty_tri')
+    .map(b => ({ indexName: b.symbol, latestDate: summaries[b.id]?.latest ?? null })),
+  [userBenchmarks, summaries]);
+  const triScript = useMemo(() => buildTriDownloadScript(triTargets), [triTargets]);
+  // Only benchmarks whose date range has finished loading are judged (avoids a false alarm on load)
+  const staleBenchmarks = useMemo(() => findStaleBenchmarks(
+    userBenchmarks.filter(b => b.id in summaries).map(b => ({ name: b.name, latestDate: summaries[b.id]?.latest ?? null }))
+  ), [userBenchmarks, summaries]);
 
   const filteredCatalogue = useMemo(() => {
     return CONFIG.NIFTY_TRI_CATALOGUE.filter(entry => entry.category === activeNiftySubTab);
@@ -352,16 +391,28 @@ export function BenchmarksManager({
             multiple
             className="hidden"
           />
-          <button 
-            onClick={() => setShowAddForm(!showAddForm)}
-            style={{ backgroundColor: 'var(--color-primary)', color: 'var(--color-text-inverse)' }}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-colors hover:brightness-110 active:brightness-90"
-          >
-            {showAddForm ? <X className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
-            {showAddForm ? 'Cancel' : 'Add Benchmark'}
-          </button>
+          <input
+            type="file"
+            ref={bulkInputRef}
+            onChange={handleBulkFileChange}
+            accept=".csv"
+            multiple
+            className="hidden"
+          />
         </div>
       </div>
+
+      <BenchmarkTopUp
+        script={triScript}
+        indexCount={triTargets.length}
+        staleBenchmarks={staleBenchmarks}
+        hasMfBenchmarks={userBenchmarks.some(b => b.benchmark_type === 'mf_nav')}
+        onUpdated={loadData}
+        addOpen={showAddForm}
+        onToggleAdd={() => setShowAddForm(!showAddForm)}
+        importing={bulkImporting}
+        onImportClick={() => bulkInputRef.current?.click()}
+      />
 
       {showAddForm && (
         <div 
@@ -673,6 +724,38 @@ export function BenchmarksManager({
         >
           <Check className="w-5 h-5 shrink-0" />
           <span>{successMessage}</span>
+        </div>
+      )}
+
+      {bulkResult && (
+        <div className="bg-white rounded-2xl border shadow-sm p-4 space-y-3" style={{ borderColor: 'var(--color-border)' }}>
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-bold">
+              Import results: {bulkResult.totals.inserted.toLocaleString()} new rows
+              {bulkResult.totals.created > 0 && `, ${bulkResult.totals.created} benchmark${bulkResult.totals.created !== 1 ? 's' : ''} added`}
+              {bulkResult.totals.failed > 0 && `, ${bulkResult.totals.failed} file${bulkResult.totals.failed !== 1 ? 's' : ''} failed`}
+            </p>
+            <button onClick={() => setBulkResult(null)} className="p-1 text-slate-400 hover:text-slate-600" aria-label="Dismiss import results">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+          <ul className="divide-y text-xs" style={{ borderColor: 'var(--color-border)' }}>
+            {bulkResult.files.map((f, i) => (
+              <li key={i} className="py-2 flex flex-col gap-0.5">
+                <span className="font-semibold text-slate-700">{f.filename}</span>
+                {f.error ? (
+                  <span className="text-rose-600">{f.error}</span>
+                ) : (
+                  <span className="text-slate-500">
+                    {f.benchmarkSymbol}{f.created ? ' (added)' : ''}: {f.inserted.toLocaleString()} new
+                    {f.inserted === 0 ? ' — already up to date' : ''}
+                    {f.alreadyPresent > 0 && `, ${f.alreadyPresent.toLocaleString()} already present`}
+                    {f.unreadable > 0 && `, ${f.unreadable} unreadable row${f.unreadable !== 1 ? 's' : ''}`}
+                  </span>
+                )}
+              </li>
+            ))}
+          </ul>
         </div>
       )}
 

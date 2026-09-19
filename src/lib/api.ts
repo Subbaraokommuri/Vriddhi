@@ -16,7 +16,9 @@ import {
   TaxPan,
   BenchmarkXirrResponse,
   AdvanceTaxEstimate,
-  OverallXirrResult
+  OverallXirrResult,
+  BulkBenchmarkImportResult,
+  MfBenchmarkRefreshResult
 } from './types.ts';
 
 async function handleResponse<T>(response: Response): Promise<T> {
@@ -194,6 +196,22 @@ export async function importBenchmarkCsvBatch(
     totalSkipped,
     failures
   };
+}
+
+export async function importBenchmarkCsvFiles(files: File[]): Promise<BulkBenchmarkImportResult> {
+  const formData = new FormData();
+  for (const file of files) formData.append('files', file);
+
+  const res = await fetch('/api/benchmarks/import-csv-bulk', {
+    method: 'POST',
+    body: formData
+  });
+  return handleResponse<BulkBenchmarkImportResult>(res);
+}
+
+export async function refreshMfBenchmarks(): Promise<MfBenchmarkRefreshResult> {
+  const res = await fetch('/api/nav/refresh-benchmarks', { method: 'POST' });
+  return handleResponse<MfBenchmarkRefreshResult>(res);
 }
 
 export async function getBenchmarkDataSummary(id: string): Promise<{ oldest: string; latest: string; count: number } | null> {

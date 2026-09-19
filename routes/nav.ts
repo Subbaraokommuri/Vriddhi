@@ -266,6 +266,70 @@ export async function runNavBackfill() {
 }
 
 /**
+ * Tops up NAV history for mf_nav benchmarks. runNavBackfill only covers funds in the funds
+ * table (funds you hold), so a benchmark fund you don't hold would never refresh. Rows are
+ * stored under the benchmark's amfi_code — the key relative-performance and
+ * folios-benchmark-xirr read. Per-benchmark failures are collected, never thrown.
+ */
+export async function refreshMfBenchmarks() {
+  const benchmarks = db.prepare(`
+    SELECT id, name, amfi_code FROM user_benchmarks
+    WHERE benchmark_type = 'mf_nav' AND amfi_code IS NOT NULL AND amfi_code != ''
+  `).all() as { id: string; name: string; amfi_code: string }[];
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const insert = db.prepare('INSERT OR IGNORE INTO nav_history (isin, nav_date, nav) VALUES (?, ?, ?)');
+  let updated = 0;
+  let upToDate = 0;
+  let rowsAdded = 0;
+  const failed: { name: string; reason: string }[] = [];
+
+  for (const b of benchmarks) {
+    try {
+      const last = db.prepare('SELECT MAX(nav_date) AS d FROM nav_history WHERE isin = ?').get(b.amfi_code) as { d: string | null };
+      if (last?.d) {
+        const lastDate = new Date(last.d);
+        lastDate.setHours(0, 0, 0, 0);
+        const gap = Math.floor((today.getTime() - lastDate.getTime()) / (1000 * 60 * 60 * 24));
+        if (gap <= 1) {
+          upToDate++;
+          continue;
+        }
+      }
+
+      const response = await fetch(`https://api.mfapi.in/mf/${b.amfi_code}`);
+      if (!response.ok) throw new Error(`MFAPI request failed: ${response.statusText}`);
+      const data = await response.json() as any;
+      if (!data?.data || !Array.isArray(data.data)) throw new Error('Invalid NAV data received from MFAPI');
+      if (data.data.length === 0) throw new Error(`No NAV data found for AMFI code ${b.amfi_code}`);
+
+      let inserted = 0;
+      db.transaction((items: any[]) => {
+        for (const item of items) {
+          const parts = String(item?.date ?? '').split('-'); // DD-MM-YYYY
+          const nav = parseFloat(item?.nav);
+          if (parts.length !== 3 || !Number.isFinite(nav)) continue;
+          const r = insert.run(b.amfi_code, `${parts[2]}-${parts[1]}-${parts[0]}`, nav);
+          if (r.changes > 0) inserted++;
+        }
+      })(data.data);
+
+      rowsAdded += inserted;
+      if (inserted > 0) updated++; else upToDate++;
+      log('nav', 'INFO', 'BENCHMARK-REFRESH', `${b.name} (${b.amfi_code}): ${inserted} new NAV rows`);
+    } catch (err) {
+      const reason = err instanceof Error ? err.message : String(err);
+      failed.push({ name: b.name, reason });
+      log('nav', 'ERROR', 'BENCHMARK-REFRESH', `${b.name} (${b.amfi_code}): ${reason}`);
+    }
+  }
+
+  return { total: benchmarks.length, updated, upToDate, rowsAdded, failed };
+}
+
+/**
  * Unified NAV sync: refreshes the ISIN -> amfi_code map only for funds that
  * don't have one yet (new funds from a CAS import), then runs the
  * incremental MFAPI backfill for everything — this is what fills today's
@@ -287,7 +351,16 @@ export async function syncNavData() {
   }
 
   const backfill = await runNavBackfill();
-  return { amfi, backfill };
+
+  // MF benchmarks may be funds you don't hold — top them up too. Never fails the sync.
+  let benchmarks: Awaited<ReturnType<typeof refreshMfBenchmarks>> | null = null;
+  try {
+    benchmarks = await refreshMfBenchmarks();
+  } catch (err) {
+    log('nav', 'ERROR', 'SYNC', `MF benchmark refresh failed: ${err instanceof Error ? err.message : String(err)}`);
+  }
+
+  return { amfi, backfill, benchmarks };
 }
 
 router.post('/nav/sync', async (req, res) => {
@@ -298,6 +371,16 @@ router.post('/nav/sync', async (req, res) => {
     const reason = error instanceof Error ? error.message : String(error);
     log('nav', 'ERROR', 'SYNC', `nav/sync failed: ${reason}`);
     res.status(503).json({ error: 'Failed to sync NAV data' });
+  }
+});
+
+router.post('/nav/refresh-benchmarks', async (req, res) => {
+  try {
+    res.json(await refreshMfBenchmarks());
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    log('nav', 'ERROR', 'BENCHMARK-REFRESH', `nav/refresh-benchmarks failed: ${reason}`);
+    res.status(500).json({ error: 'Failed to refresh MF benchmarks' });
   }
 });
 
