@@ -6,7 +6,7 @@ import { getTransactions, getTransactionFundsList, exportTransactionsCsv } from 
 
 export function TransactionsList() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [fundsList, setFundsList] = useState<{ id: string; name: string; clean_name?: string }[]>([]);
+  const [fundsList, setFundsList] = useState<{ id: string; name: string; clean_name?: string; simple_name?: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filtersOpen, setFiltersOpen] = useState(false);

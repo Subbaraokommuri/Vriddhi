@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { getFundsXirrGrouped, FolioXirrFilters, downloadFundsGroupedCsv, getFoliosBenchmarkXirr, getThemeTags, getOverallXirr, getGroupsXirr, syncNavData } from '../lib/api';
-import { FundGroupXirr, FolioXirr, FolioBenchmarkXirrResult, GroupBenchmarkXirrResult, OverallXirrResult, OverallBenchmarkXirrResult } from '../lib/types';
+import { FundGroupXirr, FolioXirr, FolioBenchmarkXirrResult, GroupBenchmarkXirrResult, OverallXirrResult, OverallBenchmarkXirrResult, UserBenchmark } from '../lib/types';
 import { FundsFilterBar } from './FundsFilterBar';
 import { FundGroupRow } from './FundGroupRow';
 import { RefreshCw, Loader2, Download, ChevronUp, ChevronDown, ChevronRight, AlertCircle, SlidersHorizontal, Target, AlertTriangle } from 'lucide-react';
@@ -9,7 +9,7 @@ import { cn, formatCurrency, formatPercent } from '../lib/utils';
 interface FundsXirrProps {
   themes: { id: string; name: string }[];
   onNavsUpdated: () => void;
-  benchmarks: Array<{ id: string; name: string; symbol: string; is_active: boolean }>;
+  benchmarks: UserBenchmark[];
 }
 
 type SortKey = 'fundName' | 'units' | 'investedAmount' | 'currentValue' | 'gainAmount' | 'gainPercent' | 'xirr' | 'nav' | 'navDate' | 'benchmarkXirr' | 'alpha';
@@ -213,7 +213,7 @@ export function FundsXirr({ themes, onNavsUpdated, benchmarks }: FundsXirrProps)
 
   useEffect(() => {
     let active = true;
-    const folioIds = filteredGroups.flatMap(g => (g.visibleFolios || g.folios || []).map(f => f.folioId));
+    const folioIds = filteredGroups.flatMap(g => (g.visibleFolios || []).map(f => f.folioId));
     if (folioIds.length === 0) {
       setOverallXirr(null);
       return;
@@ -717,7 +717,7 @@ export function FundsXirr({ themes, onNavsUpdated, benchmarks }: FundsXirrProps)
                             {formatPercent(overallXirr.xirr)}
                           </span>
                           {overallXirr.xirrWarning && (
-                            <AlertTriangle className="w-3.5 h-3.5 text-amber-500 shrink-0" title="Overall XIRR may be unreliable" />
+                            <AlertTriangle className="w-3.5 h-3.5 text-amber-500 shrink-0"><title>Overall XIRR may be unreliable</title></AlertTriangle>
                           )}
                         </div>
                       ) : (
@@ -735,7 +735,7 @@ export function FundsXirr({ themes, onNavsUpdated, benchmarks }: FundsXirrProps)
                                 {formatPercent(overallBenchmarkResult.benchmarkXirr)}
                               </span>
                               {overallBenchmarkResult.benchmarkXirrWarning && (
-                                <AlertTriangle className="w-3.5 h-3.5 text-amber-500 shrink-0" title="Overall benchmark XIRR may be unreliable" />
+                                <AlertTriangle className="w-3.5 h-3.5 text-amber-500 shrink-0"><title>Overall benchmark XIRR may be unreliable</title></AlertTriangle>
                               )}
                             </div>
                           ) : (

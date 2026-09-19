@@ -116,7 +116,7 @@ export const FundRow: React.FC<FundRowProps> = ({
         <div className="flex items-center justify-end gap-1">
           {folio.xirr !== null ? formatPercent(folio.xirr) : '—'}
           {folio.xirrWarning && (
-            <AlertTriangle className="w-3.5 h-3.5 text-amber-500" title="XIRR may be unreliable" />
+            <AlertTriangle className="w-3.5 h-3.5 text-amber-500"><title>XIRR may be unreliable</title></AlertTriangle>
           )}
         </div>
       </td>
@@ -131,7 +131,7 @@ export const FundRow: React.FC<FundRowProps> = ({
                   {benchmarkResult.benchmarkXirr === null ? '--' : formatPercent(benchmarkResult.benchmarkXirr)}
                 </span>
                 {benchmarkResult.benchmarkXirrWarning && (
-                  <AlertTriangle className="w-3.5 h-3.5 text-amber-500" title="Benchmark XIRR may be unreliable" />
+                  <AlertTriangle className="w-3.5 h-3.5 text-amber-500"><title>Benchmark XIRR may be unreliable</title></AlertTriangle>
                 )}
               </div>
             ) : (

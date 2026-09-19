@@ -161,7 +161,7 @@ export function Dashboard({ summary, folios, dashboardPerf, investmentTrend, das
                           <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
                         ))}
                       </Pie>
-                      <Tooltip formatter={(value: number) => formatCurrency(value)} />
+                      <Tooltip formatter={(value) => formatCurrency(Number(value))} />
                     </RePieChart>
                   </ResponsiveContainer>
                 </div>
@@ -297,7 +297,7 @@ export function Dashboard({ summary, folios, dashboardPerf, investmentTrend, das
                     tickFormatter={(v) => formatIndianNumber(v)}
                   />
                   <Tooltip 
-                    formatter={(value: number) => formatCurrency(value)}
+                    formatter={(value) => formatCurrency(Number(value))}
                     labelFormatter={(label) => new Date(label).toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })}
                   />
                   <Legend />

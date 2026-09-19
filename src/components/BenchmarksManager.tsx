@@ -521,7 +521,7 @@ export function BenchmarksManager({
                       type="text"
                       placeholder="Search mutual fund (e.g. Nifty 50 Index Fund)"
                       className="w-full pl-10 pr-4 py-3 rounded-xl border bg-white focus:outline-none focus:ring-2"
-                      style={{ borderColor: 'var(--color-border)', focusRingColor: 'var(--color-primary)' }}
+                      style={{ borderColor: 'var(--color-border)' }}
                       value={mfSearchQuery}
                       onChange={(e) => setMfSearchQuery(e.target.value)}
                     />
@@ -608,7 +608,7 @@ export function BenchmarksManager({
                           value={fundHouseFilter}
                           onChange={(e) => setFundHouseFilter(e.target.value)}
                           className="text-[10px] font-bold bg-white border rounded-lg px-2 py-1 outline-none focus:ring-1 max-w-[150px]"
-                          style={{ borderColor: 'var(--color-border)', focusRingColor: 'var(--color-primary)' }}
+                          style={{ borderColor: 'var(--color-border)' }}
                         >
                           {fundHouses.map(h => (
                             <option key={h} value={h}>{h === 'all' ? 'All Fund Houses' : h}</option>
@@ -666,7 +666,7 @@ export function BenchmarksManager({
                       <Loader2 className="w-6 h-6 animate-spin text-primary" style={{ color: 'var(--color-primary)' }} />
                     </div>
                   ) : filteredMfSearchResults.length > 0 ? (
-                    <div className="divide-y border rounded-xl overflow-hidden bg-white" style={{ borderColor: 'var(--color-border)', divideColor: 'var(--color-border)' }}>
+                    <div className="divide-y border rounded-xl overflow-hidden bg-white" style={{ borderColor: 'var(--color-border)' }}>
                       {filteredMfSearchResults.map(result => {
                         const isAdded = userBenchmarks.some(b => b.amfi_code === result.amfi_code);
                         const isAdding = addingItem === result.amfi_code;
@@ -780,7 +780,7 @@ export function BenchmarksManager({
                 <th className="px-6 py-4 text-xs font-bold uppercase text-right" style={{ color: 'var(--color-text-muted)' }}>Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y" style={{ divideColor: 'var(--color-border)' }}>
+            <tbody className="divide-y">
               {userBenchmarks.map((b) => (
                 <tr key={b.id} className="hover:bg-slate-50 transition-colors">
                   <td className="px-6 py-4">

@@ -197,7 +197,7 @@ export default function App() {
                   benchmarks={userBenchmarks}
                 />
               )}
-              {activeTab === 'transactions' && <TransactionsList transactions={transactions} />}
+              {activeTab === 'transactions' && <TransactionsList />}
               {activeTab === 'benchmarks' && (
                 <BenchmarksManager 
                   userBenchmarks={userBenchmarks} 

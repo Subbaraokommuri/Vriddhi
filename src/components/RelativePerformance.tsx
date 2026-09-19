@@ -246,10 +246,10 @@ export function RelativePerformance({
                     tickFormatter={formatShortCurrency}
                     axisLine={false}
                     tickLine={false}
-                    tick={{ fontSize: 10, fontBold: 700, fill: '#94a3b8' }}
+                    tick={{ fontSize: 10, fill: '#94a3b8' }}
                   />
                   <Tooltip 
-                    formatter={(val: number) => [formatShortCurrency(val), ""]}
+                    formatter={(val) => [formatShortCurrency(Number(val)), ""]}
                     contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', padding: '12px' }}
                     labelStyle={{ fontWeight: 700, marginBottom: '4px', fontSize: '12px' }}
                   />
