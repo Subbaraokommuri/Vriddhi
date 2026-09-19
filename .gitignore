@@ -31,3 +31,8 @@ test.xlsx
 exports/
 reports/
 .DS_Store
+
+# Private project docs — never uploaded (master docs + working notes; contain PANs / tax figures)
+CLAUDE.md
+CONTEXT-V11.md
+docs/
