@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { getFundsXirrGrouped, updateNavs, FolioXirrFilters, downloadFundsGroupedCsv, getFoliosBenchmarkXirr, getThemeTags, getOverallXirr, refreshNavAndBenchmarks } from '../lib/api';
+import { getFundsXirrGrouped, FolioXirrFilters, downloadFundsGroupedCsv, getFoliosBenchmarkXirr, getThemeTags, getOverallXirr, refreshNavAndBenchmarks } from '../lib/api';
 import { FundGroupXirr, FolioXirr, FolioBenchmarkXirrResult, GroupBenchmarkXirrResult, OverallXirrResult, OverallBenchmarkXirrResult } from '../lib/types';
 import { FundsFilterBar } from './FundsFilterBar';
 import { FundGroupRow } from './FundGroupRow';
-import { RefreshCw, Loader2, Download, ChevronUp, ChevronDown, ChevronRight, AlertCircle, X, SlidersHorizontal, Target, AlertTriangle } from 'lucide-react';
+import { RefreshCw, Loader2, Download, ChevronUp, ChevronDown, ChevronRight, AlertCircle, SlidersHorizontal, Target, AlertTriangle } from 'lucide-react';
 import { cn, formatCurrency, formatPercent } from '../lib/utils';
 
 interface FundsXirrProps {
@@ -22,8 +22,6 @@ export function FundsXirr({ themes, onNavsUpdated, benchmarks }: FundsXirrProps)
   const [availableTags, setAvailableTags] = useState<string[]>([]);
   const [sortCol, setSortCol] = useState<SortKey>('fundName');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
-  const [updating, setUpdating] = useState(false);
-  const [updateErrors, setUpdateErrors] = useState<{ name: string; error: string }[]>([]);
   const [expandedFundIds, setExpandedFundIds] = useState<Set<string>>(new Set());
   const [refreshing, setRefreshing] = useState(false);
   const [refreshMessage, setRefreshMessage] = useState<string | null>(null);
@@ -71,24 +69,6 @@ export function FundsXirr({ themes, onNavsUpdated, benchmarks }: FundsXirrProps)
   useEffect(() => {
     loadData();
   }, []);
-
-  const handleUpdateNavs = async () => {
-    setUpdating(true);
-    setUpdateErrors([]);
-    try {
-      const result = await updateNavs();
-      if (result.errors && result.errors.length > 0) {
-        setUpdateErrors(result.errors.map(e => ({ name: e.name, error: e.error })));
-      }
-      const fresh = await getFundsXirrGrouped();
-      setGroups(fresh);
-      onNavsUpdated();
-    } catch (err: any) {
-      setUpdateErrors([{ name: 'System', error: err.message || String(err) }]);
-    } finally {
-      setUpdating(false);
-    }
-  };
 
   const handleRefreshData = async () => {
     const activeBenchmarkIds = (benchmarks || [])
@@ -499,28 +479,6 @@ export function FundsXirr({ themes, onNavsUpdated, benchmarks }: FundsXirrProps)
           )}
         </div>
       </div>
-
-      {updateErrors.length > 0 && (
-        <div className="bg-rose-50 border border-rose-100 rounded-2xl p-4 relative pr-12">
-          <div className="flex items-start gap-3">
-            <AlertCircle className="w-5 h-5 text-rose-600 mt-0.5 shrink-0" />
-            <div>
-              <p className="text-sm font-bold text-rose-800 mb-1">NAV Update Partial Failures</p>
-              <ul className="text-xs text-rose-700 space-y-1 list-disc list-inside">
-                {updateErrors.map((err, i) => (
-                  <li key={i}><span className="font-semibold">{err.name}:</span> {err.error}</li>
-                ))}
-              </ul>
-            </div>
-          </div>
-          <button 
-            onClick={() => setUpdateErrors([])}
-            className="absolute top-4 right-4 p-1 text-rose-400 hover:text-rose-600 transition-colors"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-      )}
 
       {error && (
         <div className="bg-rose-50 border border-rose-200 p-6 rounded-2xl flex items-center justify-between">

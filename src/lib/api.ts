@@ -1,9 +1,7 @@
 import { 
   Summary, 
   Folio, 
-  Portfolio, 
   Transaction, 
-  Fund, 
   TagTheme, 
   FolioTagDetail,
   RelativePerformanceResult,
@@ -67,19 +65,9 @@ export async function fetchSummary(): Promise<Summary> {
   return handleResponse<Summary>(res);
 }
 
-export async function fetchFunds(): Promise<Fund[]> {
-  const res = await fetch('/api/funds');
-  return handleResponse<Fund[]>(res);
-}
-
 export async function fetchFolios(): Promise<Folio[]> {
   const res = await fetch('/api/folios');
   return handleResponse<Folio[]>(res);
-}
-
-export async function fetchPortfolios(): Promise<Portfolio[]> {
-  const res = await fetch('/api/portfolios');
-  return handleResponse<Portfolio[]>(res);
 }
 
 
@@ -219,27 +207,6 @@ export async function fetchBenchmarkData(id: string): Promise<{ inserted: number
   return handleResponse<{ inserted: number; total: number }>(res);
 }
 
-export async function fetchBenchmarkXirr(params: { folioId?: string; portfolioId?: string; benchmarkIds: string[] }): Promise<any> {
-  const query = new URLSearchParams();
-  if (params.folioId) query.append('folio_id', params.folioId);
-  if (params.portfolioId) query.append('portfolio_id', params.portfolioId);
-  params.benchmarkIds.forEach(id => query.append('benchmark_ids', id));
-  
-  const res = await fetch(`/api/benchmark-xirr?${query.toString()}`);
-  return handleResponse<any>(res);
-}
-
-export async function fetchPortfolioGrowth(benchmarkSymbol: string): Promise<any[]> {
-  const res = await fetch(`/api/portfolio-growth-vs-benchmark?benchmark_symbol=${benchmarkSymbol}`);
-  return handleResponse<any[]>(res);
-}
-
-/** @deprecated superseded by syncNavData() — kept working, frozen, do not modify */
-export async function updateNavs(): Promise<{ updated: number; errors?: { fundId: string; name: string; error: string }[] }> {
-  const res = await fetch('/api/fetch-nav', { method: 'POST' });
-  return handleResponse<{ updated: number; errors?: { fundId: string; name: string; error: string }[] }>(res);
-}
-
 export async function syncNavData(): Promise<{
   amfi: { updated: number; notFound: number; failed: any[] };
   backfill: { full_backfill: number; incremental: number; up_to_date: number; failed: any[] };
@@ -281,18 +248,6 @@ export async function refreshNavAndBenchmarks(
   }
 
   return { navResult, navError, benchmarkResults, benchmarkErrors };
-}
-
-/** @deprecated superseded by syncNavData() — kept working, frozen, do not modify */
-export async function refreshAmfiCodes(): Promise<{ updated: number; notFound: number; failedCount: number }> {
-  const res = await fetch('/api/nav/refresh-amfi-codes', { method: 'POST' });
-  return handleResponse<{ updated: number; notFound: number; failedCount: number }>(res);
-}
-
-/** @deprecated superseded by syncNavData() — kept working, frozen, do not modify */
-export async function backfillNavHistory(): Promise<{ full_backfill: number; incremental: number; up_to_date: number; failed: any[] }> {
-  const res = await fetch('/api/nav/backfill', { method: 'POST' });
-  return handleResponse<{ full_backfill: number; incremental: number; up_to_date: number; failed: any[] }>(res);
 }
 
 export async function fetchLogs(type: string, date: string): Promise<string> {

@@ -118,38 +118,6 @@ export async function refreshAmfiCodes() {
   return { updated, notFound, failed };
 }
 
-/** @deprecated superseded by POST /api/nav/sync — kept working, frozen, do not modify */
-router.post('/nav/refresh-amfi-codes', async (req, res) => {
-  try {
-    const result = await refreshAmfiCodes();
-    res.json({
-      updated: result.updated,
-      notFound: result.notFound,
-      failedCount: result.failed.length
-    });
-  } catch (error) {
-    res.status(503).json({ error: 'Failed to fetch NAVAll.txt from AMFI' });
-  }
-});
-
-/** @deprecated superseded by POST /api/nav/sync — kept working, frozen, do not modify */
-router.post('/fetch-nav', async (req, res) => {
-  log('nav', 'INFO', 'NAV', 'Starting NAV update via NAVAll.txt');
-  try {
-    const result = await refreshAmfiCodes();
-    log('nav', 'INFO', 'NAV', `COMPLETE nav-update: ${result.updated} updated, ${result.notFound} not found, ${result.failed.length} errors`);
-    res.json({
-      updated: result.updated,
-      notFound: result.notFound,
-      failedCount: result.failed.length
-    });
-  } catch (error) {
-    const reason = error instanceof Error ? error.message : String(error);
-    log('nav', 'ERROR', 'NAV', `NAVAll.txt fetch failed: ${reason}`);
-    res.status(503).json({ error: 'Failed to fetch NAVAll.txt from AMFI' });
-  }
-});
-
 /**
  * Incremental NAV history + metadata sync via MFAPI, per fund with an amfi_code.
  * Skips any fund whose last NAV is <=1 day old and already has clean_name/simple_name.
@@ -296,16 +264,6 @@ export async function runNavBackfill() {
   log('nav', 'INFO', 'BACKFILL', `COMPLETE backfill: ${full_backfill} full, ${incremental} incremental, ${up_to_date} up-to-date, ${failed.length} errors`);
   return { full_backfill, incremental, up_to_date, failed };
 }
-
-router.post('/nav/backfill', async (req, res) => {
-  try {
-    const result = await runNavBackfill();
-    res.json(result);
-  } catch (error) {
-    const reason = error instanceof Error ? error.message : String(error);
-    res.status(503).json({ error: reason });
-  }
-});
 
 /**
  * Unified NAV sync: refreshes the ISIN -> amfi_code map only for funds that
