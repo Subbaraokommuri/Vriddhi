@@ -1,5 +1,7 @@
 # Database — never commit
 tracker.db
+tracker.db-wal
+tracker.db-shm
 
 # Secrets — never commit
 .env.local

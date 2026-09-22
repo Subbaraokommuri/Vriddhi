@@ -20,21 +20,45 @@ router.get('/summary', (req, res) => {
   let currentValue = 0;
   const allCashflows: { date: Date; amount: number }[] = [];
 
+  // Bulk-fetch latest NAV per ISIN once (VB-20 — was 1 query per folio)
+  const latestNavByIsin = new Map<string, number>();
+  const latestNavs = db.prepare(`
+    SELECT nh.isin, nh.nav
+    FROM nav_history nh
+    INNER JOIN (
+      SELECT isin, MAX(nav_date) as max_date FROM nav_history GROUP BY isin
+    ) latest ON nh.isin = latest.isin AND nh.nav_date = latest.max_date
+  `).all() as any[];
+  for (const row of latestNavs) {
+    latestNavByIsin.set(row.isin, row.nav);
+  }
+
+  // Bulk-fetch all transactions once, grouped by folio_id (VB-20 — was 1 query per folio)
+  const txnsByFolioId = new Map<string, any[]>();
+  const allTxns = db.prepare('SELECT folio_id, date, amount FROM transactions ORDER BY date, rowid').all() as any[];
+  for (const t of allTxns) {
+    if (!txnsByFolioId.has(t.folio_id)) txnsByFolioId.set(t.folio_id, []);
+    txnsByFolioId.get(t.folio_id)!.push(t);
+  }
+
   for (const folio of folios) {
     // Use stated values directly from CAS — authoritative and correct
-    totalInvested += (folio.stated_cost || 0);
-    
+    // Active folios only (V1-01) — a fully redeemed folio's stated_cost
+    // shouldn't count as money still invested. No live folio hits this
+    // today (all closed folios have stated_cost = 0), so this is a
+    // forward-looking guard, not a numbers change.
+    if ((folio.stated_balance || 0) > 0) {
+      totalInvested += (folio.stated_cost || 0);
+    }
+
     // Current value = stated_balance × latest NAV (live price)
-    const latestNav = db.prepare(
-      'SELECT nav FROM nav_history WHERE isin = ? ORDER BY nav_date DESC LIMIT 1'
-    ).get(folio.isin) as any;
-    const nav = latestNav ? latestNav.nav : 0;
+    const nav = latestNavByIsin.get(folio.isin) || 0;
     currentValue += (folio.stated_balance || 0) * nav;
 
-    // XIRR cashflows — use natural signs, negate amount for convention
-    const txns = db.prepare(
-      'SELECT date, amount FROM transactions WHERE folio_id = ?'
-    ).all(folio.id) as any[];
+    // XIRR cashflows — use natural signs, negate amount for convention.
+    // All folios (including closed ones) contribute here: their historical
+    // buy/sell cashflows are real cash movements the overall XIRR must see.
+    const txns = txnsByFolioId.get(folio.id) || [];
     for (const t of txns) {
       allCashflows.push({ date: new Date(t.date), amount: -(t.amount) });
     }

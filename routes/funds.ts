@@ -26,9 +26,30 @@ router.get('/folios', (req, res) => {
     JOIN funds fu ON f.fund_id = fu.id
   `).all() as any[];
 
+  // Bulk-fetch latest NAV per ISIN once (VB-20 — was 1 query per folio)
+  const latestNavByIsin = new Map<string, { nav: number; date: string }>();
+  const latestNavs = db.prepare(`
+    SELECT nh.isin, nh.nav, nh.nav_date as date
+    FROM nav_history nh
+    INNER JOIN (
+      SELECT isin, MAX(nav_date) as max_date FROM nav_history GROUP BY isin
+    ) latest ON nh.isin = latest.isin AND nh.nav_date = latest.max_date
+  `).all() as any[];
+  for (const row of latestNavs) {
+    latestNavByIsin.set(row.isin, { nav: row.nav, date: row.date });
+  }
+
+  // Bulk-fetch all transactions once, grouped by folio_id (VB-20 — was 1 query per folio)
+  const txnsByFolioId = new Map<string, any[]>();
+  const allTxns = db.prepare('SELECT folio_id, date, amount, units, transaction_type FROM transactions ORDER BY date, rowid').all() as any[];
+  for (const t of allTxns) {
+    if (!txnsByFolioId.has(t.folio_id)) txnsByFolioId.set(t.folio_id, []);
+    txnsByFolioId.get(t.folio_id)!.push(t);
+  }
+
   const result = folios.map(folio => {
-    const txns = db.prepare('SELECT date, amount, units, transaction_type FROM transactions WHERE folio_id = ?').all(folio.id) as any[];
-    const latestNav = db.prepare('SELECT nav, nav_date as date FROM nav_history WHERE isin = ? ORDER BY nav_date DESC LIMIT 1').get(folio.isin) as any;
+    const txns = txnsByFolioId.get(folio.id) || [];
+    const latestNav = latestNavByIsin.get(folio.isin);
     const nav = latestNav ? latestNav.nav : 0;
     const navDate = latestNav ? latestNav.date : null;
 

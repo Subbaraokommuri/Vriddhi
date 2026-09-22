@@ -3,6 +3,8 @@ import { CONFIG } from './config.ts';
 import { runMigrations } from './migrations.ts';
 
 export const db = new Database(CONFIG.DB_NAME);
+db.pragma('journal_mode = WAL');
+db.pragma('foreign_keys = ON');
 
 export function initDb() {
   runMigrations(db);
