@@ -4,7 +4,11 @@ import fs from 'fs';
 import { CONFIG } from './config.ts';
 import { log } from './logger.ts';
 
-export function runMigrations(db: Database.Database) {
+// ARC-16: numbered migrations + schema_version in settings, so each step
+// runs exactly once instead of every boot re-checking everything. See
+// .claude/rules/known-debt-register.md for the history.
+
+function migration001Baseline(db: Database.Database) {
   db.exec(`
     CREATE TABLE IF NOT EXISTS funds (
       id TEXT PRIMARY KEY,
@@ -145,8 +149,8 @@ export function runMigrations(db: Database.Database) {
   for (const tableName of tablesToCheck) {
     try {
       const tableInfo = db.prepare(`PRAGMA table_info(${tableName})`).all() as any[];
-      const columnsToMigrate = tableInfo.filter(c => 
-        c.name.toLowerCase().includes('folio') && 
+      const columnsToMigrate = tableInfo.filter(c =>
+        c.name.toLowerCase().includes('folio') &&
         c.type.toUpperCase() !== 'TEXT'
       );
 
@@ -155,7 +159,7 @@ export function runMigrations(db: Database.Database) {
         db.transaction(() => {
           const createSqlRow = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name=?").get(tableName) as any;
           if (!createSqlRow) return;
-          
+
           let newCreateSql = createSqlRow.sql;
           for (const col of columnsToMigrate) {
             const reg = new RegExp(`\\b${col.name}\\b\\s+[^,)]+`, 'gi');
@@ -164,12 +168,12 @@ export function runMigrations(db: Database.Database) {
 
           db.exec(`ALTER TABLE ${tableName} RENAME TO ${tableName}_old`);
           db.exec(newCreateSql);
-          
+
           const colNames = tableInfo.map(c => c.name).join(', ');
-          const selectNames = tableInfo.map(c => 
+          const selectNames = tableInfo.map(c =>
             c.name.toLowerCase().includes('folio') ? `CAST(${c.name} AS TEXT)` : c.name
           ).join(', ');
-          
+
           db.exec(`INSERT INTO ${tableName} (${colNames}) SELECT ${selectNames} FROM ${tableName}_old`);
           db.exec(`DROP TABLE ${tableName}_old`);
         })();
@@ -421,4 +425,44 @@ export function runMigrations(db: Database.Database) {
     );
   `).run();
   log('app', 'INFO', 'DB', 'Nifty 50 TRI seeded successfully');
+}
+
+interface Migration {
+  id: number;
+  name: string;
+  run: (db: Database.Database) => void;
+}
+
+// New schema changes are appended here as { id: N, name: '...', run: fn }.
+// migration001Baseline is the entire pre-ARC-16 runMigrations body, frozen
+// as-is — it's idempotent, so existing DBs converge to schema_version 1 on
+// first run with no data changes.
+const MIGRATIONS: Migration[] = [
+  { id: 1, name: 'baseline', run: migration001Baseline },
+];
+
+function getSchemaVersion(db: Database.Database): number {
+  const settingsTable = db.prepare(
+    "SELECT name FROM sqlite_master WHERE type='table' AND name='settings'"
+  ).get();
+  if (!settingsTable) return 0;
+  const row = db.prepare("SELECT value FROM settings WHERE key = 'schema_version'").get() as any;
+  return row ? parseInt(row.value, 10) : 0;
+}
+
+function setSchemaVersion(db: Database.Database, version: number) {
+  db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('schema_version', ?)").run(String(version));
+}
+
+export function runMigrations(db: Database.Database) {
+  const currentVersion = getSchemaVersion(db);
+  const pending = MIGRATIONS.filter(m => m.id > currentVersion).sort((a, b) => a.id - b.id);
+
+  for (const migration of pending) {
+    db.transaction(() => {
+      migration.run(db);
+      setSchemaVersion(db, migration.id);
+    })();
+    log('app', 'INFO', 'DB', `Applied migration ${migration.id} (${migration.name})`);
+  }
 }
