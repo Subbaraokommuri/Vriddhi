@@ -349,6 +349,8 @@ export function runMigrations(db: Database.Database) {
       sort_order INTEGER DEFAULT 0
     );
 
+    -- @deprecated frozen 2026-09-23 (ARC-02) — superseded by asset_tags;
+    -- kept for historical data only, never written to again
     CREATE TABLE IF NOT EXISTS folio_tags (
       folio_id  TEXT NOT NULL REFERENCES folios(id),
       tag       TEXT NOT NULL,
@@ -361,6 +363,25 @@ export function runMigrations(db: Database.Database) {
       tag       TEXT NOT NULL,
       PRIMARY KEY (theme_id, tag)
     );
+
+    -- asset_type has no CHECK constraint by design (ARC-02) — validate
+    -- allowed values in code (lib/config.ts ASSET_TYPES) so adding a new
+    -- asset type never requires a schema migration.
+    CREATE TABLE IF NOT EXISTS asset_tags (
+      asset_type TEXT NOT NULL,
+      asset_id   TEXT NOT NULL,
+      tag        TEXT NOT NULL,
+      theme_id   TEXT REFERENCES tag_themes(id),
+      PRIMARY KEY (asset_type, asset_id, tag)
+    );
+  `);
+
+  // One-time backfill: copy existing folio_tags rows into asset_tags
+  // (ARC-02). Idempotent — INSERT OR IGNORE against the matching PK makes
+  // this a no-op on every startup after the first.
+  db.exec(`
+    INSERT OR IGNORE INTO asset_tags (asset_type, asset_id, tag, theme_id)
+    SELECT 'mf_folio', folio_id, tag, theme_id FROM folio_tags;
   `);
 
   // Schema extension for user_benchmarks

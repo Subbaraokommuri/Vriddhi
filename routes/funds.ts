@@ -146,7 +146,9 @@ router.delete('/tags/themes/:id', (req, res) => {
       return res.status(403).json({ error: 'The built-in Portfolio theme cannot be deleted' });
     }
     db.transaction(() => {
-      db.prepare('UPDATE folio_tags SET theme_id = NULL WHERE theme_id = ?').run(id);
+      // No asset_type filter — a deleted theme orphans its tags across every
+      // asset type, not just mf_folio.
+      db.prepare('UPDATE asset_tags SET theme_id = NULL WHERE theme_id = ?').run(id);
       db.prepare('DELETE FROM theme_tags WHERE theme_id = ?').run(id);
       db.prepare('DELETE FROM tag_themes WHERE id = ?').run(id);
     })();
@@ -190,7 +192,8 @@ router.put('/tags/themes/:id/tags/:tag', (req, res) => {
     
     db.transaction(() => {
       db.prepare('UPDATE theme_tags SET tag = ? WHERE theme_id = ? AND tag = ?').run(newTag, id, tag);
-      db.prepare('UPDATE folio_tags SET tag = ? WHERE theme_id = ? AND tag = ?').run(newTag, id, tag);
+      // No asset_type filter — a tag rename applies across every asset type.
+      db.prepare('UPDATE asset_tags SET tag = ? WHERE theme_id = ? AND tag = ?').run(newTag, id, tag);
     })();
     res.json({ success: true });
   } catch (error) {
@@ -204,7 +207,8 @@ router.delete('/tags/themes/:id/tags/:tag', (req, res) => {
     const { id, tag } = req.params;
     db.transaction(() => {
       db.prepare('DELETE FROM theme_tags WHERE theme_id = ? AND tag = ?').run(id, tag);
-      db.prepare('DELETE FROM folio_tags WHERE theme_id = ? AND tag = ?').run(id, tag);
+      // No asset_type filter — a tag delete applies across every asset type.
+      db.prepare('DELETE FROM asset_tags WHERE theme_id = ? AND tag = ?').run(id, tag);
     })();
     res.json({ success: true });
   } catch (error) {
@@ -215,7 +219,7 @@ router.delete('/tags/themes/:id/tags/:tag', (req, res) => {
 
 router.get('/tags/unassigned', (req, res) => {
   try {
-    const tags = db.prepare('SELECT DISTINCT tag FROM folio_tags WHERE theme_id IS NULL').all() as { tag: string }[];
+    const tags = db.prepare('SELECT DISTINCT tag FROM asset_tags WHERE theme_id IS NULL').all() as { tag: string }[];
     res.json(tags.map(t => t.tag));
   } catch (error) {
     log('app', 'ERROR', 'TAGS', `Failed to get unassigned tags: ${String(error)}`);
@@ -226,7 +230,7 @@ router.get('/tags/unassigned', (req, res) => {
 router.delete('/tags/unassigned/:tag', (req, res) => {
   try {
     const { tag } = req.params;
-    db.prepare('DELETE FROM folio_tags WHERE tag = ? AND theme_id IS NULL').run(tag);
+    db.prepare('DELETE FROM asset_tags WHERE tag = ? AND theme_id IS NULL').run(tag);
     res.json({ success: true });
   } catch (error) {
     log('app', 'ERROR', 'TAGS', `Failed to delete unassigned tag: ${String(error)}`);
@@ -240,11 +244,11 @@ router.get('/folios/:id/tags', (req, res) => {
   try {
     const { id } = req.params;
     const tags = db.prepare(`
-      SELECT ft.tag, ft.theme_id, tt.name as theme_name
-      FROM folio_tags ft
-      LEFT JOIN tag_themes tt ON ft.theme_id = tt.id
-      WHERE ft.folio_id = ?
-    `).all(id) as any[];
+      SELECT at.tag, at.theme_id, tt.name as theme_name
+      FROM asset_tags at
+      LEFT JOIN tag_themes tt ON at.theme_id = tt.id
+      WHERE at.asset_type = ? AND at.asset_id = ?
+    `).all(CONFIG.ASSET_TYPES[0], id) as any[];
     res.json(tags);
   } catch (error) {
     log('app', 'ERROR', 'TAGS', `Failed to get folio tags: ${String(error)}`);
@@ -258,7 +262,7 @@ router.post('/folios/:id/tags', (req, res) => {
     const { tag, theme_id } = req.body;
     if (!tag) return res.status(400).json({ error: 'Tag is required' });
     
-    db.prepare('INSERT OR IGNORE INTO folio_tags (folio_id, tag, theme_id) VALUES (?, ?, ?)').run(id, tag, theme_id || null);
+    db.prepare('INSERT OR IGNORE INTO asset_tags (asset_type, asset_id, tag, theme_id) VALUES (?, ?, ?, ?)').run(CONFIG.ASSET_TYPES[0], id, tag, theme_id || null);
     res.json({ success: true });
   } catch (error) {
     log('app', 'ERROR', 'TAGS', `Failed to assign tag to folio: ${String(error)}`);
@@ -269,7 +273,7 @@ router.post('/folios/:id/tags', (req, res) => {
 router.delete('/folios/:id/tags/:tag', (req, res) => {
   try {
     const { id, tag } = req.params;
-    db.prepare('DELETE FROM folio_tags WHERE folio_id = ? AND tag = ?').run(id, tag);
+    db.prepare('DELETE FROM asset_tags WHERE asset_type = ? AND asset_id = ? AND tag = ?').run(CONFIG.ASSET_TYPES[0], id, tag);
     res.json({ success: true });
   } catch (error) {
     log('app', 'ERROR', 'TAGS', `Failed to remove tag from folio: ${String(error)}`);
@@ -289,8 +293,8 @@ router.post('/tags/assign-all-mf', (req, res) => {
 
     const sync = db.transaction((themeId: string, folioIds: string[]) => {
       for (const fId of folioIds) {
-        const result = db.prepare('INSERT OR IGNORE INTO folio_tags (folio_id, tag, theme_id) VALUES (?, ?, ?)')
-          .run(fId, 'All MF', themeId);
+        const result = db.prepare('INSERT OR IGNORE INTO asset_tags (asset_type, asset_id, tag, theme_id) VALUES (?, ?, ?, ?)')
+          .run(CONFIG.ASSET_TYPES[0], fId, 'All MF', themeId);
         if (result.changes > 0) {
           assigned++;
         }
@@ -399,13 +403,13 @@ async function buildGroupedFunds(): Promise<any[]> {
 
   // STEP 3b — Bulk-fetch all folio tags in one query:
   const allTags = db.prepare(`
-    SELECT folio_id, tag FROM folio_tags ORDER BY folio_id
-  `).all() as { folio_id: string; tag: string }[];
+    SELECT asset_id, tag FROM asset_tags WHERE asset_type = ? ORDER BY asset_id
+  `).all(CONFIG.ASSET_TYPES[0]) as { asset_id: string; tag: string }[];
 
   const tagMap = new Map<string, string[]>();
   for (const t of allTags) {
-    if (!tagMap.has(t.folio_id)) tagMap.set(t.folio_id, []);
-    tagMap.get(t.folio_id)!.push(t.tag);
+    if (!tagMap.has(t.asset_id)) tagMap.set(t.asset_id, []);
+    tagMap.get(t.asset_id)!.push(t.tag);
   }
 
   // STEP 4 — Build per-folio transaction cashflows (do NOT add terminal cashflows here):

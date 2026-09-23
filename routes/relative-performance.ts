@@ -34,7 +34,7 @@ router.get('/relative-performance', (req, res) => {
     if (benchmarkPrices.length === 0) return res.status(404).json({ error: 'No history data for benchmark' });
     if (!themeInfo) return res.status(404).json({ error: 'Theme not found' });
 
-    const taggedFolios = db.prepare('SELECT DISTINCT folio_id FROM folio_tags WHERE theme_id = ? AND tag = ?').all(theme_id, tag) as { folio_id: string }[];
+    const taggedFolios = db.prepare('SELECT DISTINCT asset_id AS folio_id FROM asset_tags WHERE asset_type = ? AND theme_id = ? AND tag = ?').all(CONFIG.ASSET_TYPES[0], theme_id, tag) as { folio_id: string }[];
     if (taggedFolios.length === 0) return res.status(404).json({ error: 'No folios found for the specified tag' });
 
     const folioIds = taggedFolios.map(f => f.folio_id);

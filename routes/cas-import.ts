@@ -401,18 +401,18 @@ router.post('/confirm', upload.single('file'), async (req, res) => {
       } else {
         // Run a one-time cleanup for rows already inserted with NULL theme_id
         db.prepare(
-          `UPDATE folio_tags SET theme_id = ?
-           WHERE tag = 'All MF' AND theme_id IS NULL`
-        ).run(themeRow.id);
+          `UPDATE asset_tags SET theme_id = ?
+           WHERE asset_type = ? AND tag = 'All MF' AND theme_id IS NULL`
+        ).run(themeRow.id, CONFIG.ASSET_TYPES[0]);
 
         const tagResult = db.prepare(`
-          INSERT OR IGNORE INTO folio_tags (folio_id, tag, theme_id)
-          SELECT id, 'All MF', ?
+          INSERT OR IGNORE INTO asset_tags (asset_type, asset_id, tag, theme_id)
+          SELECT ?, id, 'All MF', ?
           FROM folios
           WHERE id NOT IN (
-            SELECT folio_id FROM folio_tags WHERE tag = 'All MF'
+            SELECT asset_id FROM asset_tags WHERE asset_type = ? AND tag = 'All MF'
           )
-        `).run(themeRow.id);
+        `).run(CONFIG.ASSET_TYPES[0], themeRow.id, CONFIG.ASSET_TYPES[0]);
 
         log('import', 'INFO', 'cas-import', `Auto-tagged ${tagResult.changes} folios with 'All MF'`);
       }

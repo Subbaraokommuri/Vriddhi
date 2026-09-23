@@ -12,7 +12,11 @@ export const CONFIG = {
   
   // UI Defaults
   DEFAULT_THEME_COLOR: '#01696f',
-  
+
+  // asset_tags.asset_type allowed values (ARC-02) — no DB CHECK constraint
+  // by design, so a new asset class is added here, not via migration.
+  ASSET_TYPES: ['mf_folio'] as const,
+
   // Logging
   LOG_DIR: 'logs',
   
